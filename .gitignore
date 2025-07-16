@@ -1,0 +1,100 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+/src/generated/prisma
+
+# database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.md
+!README.md
+!MISSING_FEATURES_PLAN.md
+!PHASE_2_IMPLEMENTATION_PLAN.md
+!TASK_TYPE_SYSTEM_IMPLEMENTATION_PLAN.md
+!SECURITY_AND_IMPLEMENTATION_PLAN.md
+!SYSTEM_ARCHITECTURE.md
+# !setup-supabase.md
+!issues.md
+!scholars_xp_dashboard_redesign_plan.md
+!scholars_xp_dashboard_ux_assessment.md
+
+
+# prisma migrations (schema managed by supabase)
+/prisma/migrations/
+
+# augment
+.augment/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# SWC compiler cache
+.swc/
+
+# Additional logs
+*.log
+logs/
+
+# Jest cache
+.jest/
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+.temp/
+
+# Editor backups
+*~
+*.bak
+*.orig
+
+# OS
+Thumbs.db
+
+__tests__
+test*

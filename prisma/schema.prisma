@@ -1,0 +1,285 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                 String       @id @default(uuid()) @db.Uuid
+  email              String       @unique
+  username           String?
+  role               UserRole     @default(USER)
+  totalXp            Int          @default(0)
+  currentWeekXp      Int          @default(0)
+  streakWeeks        Int          @default(0)
+  missedReviews      Int          @default(0)
+  profileImageUrl    String?
+  bio                String?
+  joinedAt           DateTime     @default(now())
+  lastActiveAt       DateTime?
+  preferences        Json         @default("{}")
+  submissions        Submission[]
+  peerReviews        PeerReview[]
+  weeklyStats        WeeklyStats[]
+  reviewAssignments  ReviewAssignment[]
+  userAchievements   UserAchievement[]
+  contentFlags       ContentFlag[]
+  adminActions       AdminAction[]
+  xpTransactions     XpTransaction[]
+  notifications      Notification[]
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+}
+
+model Submission {
+  id                 String       @id @default(uuid()) @db.Uuid
+  userId             String       @db.Uuid
+  url                String
+  platform           String       // e.g. "Twitter", "Medium"
+  taskTypes          String[]     // Array of task types for PostgreSQL
+  aiXp               Int
+  originalityScore   Float?
+  peerXp             Int?
+  finalXp            Int?
+  status             SubmissionStatus @default(PENDING)
+  reviewDeadline     DateTime?
+  consensusScore     Float?
+  reviewCount        Int          @default(0)
+  flagCount          Int          @default(0)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  weekNumber         Int
+  peerReviews        PeerReview[]
+  reviewAssignments  ReviewAssignment[]
+  contentFlags       ContentFlag[]
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PeerReview {
+  id             String     @id @default(uuid()) @db.Uuid
+  reviewerId     String     @db.Uuid
+  submissionId   String     @db.Uuid
+  xpScore        Int
+  comments       String?
+  timeSpent      Int?       // in minutes
+  qualityRating  Int?       @db.SmallInt // 1-5 rating
+  isLate         Boolean    @default(false)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  reviewer       User       @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+  submission     Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+}
+
+model WeeklyStats {
+  id             String     @id @default(uuid()) @db.Uuid
+  userId         String     @db.Uuid
+  weekNumber     Int
+  xpTotal        Int
+  reviewsDone    Int
+  reviewsMissed  Int
+  earnedStreak   Boolean    @default(false)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekNumber])
+}
+
+model ReviewAssignment {
+  id             String                @id @default(uuid()) @db.Uuid
+  submissionId   String                @db.Uuid
+  reviewerId     String                @db.Uuid
+  assignedAt     DateTime              @default(now())
+  deadline       DateTime
+  status         ReviewAssignmentStatus @default(PENDING)
+  completedAt    DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  submission     Submission            @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  reviewer       User                  @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, reviewerId])
+}
+
+model Achievement {
+  id             String              @id @default(uuid()) @db.Uuid
+  name           String              @unique @db.VarChar(100)
+  description    String
+  category       AchievementCategory
+  iconUrl        String?
+  xpReward       Int                 @default(0)
+  criteria       Json                // Flexible criteria definition
+  isActive       Boolean             @default(true)
+  createdAt      DateTime            @default(now())
+
+  userAchievements UserAchievement[]
+}
+
+model UserAchievement {
+  id             String      @id @default(uuid()) @db.Uuid
+  userId         String      @db.Uuid
+  achievementId  String      @db.Uuid
+  earnedAt       DateTime    @default(now())
+
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement    Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+}
+
+model ContentFlag {
+  id             String      @id @default(uuid()) @db.Uuid
+  submissionId   String      @db.Uuid
+  flaggedBy      String      @db.Uuid
+  reason         FlagReason
+  description    String?
+  status         FlagStatus  @default(PENDING)
+  resolvedBy     String?     @db.Uuid
+  resolvedAt     DateTime?
+  createdAt      DateTime    @default(now())
+
+  submission     Submission  @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  flagger        User        @relation(fields: [flaggedBy], references: [id], onDelete: Cascade)
+}
+
+model AdminAction {
+  id             String          @id @default(uuid()) @db.Uuid
+  adminId        String          @db.Uuid
+  action         AdminActionType
+  targetType     String          @db.VarChar(50) // 'user', 'submission', 'review', etc.
+  targetId       String          @db.Uuid
+  details        Json?
+  createdAt      DateTime        @default(now())
+
+  admin          User            @relation(fields: [adminId], references: [id], onDelete: Cascade)
+}
+
+model XpTransaction {
+  id             String            @id @default(uuid()) @db.Uuid
+  userId         String            @db.Uuid
+  amount         Int               // Can be negative for penalties
+  type           XpTransactionType
+  sourceId       String?           @db.Uuid // Reference to submission, review, etc.
+  description    String
+  weekNumber     Int
+  createdAt      DateTime          @default(now())
+
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum SubmissionStatus {
+  PENDING
+  AI_REVIEWED
+  UNDER_PEER_REVIEW
+  FINALIZED
+  FLAGGED
+  REJECTED
+}
+
+enum UserRole {
+  USER
+  REVIEWER
+  ADMIN
+}
+
+enum ReviewAssignmentStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  MISSED
+  REASSIGNED
+}
+
+enum AchievementCategory {
+  SUBMISSION
+  REVIEW
+  STREAK
+  MILESTONE
+  SPECIAL
+}
+
+enum FlagReason {
+  INAPPROPRIATE
+  SPAM
+  PLAGIARISM
+  OFF_TOPIC
+  QUALITY
+  OTHER
+}
+
+enum FlagStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+  DISMISSED
+}
+
+enum AdminActionType {
+  XP_OVERRIDE
+  USER_ROLE_CHANGE
+  CONTENT_FLAG
+  REVIEW_REASSIGN
+  SYSTEM_CONFIG
+}
+
+enum XpTransactionType {
+  SUBMISSION_REWARD
+  REVIEW_REWARD
+  STREAK_BONUS
+  PENALTY
+  ADMIN_ADJUSTMENT
+  ACHIEVEMENT_BONUS
+}
+
+enum NotificationType {
+  XP_AWARDED
+  REVIEW_ASSIGNED
+  REVIEW_COMPLETED
+  SUBMISSION_PROCESSED
+  WEEKLY_SUMMARY
+  STREAK_ACHIEVED
+  PENALTY_APPLIED
+  ADMIN_MESSAGE
+}
+
+model RateLimit {
+  id           String   @id @default(uuid()) @db.Uuid
+  identifier   String   @db.VarChar(255)
+  endpointType String   @db.VarChar(50)
+  requestCount Int      @default(1)
+  windowStart  DateTime
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@unique([identifier, endpointType, windowStart])
+  @@index([identifier, endpointType, expiresAt], name: "idx_rate_limits_lookup")
+  @@index([expiresAt], name: "idx_rate_limits_cleanup")
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  type      NotificationType
+  title     String           @db.VarChar(255)
+  message   String           @db.Text
+  data      Json?            // Flexible data storage for notification context
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  // Relationships
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes for performance
+  @@index([userId, createdAt], name: "idx_notifications_user_created")
+  @@index([userId, read], name: "idx_notifications_user_read")
+  @@index([createdAt], name: "idx_notifications_cleanup")
+  @@map("notifications")
+}
