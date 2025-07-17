@@ -92,12 +92,12 @@ export default function AchievementsPage() {
 
   const getCategoryColor = (category: string) => {
     switch (category) {
-      case 'SUBMISSION': return 'text-blue-600 bg-blue-50 border-blue-200'
-      case 'REVIEW': return 'text-green-600 bg-green-50 border-green-200'
-      case 'STREAK': return 'text-orange-600 bg-orange-50 border-orange-200'
-      case 'MILESTONE': return 'text-purple-600 bg-purple-50 border-purple-200'
-      case 'SPECIAL': return 'text-yellow-600 bg-yellow-50 border-yellow-200'
-      default: return 'text-gray-600 bg-gray-50 border-gray-200'
+      case 'SUBMISSION': return 'text-info bg-info/10 border-info/20'
+      case 'REVIEW': return 'text-success bg-success/10 border-success/20'
+      case 'STREAK': return 'text-warning bg-warning/10 border-warning/20'
+      case 'MILESTONE': return 'text-purple bg-purple/10 border-purple/20'
+      case 'SPECIAL': return 'text-warning bg-warning/10 border-warning/20'
+      default: return 'text-muted-foreground bg-muted border-border'
     }
   }
 

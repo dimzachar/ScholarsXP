@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import NotificationCenter from '@/components/NotificationCenter'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
+import { MobileBottomNav, createNavItem } from '@/components/navigation/MobileBottomNav'
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout'
 import { Home, Users, Trophy, Settings, Zap, LogOut } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import {
@@ -20,6 +22,7 @@ import {
 export default function Navigation() {
   const pathname = usePathname()
   const { user, userProfile, signOut, loading, isAdmin, isReviewer } = useAuth()
+  const { isMobile, isTablet } = useResponsiveLayout()
 
   const handleSignOut = async () => {
     try {
@@ -51,7 +54,22 @@ export default function Navigation() {
 
   const navItems = getNavItems()
 
+  // Mobile navigation items
+  const mobileNavItems = [
+    createNavItem('/dashboard', 'Submit', Home),
+    createNavItem('/leaderboard', 'Leaderboard', Trophy),
+    ...(isReviewer || isAdmin ? [createNavItem('/review', 'Review', Users)] : []),
+    ...(isAdmin ? [createNavItem('/admin', 'Admin', Settings)] : []),
+  ]
+
   return (
+    <>
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNav
+        items={mobileNavItems}
+        userRole={isAdmin ? 'admin' : isReviewer ? 'reviewer' : 'user'}
+        isAuthenticated={!!user}
+      />
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 shadow-sm">
       <div className="container flex h-16 items-center max-w-7xl mx-auto px-4">
         <div className="mr-4 hidden md:flex">
@@ -193,6 +211,7 @@ export default function Navigation() {
         </div>
       </div>
     </nav>
+    </>
   )
 }
 

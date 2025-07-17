@@ -72,15 +72,15 @@ export default function ReviewPage() {
     return (
       <AuthGuard>
         <ReviewerGuard>
-          <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50 to-indigo-50">
-            <div className="container mx-auto px-4 py-8">
+          <div className="min-h-screen bg-background">
+            <div className="container mx-auto px-4 py-8 pb-20 md:pb-8">
               <div className="text-center">
                 <div className="inline-flex items-center space-x-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6">
                   <Users className="h-4 w-4" />
                   <span>Loading Reviews</span>
                 </div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-4">Peer Review Dashboard</h1>
-                <p className="text-gray-600">Loading pending reviews...</p>
+                <h1 className="text-3xl font-bold text-foreground mb-4">Peer Review Dashboard</h1>
+                <p className="text-muted-foreground">Loading pending reviews...</p>
               </div>
             </div>
           </div>
@@ -92,8 +92,8 @@ export default function ReviewPage() {
   return (
     <AuthGuard>
       <ReviewerGuard>
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50 to-indigo-50">
-      <div className="container mx-auto px-4 py-8">
+        <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-8 pb-20 md:pb-8">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center space-x-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6">
@@ -101,14 +101,14 @@ export default function ReviewPage() {
             <span>Community Reviews</span>
           </div>
           
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+          <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
             Peer Review{' '}
             <span className="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
               Dashboard
             </span>
           </h1>
           
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             Help validate submissions from fellow scholars and earn XP for your contributions
           </p>
         </div>
@@ -132,12 +132,12 @@ export default function ReviewPage() {
           <Card className="border-0 shadow-lg">
             <CardContent className="p-6">
               <div className="flex items-center space-x-4">
-                <div className="p-3 bg-green-100 rounded-lg">
-                  <Star className="h-6 w-6 text-green-600" />
+                <div className="p-3 bg-success/20 rounded-lg">
+                  <Star className="h-6 w-6 text-success" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900">+5</p>
-                  <p className="text-gray-600">XP per Review</p>
+                  <p className="text-2xl font-bold text-foreground">+5</p>
+                  <p className="text-muted-foreground">XP per Review</p>
                 </div>
               </div>
             </CardContent>
@@ -146,12 +146,12 @@ export default function ReviewPage() {
           <Card className="border-0 shadow-lg">
             <CardContent className="p-6">
               <div className="flex items-center space-x-4">
-                <div className="p-3 bg-red-100 rounded-lg">
-                  <AlertCircle className="h-6 w-6 text-red-600" />
+                <div className="p-3 bg-destructive/20 rounded-lg">
+                  <AlertCircle className="h-6 w-6 text-destructive" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900">72h</p>
-                  <p className="text-gray-600">Deadline</p>
+                  <p className="text-2xl font-bold text-foreground">72h</p>
+                  <p className="text-muted-foreground">Deadline</p>
                 </div>
               </div>
             </CardContent>
@@ -177,11 +177,11 @@ export default function ReviewPage() {
           <div className="text-center py-16">
             <Card className="border-0 shadow-xl max-w-md mx-auto">
               <CardContent className="p-8 text-center">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <CheckCircle className="h-8 w-8 text-gray-400" />
+                <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="h-8 w-8 text-muted-foreground" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">No Pending Reviews</h2>
-                <p className="text-gray-600 mb-6">
+                <h2 className="text-xl font-semibold text-foreground mb-2">No Pending Reviews</h2>
+                <p className="text-muted-foreground mb-6">
                   Great job! You're all caught up. Check back later for new submissions to review.
                 </p>
                 <div className="space-y-2">
@@ -216,14 +216,14 @@ export default function ReviewPage() {
                     <CheckCircle className="h-4 w-4 text-primary mt-0.5" />
                     <div>
                       <p className="font-medium">Originality Check</p>
-                      <p className="text-gray-600">Ensure content is original and not AI-generated</p>
+                      <p className="text-muted-foreground">Ensure content is original and not AI-generated</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
+                    <CheckCircle className="h-4 w-4 text-success mt-0.5" />
                     <div>
                       <p className="font-medium">Fair Scoring</p>
-                      <p className="text-gray-600">Rate based on effort and community value</p>
+                      <p className="text-muted-foreground">Rate based on effort and community value</p>
                     </div>
                   </div>
                 </div>

@@ -236,28 +236,28 @@ export default function AdminUsersPage() {
 
   const getRoleIcon = (role: string) => {
     switch (role) {
-      case 'ADMIN': return <Crown className="h-4 w-4 text-yellow-600" />
-      case 'REVIEWER': return <Shield className="h-4 w-4 text-blue-600" />
-      case 'USER': return <User className="h-4 w-4 text-gray-600" />
-      default: return <User className="h-4 w-4 text-gray-600" />
+      case 'ADMIN': return <Crown className="h-4 w-4 text-warning" />
+      case 'REVIEWER': return <Shield className="h-4 w-4 text-info" />
+      case 'USER': return <User className="h-4 w-4 text-muted-foreground" />
+      default: return <User className="h-4 w-4 text-muted-foreground" />
     }
   }
 
   const getRoleColor = (role: string) => {
     switch (role) {
-      case 'ADMIN': return 'bg-yellow-100 text-yellow-800'
-      case 'REVIEWER': return 'bg-blue-100 text-blue-800'
-      case 'USER': return 'bg-gray-100 text-gray-800'
-      default: return 'bg-gray-100 text-gray-800'
+      case 'ADMIN': return 'bg-warning/10 text-warning'
+      case 'REVIEWER': return 'bg-info/10 text-info'
+      case 'USER': return 'bg-muted text-muted-foreground'
+      default: return 'bg-muted text-muted-foreground'
     }
   }
 
   const getActivityColor = (status: string) => {
     switch (status) {
-      case 'active': return 'bg-green-100 text-green-800'
-      case 'recent': return 'bg-yellow-100 text-yellow-800'
-      case 'inactive': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
+      case 'active': return 'bg-success/10 text-success'
+      case 'recent': return 'bg-warning/10 text-warning'
+      case 'inactive': return 'bg-destructive/10 text-destructive'
+      default: return 'bg-muted text-muted-foreground'
     }
   }
 
@@ -302,7 +302,7 @@ export default function AdminUsersPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <Card>
             <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-blue-600">
+              <div className="text-2xl font-bold text-info">
                 {stats.totalUsers}
               </div>
               <div className="text-sm text-muted-foreground">Total Users</div>

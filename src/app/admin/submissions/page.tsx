@@ -208,12 +208,12 @@ export default function AdminSubmissionsPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'PENDING': return 'bg-yellow-100 text-yellow-800'
-      case 'AI_REVIEWED': return 'bg-blue-100 text-blue-800'
-      case 'PEER_REVIEW': return 'bg-purple-100 text-purple-800'
-      case 'COMPLETED': return 'bg-green-100 text-green-800'
-      case 'REJECTED': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
+      case 'PENDING': return 'bg-warning/10 text-warning'
+      case 'AI_REVIEWED': return 'bg-info/10 text-info'
+      case 'PEER_REVIEW': return 'bg-purple/10 text-purple'
+      case 'COMPLETED': return 'bg-success/10 text-success'
+      case 'REJECTED': return 'bg-destructive/10 text-destructive'
+      default: return 'bg-muted text-muted-foreground'
     }
   }
 
@@ -257,7 +257,7 @@ export default function AdminSubmissionsPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <Card>
             <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-blue-600">
+              <div className="text-2xl font-bold text-info">
                 {stats.totalSubmissions}
               </div>
               <div className="text-sm text-muted-foreground">Total Submissions</div>

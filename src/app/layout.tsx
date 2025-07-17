@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Oxanium } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/contexts/AuthContext'
 import AuthErrorBoundary from '@/components/Auth/AuthErrorBoundary'
@@ -8,9 +9,20 @@ import { Toaster } from 'sonner'
 // Import console configuration to reduce log noise
 import '@/lib/console-config'
 
+const oxanium = Oxanium({
+  subsets: ['latin'],
+  variable: '--font-oxanium',
+})
+
 export const metadata: Metadata = {
   title: 'ScholarXP Evaluation System',
   description: 'Submit your content and earn XP through AI evaluation and peer review',
+}
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
 }
 
 export default function RootLayout({
@@ -20,7 +32,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body>
+      <body className={`${oxanium.variable} font-sans`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

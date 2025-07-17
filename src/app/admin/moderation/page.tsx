@@ -230,20 +230,20 @@ export default function AdminModerationPage() {
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
-      case 'LOW': return 'bg-green-100 text-green-800'
-      case 'MEDIUM': return 'bg-yellow-100 text-yellow-800'
-      case 'HIGH': return 'bg-orange-100 text-orange-800'
-      case 'CRITICAL': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
+      case 'LOW': return 'bg-success/10 text-success'
+      case 'MEDIUM': return 'bg-warning/10 text-warning'
+      case 'HIGH': return 'bg-warning/20 text-warning'
+      case 'CRITICAL': return 'bg-destructive/10 text-destructive'
+      default: return 'bg-muted text-muted-foreground'
     }
   }
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'PENDING': return 'bg-yellow-100 text-yellow-800'
-      case 'RESOLVED': return 'bg-green-100 text-green-800'
-      case 'DISMISSED': return 'bg-gray-100 text-gray-800'
-      default: return 'bg-gray-100 text-gray-800'
+      case 'PENDING': return 'bg-warning/10 text-warning'
+      case 'RESOLVED': return 'bg-success/10 text-success'
+      case 'DISMISSED': return 'bg-muted text-muted-foreground'
+      default: return 'bg-muted text-muted-foreground'
     }
   }
 
@@ -275,7 +275,7 @@ export default function AdminModerationPage() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Shield className="h-8 w-8 text-red-600" />
+              <Shield className="h-8 w-8 text-destructive" />
               Content Moderation
             </h1>
             <p className="text-muted-foreground">
@@ -293,17 +293,17 @@ export default function AdminModerationPage() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <Card className="border-red-200 bg-red-50">
+          <Card className="border-destructive/20 bg-destructive/10">
             <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-red-600">
+              <div className="text-2xl font-bold text-destructive">
                 {stats.pendingFlags}
               </div>
-              <div className="text-sm text-red-600">Pending Review</div>
+              <div className="text-sm text-destructive">Pending Review</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-blue-600">
+              <div className="text-2xl font-bold text-info">
                 {stats.totalFlags}
               </div>
               <div className="text-sm text-muted-foreground">Total Flags</div>
@@ -311,7 +311,7 @@ export default function AdminModerationPage() {
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-green-600">
+              <div className="text-2xl font-bold text-success">
                 {stats.statusCounts.RESOLVED || 0}
               </div>
               <div className="text-sm text-muted-foreground">Resolved</div>
@@ -319,7 +319,7 @@ export default function AdminModerationPage() {
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-gray-600">
+              <div className="text-2xl font-bold text-muted-foreground">
                 {stats.statusCounts.DISMISSED || 0}
               </div>
               <div className="text-sm text-muted-foreground">Dismissed</div>

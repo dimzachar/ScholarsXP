@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator'
 import { supabase } from '@/lib/supabase-client'
 import { useAuth } from '@/contexts/AuthContext'
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout'
 import {
   Bell,
   BellRing,
@@ -32,9 +33,22 @@ interface Notification {
 
 export default function NotificationCenter() {
   const { user } = useAuth()
+  const responsiveLayout = useResponsiveLayout()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  // Fallback mobile detection if hook fails
+  const isMobile = responsiveLayout?.isMobile ?? (typeof window !== 'undefined' && window.innerWidth < 768)
+  const isTablet = responsiveLayout?.isTablet ?? (typeof window !== 'undefined' && window.innerWidth >= 768 && window.innerWidth < 1024)
+
+  // Debug: Log mobile state when component renders
+  console.log('NotificationCenter render:', {
+    isMobile,
+    isTablet,
+    windowWidth: typeof window !== 'undefined' ? window.innerWidth : 'SSR',
+    hookResult: responsiveLayout
+  })
 
   useEffect(() => {
     if (user) {
@@ -171,17 +185,23 @@ export default function NotificationCenter() {
         variant="ghost"
         size="sm"
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2"
+        className={`relative ${isMobile ? 'p-2 h-10 w-10' : 'p-2'} touch-manipulation`}
+        aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ''} ${isMobile ? '(Mobile)' : ''}`}
+        title={isMobile ? 'Mobile Notification Center' : 'Notification Center'}
       >
         {unreadCount > 0 ? (
-          <BellRing className="h-5 w-5" />
+          <BellRing className={`${isMobile ? 'h-5 w-5' : 'h-5 w-5'}`} />
         ) : (
-          <Bell className="h-5 w-5" />
+          <Bell className={`${isMobile ? 'h-5 w-5' : 'h-5 w-5'}`} />
         )}
         {unreadCount > 0 && (
-          <Badge 
-            variant="destructive" 
-            className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
+          <Badge
+            variant="destructive"
+            className={`absolute flex items-center justify-center p-0 text-xs ${
+              isMobile
+                ? '-top-0.5 -right-0.5 h-4 w-4 min-w-4'
+                : '-top-1 -right-1 h-5 w-5'
+            }`}
           >
             {unreadCount > 9 ? '9+' : unreadCount}
           </Badge>
@@ -191,38 +211,53 @@ export default function NotificationCenter() {
       {isOpen && (
         <>
           {/* Backdrop */}
-          <div 
-            className="fixed inset-0 z-40" 
+          <div
+            className="fixed inset-0 z-40"
             onClick={() => setIsOpen(false)}
           />
-          
+
           {/* Notification Panel */}
-          <div className="absolute right-0 top-full mt-2 w-80 z-50">
-            <Card className="border-0 shadow-2xl">
-              <CardHeader className="pb-3">
+          <div className={`
+            z-50
+            ${isMobile
+              ? 'fixed inset-0 flex items-start justify-center pt-16 px-4 pb-4'
+              : `absolute mt-2 ${isTablet ? 'right-0 top-full w-96' : 'right-0 top-full w-80'}`
+            }
+          `}>
+            <Card className={`
+              border-0 shadow-2xl
+              ${isMobile
+                ? 'w-full max-w-sm max-h-[calc(100vh-6rem)] overflow-hidden animate-in slide-in-from-top-4 duration-200'
+                : 'animate-in slide-in-from-top-2 duration-150'
+              }
+            `}>
+              <CardHeader className={`pb-3 ${isMobile ? 'px-4 py-3' : ''}`}>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Bell className="h-5 w-5" />
+                  <CardTitle className={`flex items-center gap-2 ${isMobile ? 'text-base' : 'text-lg'}`}>
+                    <Bell className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'}`} />
                     Notifications
+                    {isMobile}
                   </CardTitle>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => setIsOpen(false)}
+                    className={isMobile ? 'h-9 w-9 p-0 rounded-full' : 'h-8 w-8 p-0'}
+                    aria-label="Close notifications"
                   >
-                    <X className="h-4 w-4" />
+                    <X className={isMobile ? 'h-5 w-5' : 'h-4 w-4'} />
                   </Button>
                 </div>
                 {unreadCount > 0 && (
-                  <div className="flex items-center justify-between">
-                    <CardDescription>
+                  <div className={`flex items-center justify-between ${isMobile ? 'mt-2' : ''}`}>
+                    <CardDescription className={isMobile ? 'text-xs' : ''}>
                       {unreadCount} unread notification{unreadCount > 1 ? 's' : ''}
                     </CardDescription>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={markAllAsRead}
-                      className="text-xs"
+                      className={`${isMobile ? 'text-xs h-7 px-2' : 'text-xs'}`}
                     >
                       Mark all read
                     </Button>
@@ -232,53 +267,59 @@ export default function NotificationCenter() {
 
               <CardContent className="p-0">
                 {loading ? (
-                  <div className="p-4 text-center">
+                  <div className={`text-center ${isMobile ? 'p-3' : 'p-4'}`}>
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
-                    <p className="text-sm text-muted-foreground mt-2">Loading notifications...</p>
+                    <p className={`text-muted-foreground mt-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>Loading notifications...</p>
                   </div>
                 ) : notifications.length === 0 ? (
-                  <div className="p-6 text-center">
-                    <Bell className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">No notifications yet</p>
+                  <div className={`text-center ${isMobile ? 'p-4' : 'p-6'}`}>
+                    <Bell className={`text-muted-foreground mx-auto mb-2 ${isMobile ? 'h-6 w-6' : 'h-8 w-8'}`} />
+                    <p className={`text-muted-foreground ${isMobile ? 'text-xs' : 'text-sm'}`}>No notifications yet</p>
                   </div>
                 ) : (
-                  <div className="max-h-96 overflow-y-auto">
+                  <div className={`overflow-y-auto ${isMobile ? 'max-h-[50vh]' : 'max-h-96'}`}>
                     {notifications.map((notification, index) => (
                       <div key={notification.id}>
                         <div
-                          className={`p-4 hover:bg-accent cursor-pointer transition-colors ${
+                          className={`hover:bg-accent cursor-pointer transition-colors ${
                             !notification.read ? 'bg-primary/5' : ''
-                          }`}
-                          onClick={() => !notification.isRead && markAsRead(notification.id)}
+                          } ${isMobile ? 'p-3' : 'p-4'}`}
+                          onClick={() => !notification.read && markAsRead(notification.id)}
                         >
-                          <div className="flex items-start gap-3">
-                            <div className="mt-0.5">
+                          <div className={`flex items-start ${isMobile ? 'gap-2' : 'gap-3'}`}>
+                            <div className="mt-0.5 flex-shrink-0">
                               {getNotificationIcon(notification.type)}
                             </div>
 
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <p className={`text-sm font-medium ${
-                                  !notification.isRead ? 'text-foreground' : 'text-muted-foreground'
-                                }`}>
+                              <div className={`flex items-center gap-2 ${isMobile ? 'mb-0.5' : 'mb-1'}`}>
+                                <p className={`font-medium ${
+                                  !notification.read ? 'text-foreground' : 'text-muted-foreground'
+                                } ${isMobile ? 'text-xs' : 'text-sm'}`}>
                                   {notification.title}
                                 </p>
-                                {!notification.isRead && (
-                                  <div className="w-2 h-2 bg-primary rounded-full"></div>
+                                {!notification.read && (
+                                  <div className={`bg-primary rounded-full ${isMobile ? 'w-1.5 h-1.5' : 'w-2 h-2'}`}></div>
                                 )}
                               </div>
 
-                              <p className="text-xs text-muted-foreground mb-2">
+                              <p className={`text-muted-foreground mb-2 ${isMobile ? 'text-xs leading-tight' : 'text-xs'}`}>
                                 {notification.message}
                               </p>
 
-                              <div className="flex items-center justify-between">
-                                <p className="text-xs text-muted-foreground">
-                                  {new Date(notification.createdAt).toLocaleDateString()}
+                              <div className={`flex items-center justify-between ${isMobile ? 'gap-2' : ''}`}>
+                                <p className={`text-muted-foreground ${isMobile ? 'text-xs' : 'text-xs'}`}>
+                                  {isMobile
+                                    ? new Date(notification.createdAt).toLocaleDateString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric'
+                                      })
+                                    : new Date(notification.createdAt).toLocaleDateString()
+                                  }
                                 </p>
-                                
+
                                 {notification.metadata?.xpAmount && (
-                                  <Badge variant="outline" className="text-xs">
+                                  <Badge variant="outline" className={`${isMobile ? 'text-xs px-1.5 py-0.5' : 'text-xs'}`}>
                                     +{notification.metadata.xpAmount} XP
                                   </Badge>
                                 )}
@@ -293,9 +334,9 @@ export default function NotificationCenter() {
                                   e.stopPropagation()
                                   markAsRead(notification.id)
                                 }}
-                                className="p-1 h-auto"
+                                className={`h-auto flex-shrink-0 ${isMobile ? 'p-1 w-6 h-6' : 'p-1'}`}
                               >
-                                <Check className="h-3 w-3" />
+                                <Check className={`${isMobile ? 'h-3 w-3' : 'h-3 w-3'}`} />
                               </Button>
                             )}
                           </div>
@@ -310,14 +351,14 @@ export default function NotificationCenter() {
                 {notifications.length > 0 && (
                   <>
                     <Separator />
-                    <div className="p-3">
+                    <div className={isMobile ? 'p-2' : 'p-3'}>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={fetchNotifications}
-                        className="w-full text-xs"
+                        className={`w-full ${isMobile ? 'text-xs h-8' : 'text-xs'}`}
                       >
-                        <Clock className="h-3 w-3 mr-2" />
+                        <Clock className={`mr-2 ${isMobile ? 'h-3 w-3' : 'h-3 w-3'}`} />
                         Refresh
                       </Button>
                     </div>

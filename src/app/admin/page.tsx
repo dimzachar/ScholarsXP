@@ -47,16 +47,16 @@ interface AdminStats {
 // Helper functions for system health display
 const getHealthIcon = (health: { submissionSuccessRate: number; avgReviewScore: number; flagRate: number }) => {
   const overallScore = (health.submissionSuccessRate + health.avgReviewScore - health.flagRate) / 2
-  if (overallScore >= 80) return <CheckCircle className="h-4 w-4 text-green-500" />
-  if (overallScore >= 60) return <AlertTriangle className="h-4 w-4 text-yellow-500" />
-  return <AlertTriangle className="h-4 w-4 text-red-500" />
+  if (overallScore >= 80) return <CheckCircle className="h-4 w-4 text-success" />
+  if (overallScore >= 60) return <AlertTriangle className="h-4 w-4 text-warning" />
+  return <AlertTriangle className="h-4 w-4 text-destructive" />
 }
 
 const getHealthColor = (health: { submissionSuccessRate: number; avgReviewScore: number; flagRate: number }) => {
   const overallScore = (health.submissionSuccessRate + health.avgReviewScore - health.flagRate) / 2
-  if (overallScore >= 80) return 'text-green-600'
-  if (overallScore >= 60) return 'text-yellow-600'
-  return 'text-red-600'
+  if (overallScore >= 80) return 'text-success'
+  if (overallScore >= 60) return 'text-warning'
+  return 'text-destructive'
 }
 
 export default function AdminDashboardPage() {
@@ -163,8 +163,8 @@ export default function AdminDashboardPage() {
       description: 'Manage and moderate all platform submissions',
       icon: FileText,
       href: '/admin/submissions',
-      color: 'bg-blue-50 border-blue-200 hover:bg-blue-100',
-      iconColor: 'text-blue-600',
+      color: 'bg-info/10 border-info/20 hover:bg-info/20',
+      iconColor: 'text-info',
       stats: stats ? [
         { label: 'Total', value: stats.totalSubmissions },
         { label: 'Pending', value: stats.pendingSubmissions },
@@ -176,8 +176,8 @@ export default function AdminDashboardPage() {
       description: 'Manage user accounts, roles, and permissions',
       icon: Users,
       href: '/admin/users',
-      color: 'bg-green-50 border-green-200 hover:bg-green-100',
-      iconColor: 'text-green-600',
+      color: 'bg-success/10 border-success/20 hover:bg-success/20',
+      iconColor: 'text-success',
       stats: stats ? [
         { label: 'Total Users', value: stats.totalUsers },
         { label: 'Active (7d)', value: stats.activeUsers },
@@ -189,8 +189,8 @@ export default function AdminDashboardPage() {
       description: 'Review and moderate flagged content',
       icon: Shield,
       href: '/admin/moderation',
-      color: 'bg-red-50 border-red-200 hover:bg-red-100',
-      iconColor: 'text-red-600',
+      color: 'bg-destructive/10 border-destructive/20 hover:bg-destructive/20',
+      iconColor: 'text-destructive',
       stats: stats ? [
         { label: 'Pending Flags', value: stats.pendingFlags },
         { label: 'Flag Rate', value: `${stats.systemHealth.flagRate.toFixed(2)}%` },
@@ -202,8 +202,8 @@ export default function AdminDashboardPage() {
       description: 'Comprehensive platform insights and metrics',
       icon: BarChart3,
       href: '/admin/analytics',
-      color: 'bg-purple-50 border-purple-200 hover:bg-purple-100',
-      iconColor: 'text-purple-600',
+      color: 'bg-purple/10 border-purple/20 hover:bg-purple/20',
+      iconColor: 'text-purple',
       stats: stats ? [
         { label: 'Total XP', value: stats.totalXpAwarded.toLocaleString() },
         { label: 'Avg Review', value: stats.systemHealth.avgReviewScore.toFixed(1) },
@@ -238,15 +238,15 @@ export default function AdminDashboardPage() {
     return (
       <AuthGuard>
         <AdminGuard>
-          <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-blue-50">
+          <div className="min-h-screen bg-background">
             <div className="container mx-auto px-4 py-8">
               <div className="text-center">
                 <div className="inline-flex items-center space-x-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6">
                   <Settings className="h-4 w-4" />
                   <span>Loading Admin Panel</span>
                 </div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-4">Admin Dashboard</h1>
-                <p className="text-gray-600">Loading system statistics...</p>
+                <h1 className="text-3xl font-bold text-foreground mb-4">Admin Dashboard</h1>
+                <p className="text-muted-foreground">Loading system statistics...</p>
               </div>
             </div>
           </div>
@@ -258,8 +258,8 @@ export default function AdminDashboardPage() {
   return (
     <AuthGuard>
       <AdminGuard>
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-blue-50">
-      <div className="container mx-auto px-4 py-8">
+        <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-8 pb-20 md:pb-8">
         {/* Header */}
         <div className="mb-8">
           <div className="inline-flex items-center space-x-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6">
@@ -269,13 +269,13 @@ export default function AdminDashboardPage() {
           
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+              <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">
                 Admin{' '}
-                <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r from-info to-purple bg-clip-text text-transparent">
                   Dashboard
                 </span>
               </h1>
-              <p className="text-lg text-gray-600">
+              <p className="text-lg text-muted-foreground">
                 Manage submissions, review flags, and oversee system operations
               </p>
             </div>
@@ -293,14 +293,14 @@ export default function AdminDashboardPage() {
 
         {message && (
           <div className={`mb-6 p-4 rounded-lg border flex items-center gap-3 ${
-            message.includes('successfully') 
-              ? 'bg-green-50 border-green-200 text-green-800' 
-              : 'bg-red-50 border-red-200 text-red-800'
+            message.includes('successfully')
+              ? 'bg-success/10 border-success/20 text-success'
+              : 'bg-destructive/10 border-destructive/20 text-destructive'
           }`}>
             {message.includes('successfully') ? (
-              <CheckCircle className="h-5 w-5 text-green-500" />
+              <CheckCircle className="h-5 w-5 text-success" />
             ) : (
-              <AlertTriangle className="h-5 w-5 text-red-500" />
+              <AlertTriangle className="h-5 w-5 text-destructive" />
             )}
             <p className="font-medium">{message}</p>
           </div>
@@ -326,12 +326,12 @@ export default function AdminDashboardPage() {
             <Card className="border-0 shadow-lg">
               <CardContent className="p-6">
                 <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-secondary/20 rounded-lg">
-                    <Clock className="h-6 w-6 text-secondary-foreground" />
+                  <div className="p-3 bg-warning/20 rounded-lg">
+                    <MessageSquare className="h-6 w-6 text-warning" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-foreground">{stats.pendingReviews}</p>
-                    <p className="text-muted-foreground">Pending Reviews</p>
+                    <p className="text-2xl font-bold text-foreground">{stats.totalReviews}</p>
+                    <p className="text-muted-foreground">Total Reviews</p>
                   </div>
                 </div>
               </CardContent>
@@ -344,8 +344,8 @@ export default function AdminDashboardPage() {
                     <AlertTriangle className="h-6 w-6 text-destructive" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-foreground">{stats.flaggedContent}</p>
-                    <p className="text-muted-foreground">Flagged Content</p>
+                    <p className="text-2xl font-bold text-foreground">{stats.pendingFlags}</p>
+                    <p className="text-muted-foreground">Pending Flags</p>
                   </div>
                 </div>
               </CardContent>
@@ -402,17 +402,18 @@ export default function AdminDashboardPage() {
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-4">
-                    <div className="p-4 bg-primary/10 border border-primary/20 rounded-lg">
-                      <h3 className="font-semibold text-primary mb-2 flex items-center gap-2">
+                    <div className="p-4 bg-muted/50 border border-border rounded-lg">
+                      <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
                         <Calendar className="h-4 w-4" />
                         Weekly Operations
                       </h3>
-                      <p className="text-sm text-primary/80 mb-4">
+                      <p className="text-sm text-muted-foreground mb-4">
                         Process weekly streaks, penalties, and leaderboard generation
                       </p>
-                      <Button 
+                      <Button
                         onClick={() => handleSystemAction('weekly')}
                         disabled={actionLoading === 'weekly'}
+                        variant="secondary"
                         className="w-full"
                       >
                         {actionLoading === 'weekly' ? (
@@ -429,18 +430,18 @@ export default function AdminDashboardPage() {
                       </Button>
                     </div>
 
-                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                      <h3 className="font-semibold text-green-900 mb-2 flex items-center gap-2">
+                    <div className="p-4 bg-muted/50 border border-border rounded-lg">
+                      <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
                         <TrendingUp className="h-4 w-4" />
                         XP Aggregation
                       </h3>
-                      <p className="text-sm text-green-700 mb-4">
+                      <p className="text-sm text-muted-foreground mb-4">
                         Process pending XP calculations and finalize scores
                       </p>
-                      <Button 
+                      <Button
                         onClick={() => handleSystemAction('aggregate')}
                         disabled={actionLoading === 'aggregate'}
-                        variant="outline"
+                        variant="secondary"
                         className="w-full"
                       >
                         {actionLoading === 'aggregate' ? (
@@ -459,12 +460,12 @@ export default function AdminDashboardPage() {
                   </div>
 
                   <div className="space-y-4">
-                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                      <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    <div className="p-4 bg-muted/50 border border-border rounded-lg">
+                      <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
                         <Database className="h-4 w-4" />
                         Data Refresh
                       </h3>
-                      <p className="text-sm text-gray-700 mb-4">
+                      <p className="text-sm text-muted-foreground mb-4">
                         Refresh dashboard statistics and system metrics
                       </p>
                       <Button 
@@ -487,12 +488,12 @@ export default function AdminDashboardPage() {
                       </Button>
                     </div>
 
-                    <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                      <h3 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
+                    <div className="p-4 bg-muted/50 border border-border rounded-lg">
+                      <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
                         <Shield className="h-4 w-4" />
                         System Health
                       </h3>
-                      <p className="text-sm text-purple-700 mb-4">
+                      <p className="text-sm text-muted-foreground mb-4">
                         Monitor system performance and security status
                       </p>
                       <div className="flex items-center justify-between">
@@ -515,7 +516,7 @@ export default function AdminDashboardPage() {
                 <CardDescription>Manage user roles and permissions</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-600">User management interface coming soon...</p>
+                <p className="text-muted-foreground">User management interface coming soon...</p>
               </CardContent>
             </Card>
           </TabsContent>
@@ -554,21 +555,21 @@ export default function AdminDashboardPage() {
               <CardContent>
                 {submissionsLoading ? (
                   <div className="text-center py-8">
-                    <RefreshCw className="h-8 w-8 text-gray-400 mx-auto mb-4 animate-spin" />
-                    <p className="text-gray-600">Loading submissions...</p>
+                    <RefreshCw className="h-8 w-8 text-muted-foreground mx-auto mb-4 animate-spin" />
+                    <p className="text-muted-foreground">Loading submissions...</p>
                   </div>
                 ) : submissions.length === 0 ? (
                   <div className="text-center py-8">
-                    <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 mb-2">No submissions found</p>
-                    <p className="text-sm text-gray-500">
+                    <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground mb-2">No submissions found</p>
+                    <p className="text-sm text-muted-foreground/70">
                       Submissions will appear here once users start submitting content.
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {submissions.map((submission) => (
-                      <div key={submission.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                      <div key={submission.id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
@@ -602,7 +603,7 @@ export default function AdminDashboardPage() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-sm text-gray-600 mb-1">XP Breakdown</div>
+                            <div className="text-sm text-muted-foreground mb-1">XP Breakdown</div>
                             <div className="space-y-1 text-sm">
                               <div>AI: {submission.aiXp}</div>
                               <div>Peer: {submission.peerXp || 'N/A'}</div>
@@ -632,36 +633,36 @@ export default function AdminDashboardPage() {
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-4">
-                    <h3 className="font-semibold text-gray-900">Weekly Performance</h3>
+                    <h3 className="font-semibold text-foreground">Weekly Performance</h3>
                     <div className="space-y-2">
                       <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">XP Awarded This Week</span>
+                        <span className="text-sm text-muted-foreground">XP Awarded This Week</span>
                         <span className="font-medium">{stats?.weeklyXpAwarded || 0}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Active Participants</span>
+                        <span className="text-sm text-muted-foreground">Active Participants</span>
                         <span className="font-medium">{stats?.activeUsers || 0}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Pending Reviews</span>
-                        <span className="font-medium">{stats?.pendingReviews || 0}</span>
+                        <span className="text-sm text-muted-foreground">Pending Reviews</span>
+                        <span className="font-medium">{stats?.totalReviews || 0}</span>
                       </div>
                     </div>
                   </div>
 
                   <div className="space-y-4">
-                    <h3 className="font-semibold text-gray-900">System Health</h3>
+                    <h3 className="font-semibold text-foreground">System Health</h3>
                     <div className="space-y-2">
                       <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Total Submissions</span>
+                        <span className="text-sm text-muted-foreground">Total Submissions</span>
                         <span className="font-medium">{stats?.totalSubmissions || 0}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Flagged Content</span>
-                        <span className="font-medium text-red-600">{stats?.flaggedContent || 0}</span>
+                        <span className="text-sm text-muted-foreground">Flagged Content</span>
+                        <span className="font-medium text-destructive">{stats?.pendingFlags || 0}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">System Status</span>
+                        <span className="text-sm text-muted-foreground">System Status</span>
                         <Badge variant={stats?.systemHealth === 'healthy' ? 'default' : 'destructive'}>
                           {stats?.systemHealth || 'Unknown'}
                         </Badge>

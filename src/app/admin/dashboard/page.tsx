@@ -84,8 +84,8 @@ export default function AdminDashboardPage() {
       description: 'Manage and moderate all platform submissions',
       icon: FileText,
       href: '/admin/submissions',
-      color: 'bg-blue-50 border-blue-200 hover:bg-blue-100',
-      iconColor: 'text-blue-600',
+      color: 'bg-info/10 border-info/20 hover:bg-info/20',
+      iconColor: 'text-info',
       stats: stats ? [
         { label: 'Total', value: stats.totalSubmissions },
         { label: 'Pending', value: stats.pendingSubmissions },
@@ -97,8 +97,8 @@ export default function AdminDashboardPage() {
       description: 'Manage user accounts, roles, and permissions',
       icon: Users,
       href: '/admin/users',
-      color: 'bg-green-50 border-green-200 hover:bg-green-100',
-      iconColor: 'text-green-600',
+      color: 'bg-success/10 border-success/20 hover:bg-success/20',
+      iconColor: 'text-success',
       stats: stats ? [
         { label: 'Total Users', value: stats.totalUsers },
         { label: 'Active (7d)', value: stats.activeUsers },
@@ -110,8 +110,8 @@ export default function AdminDashboardPage() {
       description: 'Review and moderate flagged content',
       icon: Shield,
       href: '/admin/moderation',
-      color: 'bg-red-50 border-red-200 hover:bg-red-100',
-      iconColor: 'text-red-600',
+      color: 'bg-destructive/10 border-destructive/20 hover:bg-destructive/20',
+      iconColor: 'text-destructive',
       stats: stats ? [
         { label: 'Pending Flags', value: stats.pendingFlags },
         { label: 'Flag Rate', value: `${stats.systemHealth.flagRate.toFixed(2)}%` },
@@ -123,8 +123,8 @@ export default function AdminDashboardPage() {
       description: 'Comprehensive platform insights and metrics',
       icon: BarChart3,
       href: '/admin/analytics',
-      color: 'bg-purple-50 border-purple-200 hover:bg-purple-100',
-      iconColor: 'text-purple-600',
+      color: 'bg-purple/10 border-purple/20 hover:bg-purple/20',
+      iconColor: 'text-purple',
       stats: stats ? [
         { label: 'Total XP', value: stats.totalXpAwarded.toLocaleString() },
         { label: 'Avg Review', value: stats.systemHealth.avgReviewScore.toFixed(1) },
@@ -193,52 +193,52 @@ export default function AdminDashboardPage() {
         {/* System Health Overview */}
         {stats && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+            <Card className="bg-gradient-to-br from-info/10 to-info/20 border-info/20">
               <CardContent className="p-4 text-center">
-                <Users className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-                <div className="text-2xl font-bold text-blue-700">
+                <Users className="h-8 w-8 text-info mx-auto mb-2" />
+                <div className="text-2xl font-bold text-foreground">
                   {stats.totalUsers}
                 </div>
-                <div className="text-sm text-blue-600">Total Users</div>
-                <div className="text-xs text-blue-500 mt-1">
+                <div className="text-sm text-info">Total Users</div>
+                <div className="text-xs text-info/80 mt-1">
                   {stats.activeUsers} active (7d)
                 </div>
               </CardContent>
             </Card>
             
-            <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+            <Card className="bg-gradient-to-br from-success/10 to-success/20 border-success/20">
               <CardContent className="p-4 text-center">
-                <FileText className="h-8 w-8 text-green-600 mx-auto mb-2" />
-                <div className="text-2xl font-bold text-green-700">
+                <FileText className="h-8 w-8 text-success mx-auto mb-2" />
+                <div className="text-2xl font-bold text-foreground">
                   {stats.totalSubmissions}
                 </div>
-                <div className="text-sm text-green-600">Submissions</div>
-                <div className="text-xs text-green-500 mt-1">
+                <div className="text-sm text-success">Submissions</div>
+                <div className="text-xs text-success/80 mt-1">
                   {stats.systemHealth.submissionSuccessRate}% success rate
                 </div>
               </CardContent>
             </Card>
             
-            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+            <Card className="bg-gradient-to-br from-purple/10 to-purple/20 border-purple/20">
               <CardContent className="p-4 text-center">
-                <MessageSquare className="h-8 w-8 text-purple-600 mx-auto mb-2" />
-                <div className="text-2xl font-bold text-purple-700">
+                <MessageSquare className="h-8 w-8 text-purple mx-auto mb-2" />
+                <div className="text-2xl font-bold text-foreground">
                   {stats.totalReviews}
                 </div>
-                <div className="text-sm text-purple-600">Reviews</div>
-                <div className="text-xs text-purple-500 mt-1">
+                <div className="text-sm text-purple">Reviews</div>
+                <div className="text-xs text-purple/80 mt-1">
                   {stats.systemHealth.avgReviewScore.toFixed(1)} avg score
                 </div>
               </CardContent>
             </Card>
             
-            <Card className={`bg-gradient-to-br ${stats.pendingFlags > 0 ? 'from-red-50 to-red-100 border-red-200' : 'from-gray-50 to-gray-100 border-gray-200'}`}>
+            <Card className={`bg-gradient-to-br ${stats.pendingFlags > 0 ? 'from-destructive/10 to-destructive/20 border-destructive/20' : 'from-muted/50 to-muted border-border'}`}>
               <CardContent className="p-4 text-center">
-                <Shield className={`h-8 w-8 ${stats.pendingFlags > 0 ? 'text-red-600' : 'text-gray-600'} mx-auto mb-2`} />
-                <div className={`text-2xl font-bold ${stats.pendingFlags > 0 ? 'text-red-700' : 'text-gray-700'}`}>
+                <Shield className={`h-8 w-8 ${stats.pendingFlags > 0 ? 'text-destructive' : 'text-muted-foreground'} mx-auto mb-2`} />
+                <div className={`text-2xl font-bold ${stats.pendingFlags > 0 ? 'text-destructive' : 'text-foreground'}`}>
                   {stats.pendingFlags}
                 </div>
-                <div className={`text-sm ${stats.pendingFlags > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                <div className={`text-sm ${stats.pendingFlags > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
                   Pending Flags
                 </div>
                 {stats.pendingFlags > 0 && (
@@ -253,9 +253,9 @@ export default function AdminDashboardPage() {
 
         {/* Quick Actions */}
         {stats && stats.pendingFlags > 0 && (
-          <Card className="mb-8 border-red-200 bg-red-50">
+          <Card className="mb-8 border-destructive/20 bg-destructive/10">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-red-700">
+              <CardTitle className="flex items-center gap-2 text-destructive">
                 <AlertTriangle className="h-5 w-5" />
                 Urgent Actions Required
               </CardTitle>
@@ -263,10 +263,10 @@ export default function AdminDashboardPage() {
             <CardContent>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-red-700 font-medium">
+                  <p className="text-destructive font-medium">
                     {stats.pendingFlags} content flag{stats.pendingFlags !== 1 ? 's' : ''} pending review
                   </p>
-                  <p className="text-red-600 text-sm">
+                  <p className="text-destructive/80 text-sm">
                     Review and resolve flagged content to maintain platform quality
                   </p>
                 </div>
@@ -315,8 +315,8 @@ export default function AdminDashboardPage() {
                     <div className="grid grid-cols-3 gap-4">
                       {[1, 2, 3].map((i) => (
                         <div key={i} className="text-center">
-                          <div className="h-6 bg-gray-200 rounded animate-pulse mb-1"></div>
-                          <div className="h-3 bg-gray-200 rounded animate-pulse"></div>
+                          <div className="h-6 bg-muted rounded animate-pulse mb-1"></div>
+                          <div className="h-3 bg-muted rounded animate-pulse"></div>
                         </div>
                       ))}
                     </div>
@@ -340,19 +340,19 @@ export default function AdminDashboardPage() {
               {quickActions.map((action) => (
                 <Link key={action.title} href={action.href}>
                   <Card className={`transition-all duration-200 cursor-pointer hover:shadow-md ${
-                    action.urgent ? 'border-red-200 bg-red-50' : 'hover:bg-muted/50'
+                    action.urgent ? 'border-destructive/20 bg-destructive/10' : 'hover:bg-muted/50'
                   }`}>
                     <CardContent className="p-4">
                       <div className="flex items-center gap-3">
                         <action.icon className={`h-6 w-6 ${
-                          action.urgent ? 'text-red-600' : 'text-muted-foreground'
+                          action.urgent ? 'text-destructive' : 'text-muted-foreground'
                         }`} />
                         <div className="flex-1">
-                          <h4 className={`font-medium ${action.urgent ? 'text-red-700' : ''}`}>
+                          <h4 className={`font-medium ${action.urgent ? 'text-destructive' : ''}`}>
                             {action.title}
                           </h4>
                           <p className={`text-sm ${
-                            action.urgent ? 'text-red-600' : 'text-muted-foreground'
+                            action.urgent ? 'text-destructive/80' : 'text-muted-foreground'
                           }`}>
                             {action.description}
                           </p>

@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { MobileInput, MobileForm } from '@/components/ui/mobile-input'
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout'
 import { detectPlatform } from '@/lib/utils'
 import { apiPost } from '@/lib/api-client'
 import {
@@ -23,6 +25,7 @@ export default function SubmissionForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [message, setMessage] = useState('')
   const [progress, setProgress] = useState(0)
+  const { isMobile } = useResponsiveLayout()
 
   const platform = detectPlatform(url)
 
@@ -83,41 +86,26 @@ export default function SubmissionForm() {
   }
 
   return (
-    <div className="space-y-8">
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="space-y-3">
-          <label className="text-sm font-semibold text-foreground block">
-            Content URL
-          </label>
-          <div className="relative">
-            <Input
-              type="url"
-              placeholder="https://twitter.com/... or https://medium.com/..."
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              disabled={isSubmitting}
-              className="pr-24 h-14 text-base border-2 border-input focus:border-ring rounded-xl shadow-sm"
-            />
-            {platform && (
-              <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                <Badge variant="outline" className="flex items-center gap-2 bg-background border-2 px-3 py-1">
-                  {getPlatformIcon()}
-                  <span className="font-medium">{platform}</span>
-                </Badge>
-              </div>
-            )}
-          </div>
-
-          {url && !platform && (
-            <div className="flex items-center gap-3 text-amber-700 text-sm bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <AlertCircle className="h-5 w-5" />
-              <span className="font-medium">Only Twitter/X and Medium links are supported</span>
-            </div>
-          )}
-        </div>
+    <div className={isMobile ? "space-y-6" : "space-y-8"}>
+      <MobileForm onSubmit={handleSubmit}>
+        <MobileInput
+          type="url"
+          label="Content URL"
+          placeholder="https://twitter.com/... or https://medium.com/..."
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          disabled={isSubmitting}
+          error={url && !platform ? "Only Twitter/X and Medium links are supported" : undefined}
+          badge={platform ? {
+            text: platform,
+            icon: platform === 'Twitter' ? Twitter : platform === 'Medium' ? FileText : ExternalLink,
+            variant: 'outline'
+          } : undefined}
+          mobileOptimized={true}
+        />
 
         {isSubmitting && (
-          <div className="space-y-3 bg-primary/10 border border-primary/20 rounded-lg p-4">
+          <div className={`space-y-3 bg-primary/10 border border-primary/20 rounded-lg ${isMobile ? 'p-3' : 'p-4'}`}>
             <div className="flex items-center justify-between text-sm text-primary">
               <span className="font-medium">Processing submission...</span>
               <span className="font-bold">{progress}%</span>
@@ -129,61 +117,61 @@ export default function SubmissionForm() {
         <Button
           type="submit"
           disabled={isSubmitting || !platform}
-          className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-300 rounded-xl"
+          className={`w-full ${isMobile ? 'h-12' : 'h-14'} ${isMobile ? 'text-base' : 'text-lg'} font-semibold bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-300 rounded-xl`}
           size="lg"
         >
           {isSubmitting ? (
             <>
-              <Loader2 className="mr-3 h-5 w-5 animate-spin" />
+              <Loader2 className={`mr-3 ${isMobile ? 'h-4 w-4' : 'h-5 w-5'} animate-spin`} />
               Submitting...
             </>
           ) : (
             <>
-              <Send className="mr-3 h-5 w-5" />
+              <Send className={`mr-3 ${isMobile ? 'h-4 w-4' : 'h-5 w-5'}`} />
               Submit Content
             </>
           )}
         </Button>
-      </form>
+      </MobileForm>
 
       {message && (
-        <div className={`flex items-center gap-4 p-5 rounded-xl border-2 shadow-sm ${
+        <div className={`flex items-center gap-4 ${isMobile ? 'p-4' : 'p-5'} rounded-xl border-2 shadow-sm ${
           message.includes('successfully')
             ? 'bg-primary/10 border-primary/30 text-primary'
             : 'bg-destructive/10 border-destructive/30 text-destructive'
         }`}>
           {message.includes('successfully') ? (
-            <div className="p-2 bg-primary rounded-full">
-              <CheckCircle className="h-5 w-5 text-primary-foreground" />
+            <div className={`${isMobile ? 'p-1.5' : 'p-2'} bg-primary rounded-full`}>
+              <CheckCircle className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'} text-primary-foreground`} />
             </div>
           ) : (
-            <div className="p-2 bg-destructive rounded-full">
-              <AlertCircle className="h-5 w-5 text-destructive-foreground" />
+            <div className={`${isMobile ? 'p-1.5' : 'p-2'} bg-destructive rounded-full`}>
+              <AlertCircle className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'} text-destructive-foreground`} />
             </div>
           )}
-          <p className="text-base font-semibold">{message}</p>
+          <p className={`${isMobile ? 'text-sm' : 'text-base'} font-semibold`}>{message}</p>
         </div>
       )}
 
       {/* Quick Tips */}
-      <div className="bg-gradient-to-r from-muted/50 to-muted border-2 border-border rounded-xl p-6 shadow-sm">
-        <h4 className="font-bold text-foreground mb-4 flex items-center gap-3 text-lg">
-          <div className="p-2 bg-primary rounded-lg">
-            <CheckCircle className="h-5 w-5 text-primary-foreground" />
+      <div className={`bg-gradient-to-r from-muted/50 to-muted border-2 border-border rounded-xl ${isMobile ? 'p-4' : 'p-6'} shadow-sm`}>
+        <h4 className={`font-bold text-foreground mb-4 flex items-center gap-3 ${isMobile ? 'text-base' : 'text-lg'}`}>
+          <div className={`${isMobile ? 'p-1.5' : 'p-2'} bg-primary rounded-lg`}>
+            <CheckCircle className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'} text-primary-foreground`} />
           </div>
           Quick Tips
         </h4>
-        <ul className="text-base text-foreground space-y-3">
+        <ul className={`${isMobile ? 'text-sm' : 'text-base'} text-foreground ${isMobile ? 'space-y-2' : 'space-y-3'}`}>
           <li className="flex items-center gap-3">
-            <div className="w-2 h-2 bg-primary rounded-full"></div>
+            <div className="w-2 h-2 bg-primary rounded-full shrink-0"></div>
             <span>Include the <code className="bg-muted px-2 py-1 rounded font-mono text-sm">#ScholarXP</code> hashtag in your content</span>
           </li>
           <li className="flex items-center gap-3">
-            <div className="w-2 h-2 bg-primary rounded-full"></div>
+            <div className="w-2 h-2 bg-primary rounded-full shrink-0"></div>
             <span>Ensure your content is original and educational</span>
           </li>
           <li className="flex items-center gap-3">
-            <div className="w-2 h-2 bg-primary rounded-full"></div>
+            <div className="w-2 h-2 bg-primary rounded-full shrink-0"></div>
             <span>Higher quality content earns more XP</span>
           </li>
         </ul>

@@ -240,10 +240,10 @@ export default function PeerReviewCard({
 
   const getScoreColor = (score: number) => {
     const percentage = (score - xpRange.min) / (xpRange.max - xpRange.min)
-    if (percentage >= 0.8) return 'text-green-600'
-    if (percentage >= 0.6) return 'text-blue-600'
-    if (percentage >= 0.4) return 'text-yellow-600'
-    return 'text-red-600'
+    if (percentage >= 0.8) return 'text-success'
+    if (percentage >= 0.6) return 'text-info'
+    if (percentage >= 0.4) return 'text-warning'
+    return 'text-destructive'
   }
 
   const getScoreLabel = (score: number) => {
@@ -323,8 +323,8 @@ export default function PeerReviewCard({
 
     if (assignment.isOverdue) {
       return {
-        color: 'text-red-600',
-        bg: 'bg-red-50 border-red-200',
+        color: 'text-destructive',
+        bg: 'bg-destructive/10 border-destructive/20',
         icon: <AlertTriangle className="h-4 w-4" />,
         text: 'Overdue'
       }
@@ -393,7 +393,7 @@ export default function PeerReviewCard({
               </Avatar>
               <div className="text-sm">
                 <p className="font-medium">{submission.user.username}</p>
-                <p className="text-gray-500">
+                <p className="text-muted-foreground">
                   {new Date(submission.createdAt).toLocaleDateString()}
                 </p>
               </div>
@@ -404,11 +404,11 @@ export default function PeerReviewCard({
 
       <CardContent className="space-y-6">
         {/* Content Link and Actions */}
-        <div className="bg-gray-50 rounded-lg p-4">
+        <div className="bg-muted/50 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 mb-1">Content URL</p>
-              <p className="text-sm text-gray-600 truncate">{submission.url}</p>
+              <p className="text-sm font-medium text-foreground mb-1">Content URL</p>
+              <p className="text-sm text-muted-foreground truncate">{submission.url}</p>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" asChild>
@@ -422,7 +422,7 @@ export default function PeerReviewCard({
                   variant="outline"
                   size="sm"
                   onClick={() => setShowFlagDialog(true)}
-                  className="text-red-600 hover:text-red-700"
+                  className="text-destructive hover:text-destructive/80"
                 >
                   <Flag className="h-4 w-4 mr-2" />
                   Flag
@@ -432,7 +432,7 @@ export default function PeerReviewCard({
           </div>
 
           {/* Time tracking */}
-          <div className="flex items-center gap-4 text-xs text-gray-500">
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
               Time spent: {timeSpent} min
@@ -448,19 +448,19 @@ export default function PeerReviewCard({
 
         {/* AI Score Reference */}
         <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
             <div className="flex items-center gap-2">
               <Zap className="h-4 w-4 text-primary" />
               <span className="text-sm font-medium text-primary">AI Evaluation Reference</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="bg-background">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="bg-background text-xs">
                 {submission.aiXp}/100 (Raw AI)
               </Badge>
-              <Badge variant="default" className="bg-primary text-primary-foreground">
+              <Badge variant="default" className="bg-primary text-primary-foreground text-xs">
                 ≈{aiXpMapped} XP (Mapped)
               </Badge>
-              <Badge variant="secondary">
+              <Badge variant="secondary" className="text-xs">
                 {xpRange.min}-{xpRange.max} Range
               </Badge>
             </div>
@@ -504,7 +504,7 @@ export default function PeerReviewCard({
                     step={1}
                     className="w-full"
                   />
-                  <div className="flex justify-between text-xs text-gray-500">
+                  <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Poor</span>
                     <span>Excellent</span>
                   </div>
@@ -523,7 +523,7 @@ export default function PeerReviewCard({
                     step={1}
                     className="w-full"
                   />
-                  <div className="flex justify-between text-xs text-gray-500">
+                  <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Poor</span>
                     <span>Excellent</span>
                   </div>
@@ -531,7 +531,7 @@ export default function PeerReviewCard({
 
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
-                    <Target className="h-4 w-4 text-blue-500" />
+                    <Target className="h-4 w-4 text-info" />
                     Relevance ({criteria.relevance}/5)
                   </Label>
                   <Slider
@@ -542,7 +542,7 @@ export default function PeerReviewCard({
                     step={1}
                     className="w-full"
                   />
-                  <div className="flex justify-between text-xs text-gray-500">
+                  <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Off-topic</span>
                     <span>Highly relevant</span>
                   </div>
@@ -550,7 +550,7 @@ export default function PeerReviewCard({
 
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
-                    <BookOpen className="h-4 w-4 text-green-500" />
+                    <BookOpen className="h-4 w-4 text-success" />
                     Educational ({criteria.educational}/5)
                   </Label>
                   <Slider
@@ -561,7 +561,7 @@ export default function PeerReviewCard({
                     step={1}
                     className="w-full"
                   />
-                  <div className="flex justify-between text-xs text-gray-500">
+                  <div className="flex justify-between text-xs text-muted-foreground">
                     <span>No value</span>
                     <span>Very educational</span>
                   </div>
@@ -569,7 +569,7 @@ export default function PeerReviewCard({
               </div>
 
               {/* Calculated XP Score */}
-              <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4">
+              <div className="bg-gradient-to-r from-primary/10 to-purple/10 border border-primary/20 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
                   <Label className="text-sm font-medium flex items-center gap-2">
                     <Star className="h-4 w-4 text-primary" />
@@ -588,19 +588,19 @@ export default function PeerReviewCard({
                   value={((xpScore - xpRange.min) / (xpRange.max - xpRange.min)) * 100}
                   className="h-3"
                 />
-                <p className="text-xs text-gray-600 mt-2">
+                <p className="text-xs text-muted-foreground mt-2">
                   Score automatically calculated from criteria ratings ({xpRange.min}-{xpRange.max} XP range)
                 </p>
               </div>
 
               {/* Manual XP Adjustment */}
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <div className="bg-muted/50 border border-border rounded-lg p-4">
                 <Label className="text-sm font-medium flex items-center gap-2 mb-2">
-                  <Target className="h-4 w-4 text-gray-600" />
+                  <Target className="h-4 w-4 text-muted-foreground" />
                   Fine-tune XP Score (Optional)
                 </Label>
                 <div className="flex items-center gap-3">
-                  <span className="text-sm text-gray-600 min-w-[3rem]">{xpRange.min}</span>
+                  <span className="text-sm text-muted-foreground min-w-[3rem]">{xpRange.min}</span>
                   <Slider
                     value={[xpScore]}
                     onValueChange={(value) => setXpScore(value[0])}
@@ -609,9 +609,9 @@ export default function PeerReviewCard({
                     step={1}
                     className="flex-1"
                   />
-                  <span className="text-sm text-gray-600 min-w-[3rem]">{xpRange.max}</span>
+                  <span className="text-sm text-muted-foreground min-w-[3rem]">{xpRange.max}</span>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
+                <p className="text-xs text-muted-foreground mt-2">
                   Adjust the final XP score if needed based on your detailed review
                 </p>
               </div>
@@ -622,7 +622,7 @@ export default function PeerReviewCard({
             <div className="space-y-4">
               <div>
                 <Label className="text-sm font-medium flex items-center gap-2 mb-2">
-                  <MessageSquare className="h-4 w-4 text-gray-600" />
+                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
                   Detailed Comments (Required)
                 </Label>
                 <Textarea
@@ -632,7 +632,7 @@ export default function PeerReviewCard({
                   className="min-h-[120px] resize-none"
                   disabled={isSubmitting}
                 />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
                   <span>{comments.length} characters (minimum 20)</span>
                   <span>Be specific and constructive</span>
                 </div>
@@ -651,11 +651,11 @@ export default function PeerReviewCard({
                   step={1}
                   className="w-full"
                 />
-                <div className="flex justify-between text-xs text-gray-500">
+                <div className="flex justify-between text-xs text-muted-foreground">
                   <span>Basic review</span>
                   <span>Comprehensive analysis</span>
                 </div>
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-muted-foreground">
                   Rate the thoroughness and helpfulness of your own review
                 </p>
               </div>
@@ -738,8 +738,8 @@ export default function PeerReviewCard({
 
         {/* Flag Dialog */}
         {showFlagDialog && (
-          <Alert className="border-red-200 bg-red-50">
-            <Flag className="h-4 w-4 text-red-600" />
+          <Alert className="border-destructive/20 bg-destructive/10">
+            <Flag className="h-4 w-4 text-destructive" />
             <AlertDescription className="space-y-3">
               <div>
                 <Label className="text-sm font-medium">Reason for flagging:</Label>

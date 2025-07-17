@@ -128,15 +128,15 @@ export default function AdminAnalyticsPage() {
   }
 
   const getGrowthIcon = (rate: number) => {
-    if (rate > 0) return <TrendingUp className="h-4 w-4 text-green-600" />
-    if (rate < 0) return <TrendingDown className="h-4 w-4 text-red-600" />
+    if (rate > 0) return <TrendingUp className="h-4 w-4 text-success" />
+    if (rate < 0) return <TrendingDown className="h-4 w-4 text-destructive" />
     return <div className="h-4 w-4" />
   }
 
   const getGrowthColor = (rate: number) => {
-    if (rate > 0) return 'text-green-600'
-    if (rate < 0) return 'text-red-600'
-    return 'text-gray-600'
+    if (rate > 0) return 'text-success'
+    if (rate < 0) return 'text-destructive'
+    return 'text-muted-foreground'
   }
 
   if (loading) {
@@ -158,7 +158,7 @@ export default function AdminAnalyticsPage() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
-              <BarChart3 className="h-8 w-8 text-blue-600" />
+              <BarChart3 className="h-8 w-8 text-info" />
               System Analytics
             </h1>
             <p className="text-muted-foreground">
@@ -195,9 +195,9 @@ export default function AdminAnalyticsPage() {
               <Card key={i}>
                 <CardContent className="p-6">
                   <div className="animate-pulse space-y-4">
-                    <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                    <div className="h-8 bg-gray-200 rounded w-3/4"></div>
-                    <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+                    <div className="h-4 bg-muted rounded w-1/2"></div>
+                    <div className="h-8 bg-muted rounded w-3/4"></div>
+                    <div className="h-3 bg-muted rounded w-1/3"></div>
                   </div>
                 </CardContent>
               </Card>
@@ -216,12 +216,12 @@ export default function AdminAnalyticsPage() {
             <TabsContent value="overview" className="space-y-6 mt-6">
               {/* Key Metrics */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+                <Card className="bg-gradient-to-br from-info/10 to-info/20 border-info/20">
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-blue-600">Total Users</p>
-                        <p className="text-2xl font-bold text-blue-700">
+                        <p className="text-sm font-medium text-info">Total Users</p>
+                        <p className="text-2xl font-bold text-info">
                           {formatNumber(analyticsData.overview.totalUsers)}
                         </p>
                         <div className={`flex items-center gap-1 text-sm ${getGrowthColor(analyticsData.growthRates.users)}`}>
@@ -229,17 +229,17 @@ export default function AdminAnalyticsPage() {
                           {Math.abs(analyticsData.growthRates.users).toFixed(1)}%
                         </div>
                       </div>
-                      <Users className="h-8 w-8 text-blue-600" />
+                      <Users className="h-8 w-8 text-info" />
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+                <Card className="bg-gradient-to-br from-success/10 to-success/20 border-success/20">
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-green-600">Submissions</p>
-                        <p className="text-2xl font-bold text-green-700">
+                        <p className="text-sm font-medium text-success">Submissions</p>
+                        <p className="text-2xl font-bold text-success">
                           {formatNumber(analyticsData.overview.totalSubmissions)}
                         </p>
                         <div className={`flex items-center gap-1 text-sm ${getGrowthColor(analyticsData.growthRates.submissions)}`}>
@@ -247,17 +247,17 @@ export default function AdminAnalyticsPage() {
                           {Math.abs(analyticsData.growthRates.submissions).toFixed(1)}%
                         </div>
                       </div>
-                      <FileText className="h-8 w-8 text-green-600" />
+                      <FileText className="h-8 w-8 text-success" />
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+                <Card className="bg-gradient-to-br from-purple/10 to-purple/20 border-purple/20">
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-purple-600">Reviews</p>
-                        <p className="text-2xl font-bold text-purple-700">
+                        <p className="text-sm font-medium text-purple">Reviews</p>
+                        <p className="text-2xl font-bold text-purple">
                           {formatNumber(analyticsData.overview.totalReviews)}
                         </p>
                         <div className={`flex items-center gap-1 text-sm ${getGrowthColor(analyticsData.growthRates.reviews)}`}>
@@ -265,24 +265,24 @@ export default function AdminAnalyticsPage() {
                           {Math.abs(analyticsData.growthRates.reviews).toFixed(1)}%
                         </div>
                       </div>
-                      <MessageSquare className="h-8 w-8 text-purple-600" />
+                      <MessageSquare className="h-8 w-8 text-purple" />
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+                <Card className="bg-gradient-to-br from-warning/10 to-warning/20 border-warning/20">
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-orange-600">XP Awarded</p>
-                        <p className="text-2xl font-bold text-orange-700">
+                        <p className="text-sm font-medium text-warning">XP Awarded</p>
+                        <p className="text-2xl font-bold text-warning">
                           {formatNumber(analyticsData.overview.totalXpAwarded)}
                         </p>
-                        <p className="text-sm text-orange-600">
+                        <p className="text-sm text-warning">
                           {analyticsData.overview.totalAchievements} achievements
                         </p>
                       </div>
-                      <Zap className="h-8 w-8 text-orange-600" />
+                      <Zap className="h-8 w-8 text-warning" />
                     </div>
                   </CardContent>
                 </Card>

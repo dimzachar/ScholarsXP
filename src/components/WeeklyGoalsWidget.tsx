@@ -209,7 +209,7 @@ export default function WeeklyGoalsWidget({
                     <div key={goal.taskType} className={`p-4 rounded-lg border ${details.lightBg}`}>
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full ${details.color} flex items-center justify-center text-white font-bold text-sm`}>
+                          <div className={`w-8 h-8 rounded-full ${details.color} flex items-center justify-center text-primary-foreground font-bold text-sm`}>
                             {goal.taskType}
                           </div>
                           <div>
@@ -219,9 +219,8 @@ export default function WeeklyGoalsWidget({
                             </p>
                           </div>
                         </div>
-                        <Badge 
-                          variant={goal.percentage >= 100 ? 'default' : 'secondary'}
-                          className={goal.percentage >= 100 ? 'bg-green-100 text-green-800' : ''}
+                        <Badge
+                          variant={goal.percentage >= 100 ? 'success' : 'secondary'}
                         >
                           {goal.percentage}%
                         </Badge>
