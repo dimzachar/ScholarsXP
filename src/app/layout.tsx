@@ -17,7 +17,7 @@ const oxanium = Oxanium({
 
 export const metadata: Metadata = {
   title: 'ScholarXP Evaluation System',
-  description: 'Submit your content and earn XP through AI evaluation and peer review',
+  description: 'Submit your content and earn XP through peer review',
 }
 
 export const viewport = {
