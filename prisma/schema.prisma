@@ -477,3 +477,26 @@ model ApiRateLimit {
   @@index([platform, endpoint, windowStart])
   @@map("api_rate_limits")
 }
+
+// Automation logging for cron jobs and manual admin operations
+model AutomationLog {
+  id           String    @id @default(uuid()) @db.Uuid
+  jobName      String    // e.g., "weekly-operations-cron", "xp-aggregation-cron"
+  jobType      String    // e.g., "weekly_operations", "xp_aggregation", "manual"
+  triggeredBy  String    // e.g., "cron", admin user ID
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+  status       String    @default("RUNNING") // "RUNNING", "SUCCESS", "FAILED"
+  result       String?   // JSON string with operation results
+  errorMessage String?
+  duration     Int?      // Duration in milliseconds
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Indexes for efficient querying
+  @@index([jobType, startedAt(sort: Desc)])
+  @@index([status, startedAt(sort: Desc)])
+  @@index([jobName, startedAt(sort: Desc)])
+  @@index([triggeredBy, startedAt(sort: Desc)])
+  @@map("AutomationLog")
+}

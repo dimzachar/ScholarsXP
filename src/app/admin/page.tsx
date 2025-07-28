@@ -24,10 +24,12 @@ import {
   CheckCircle,
   Zap,
   Calendar,
-  Database
+  Database,
+  Activity
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import AutomationStatus from '@/components/Admin/AutomationStatus'
 import SubmissionsManagement from '@/components/Admin/SubmissionsManagement'
 
 interface AdminStats {
@@ -126,20 +128,81 @@ export default function AdminDashboardPage() {
   }
 
   const handleSystemAction = async (action: string) => {
+    // Add confirmation for destructive operations
+    if (action === 'weekly') {
+      const confirmed = window.confirm(
+        'Are you sure you want to process the weekly reset?\n\n' +
+        'This will:\n' +
+        '• Process streaks for all users\n' +
+        '• Apply penalties for missed reviews\n' +
+        '• Reset weekly XP counters\n' +
+        '• Generate weekly leaderboards\n\n' +
+        'This action affects all users and cannot be undone.'
+      )
+      if (!confirmed) return
+    }
+
     try {
       setActionLoading(action)
       setMessage('')
 
-      await api.post(`/api/admin/system/${action}`)
+      console.log(`🔧 [ADMIN UI] Triggering system action: ${action}`)
 
-      setMessage(`${action} action completed successfully`)
-      if (action === 'refresh') {
-        await fetchAdminStats()
+      const response = await api.post(`/api/admin/system/${action}`)
+
+      // Extract detailed information from response
+      const result = response.data || response
+      const summary = result.summary || result.message || `${action} action completed successfully`
+      const details = result.details
+
+      // Create detailed success message
+      let successMessage = summary
+      if (details) {
+        if (action === 'weekly' && details.usersProcessed !== undefined) {
+          successMessage = `Weekly reset completed: ${details.usersProcessed} users processed, ${details.streaksAwarded} streaks awarded, ${details.penaltiesApplied} penalties applied`
+        } else if (action === 'aggregate' && details.submissionsProcessed !== undefined) {
+          successMessage = `XP aggregation completed: ${details.submissionsProcessed} submissions processed and finalized`
+        } else if (action === 'refresh') {
+          successMessage = 'Data refresh completed: system cache cleared and statistics updated'
+        }
       }
-    } catch (error) {
-      setMessage(`Error executing ${action} action`)
+
+      setMessage(successMessage)
+
+      // Always refresh stats after any system action
+      await fetchAdminStats()
+
+      console.log(`✅ [ADMIN UI] System action completed: ${action}`)
+
+    } catch (error: any) {
+      console.error(`❌ [ADMIN UI] System action failed: ${action}`, error)
+
+      // Extract error details for better user feedback
+      let errorMessage = `Error executing ${action} action`
+
+      if (error?.response?.data?.error) {
+        const errorData = error.response.data.error
+        if (typeof errorData === 'string') {
+          errorMessage = `${getActionDisplayName(action)} failed: ${errorData}`
+        } else if (errorData.message) {
+          errorMessage = `${getActionDisplayName(action)} failed: ${errorData.message}`
+        }
+      } else if (error?.message) {
+        errorMessage = `${getActionDisplayName(action)} failed: ${error.message}`
+      }
+
+      setMessage(errorMessage)
     } finally {
       setActionLoading(null)
+    }
+  }
+
+  const getActionDisplayName = (action: string): string => {
+    switch (action) {
+      case 'weekly': return 'Weekly Operations'
+      case 'aggregate': return 'XP Aggregation'
+      case 'refresh': return 'Data Refresh'
+      default: return action
     }
   }
 
@@ -328,17 +391,28 @@ export default function AdminDashboardPage() {
         </div>
 
         {message && (
-          <div className={`mb-6 p-4 rounded-lg border flex items-center gap-3 ${
-            message.includes('successfully')
+          <div className={`mb-6 p-4 rounded-lg border flex items-start gap-3 ${
+            message.includes('successfully') || message.includes('completed')
               ? 'bg-success/10 border-success/20 text-success'
-              : 'bg-destructive/10 border-destructive/20 text-destructive'
+              : message.includes('failed') || message.includes('Error')
+              ? 'bg-destructive/10 border-destructive/20 text-destructive'
+              : 'bg-warning/10 border-warning/20 text-warning'
           }`}>
-            {message.includes('successfully') ? (
-              <CheckCircle className="h-5 w-5 text-success" />
+            {message.includes('successfully') || message.includes('completed') ? (
+              <CheckCircle className="h-5 w-5 text-success flex-shrink-0 mt-0.5" />
+            ) : message.includes('failed') || message.includes('Error') ? (
+              <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
             ) : (
-              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <AlertTriangle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
             )}
-            <p className="font-medium">{message}</p>
+            <div className="flex-1">
+              <p className="font-medium">{message}</p>
+              {(message.includes('Weekly reset completed') || message.includes('XP aggregation completed')) && (
+                <p className="text-sm mt-1 opacity-80">
+                  Dashboard statistics have been automatically refreshed.
+                </p>
+              )}
+            </div>
           </div>
         )}
 
@@ -405,10 +479,14 @@ export default function AdminDashboardPage() {
 
         {/* Main Content */}
         <Tabs defaultValue="actions" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 max-w-2xl mx-auto">
+          <TabsList className="grid w-full grid-cols-5 max-w-3xl mx-auto">
             <TabsTrigger value="actions" className="flex items-center gap-2">
               <Zap className="h-4 w-4" />
               Actions
+            </TabsTrigger>
+            <TabsTrigger value="automation" className="flex items-center gap-2">
+              <Activity className="h-4 w-4" />
+              Automation
             </TabsTrigger>
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
@@ -423,6 +501,10 @@ export default function AdminDashboardPage() {
               Analytics
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="automation" className="space-y-6">
+            <AutomationStatus />
+          </TabsContent>
 
           <TabsContent value="actions" className="space-y-6">
             <Card className="border-0 shadow-xl">
@@ -444,7 +526,8 @@ export default function AdminDashboardPage() {
                         Weekly Operations
                       </h3>
                       <p className="text-sm text-muted-foreground mb-4">
-                        Process weekly streaks, penalties, and leaderboard generation
+                        Process weekly streaks, apply penalties, reset weekly XP counters, and generate leaderboards.
+                        <span className="font-medium text-orange-600 dark:text-orange-400"> Use with caution - this affects all users.</span>
                       </p>
                       <Button
                         onClick={() => handleSystemAction('weekly')}
@@ -455,12 +538,12 @@ export default function AdminDashboardPage() {
                         {actionLoading === 'weekly' ? (
                           <>
                             <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                            Processing...
+                            Processing Weekly Reset...
                           </>
                         ) : (
                           <>
                             <Calendar className="mr-2 h-4 w-4" />
-                            Trigger Weekly Reset
+                            Process Weekly Reset
                           </>
                         )}
                       </Button>
@@ -472,7 +555,8 @@ export default function AdminDashboardPage() {
                         XP Aggregation
                       </h3>
                       <p className="text-sm text-muted-foreground mb-4">
-                        Process pending XP calculations and finalize scores
+                        Finalize submissions with 3+ peer reviews, calculate final XP scores, and award XP to users.
+                        <span className="font-medium text-blue-600 dark:text-blue-400"> Safe to run multiple times.</span>
                       </p>
                       <Button
                         onClick={() => handleSystemAction('aggregate')}
@@ -483,7 +567,7 @@ export default function AdminDashboardPage() {
                         {actionLoading === 'aggregate' ? (
                           <>
                             <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                            Processing...
+                            Processing XP Aggregation...
                           </>
                         ) : (
                           <>
@@ -502,9 +586,10 @@ export default function AdminDashboardPage() {
                         Data Refresh
                       </h3>
                       <p className="text-sm text-muted-foreground mb-4">
-                        Refresh dashboard statistics and system metrics
+                        Clear system cache and refresh dashboard statistics. Updates analytics, leaderboards, and admin data.
+                        <span className="font-medium text-green-600 dark:text-green-400"> Safe operation - no data changes.</span>
                       </p>
-                      <Button 
+                      <Button
                         onClick={() => handleSystemAction('refresh')}
                         disabled={actionLoading === 'refresh'}
                         variant="secondary"
@@ -513,7 +598,7 @@ export default function AdminDashboardPage() {
                         {actionLoading === 'refresh' ? (
                           <>
                             <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                            Refreshing...
+                            Refreshing Data...
                           </>
                         ) : (
                           <>

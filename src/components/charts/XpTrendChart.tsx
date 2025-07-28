@@ -1,9 +1,17 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import {
+  ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from '@/components/ui/chart'
 
 interface XpTrendData {
   week: number
@@ -22,13 +30,32 @@ interface XpTrendChartProps {
   totalSubmissions?: number
 }
 
+const chartConfig = {
+  xpEarned: {
+    label: "XP Earned",
+    color: "hsl(var(--chart-1))",
+  },
+  submissions: {
+    label: "Submissions",
+    color: "hsl(var(--chart-2))",
+  },
+  reviews: {
+    label: "Reviews",
+    color: "hsl(var(--chart-3))",
+  },
+  streaks: {
+    label: "Streaks",
+    color: "hsl(var(--chart-4))",
+  },
+} satisfies ChartConfig
+
 export default function XpTrendChart({
   data,
-  title = "XP Trend (Last 12 Weeks)",
+  title = "Progress Trends",
   showDetails = true,
   totalSubmissions
 }: XpTrendChartProps) {
-
+  const [activeMetrics, setActiveMetrics] = useState(['xpEarned'])
 
   if (!data || data.length === 0) {
     return (
@@ -38,6 +65,9 @@ export default function XpTrendChart({
             <TrendingUp className="w-5 h-5 text-muted-foreground" />
             {title}
           </CardTitle>
+          <CardDescription>
+            Weekly XP progression over time
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col items-center justify-center py-12 space-y-4">
@@ -56,51 +86,25 @@ export default function XpTrendChart({
     )
   }
 
-  // Calculate chart dimensions and scaling
-  const maxXp = Math.max(...data.map(d => d.xpEarned))
-  const minXp = Math.min(...data.map(d => d.xpEarned))
-  const chartHeight = 200
-  const chartWidth = 600
-  const padding = 40
-
   // Calculate trend
   const recentWeeks = data.slice(-4)
   const olderWeeks = data.slice(0, -4)
   const recentAvg = recentWeeks.reduce((sum, d) => sum + d.xpEarned, 0) / recentWeeks.length
-  const olderAvg = olderWeeks.length > 0 
-    ? olderWeeks.reduce((sum, d) => sum + d.xpEarned, 0) / olderWeeks.length 
+  const olderAvg = olderWeeks.length > 0
+    ? olderWeeks.reduce((sum, d) => sum + d.xpEarned, 0) / olderWeeks.length
     : recentAvg
 
   const trendPercentage = olderAvg > 0 ? ((recentAvg - olderAvg) / olderAvg) * 100 : 0
   const isPositiveTrend = trendPercentage > 5
   const isNegativeTrend = trendPercentage < -5
 
-  // Generate SVG path for the line chart
-  const generatePath = (data: XpTrendData[]) => {
-    if (data.length === 0) return ''
-
-    const points = data.map((d, index) => {
-      const x = padding + (index * (chartWidth - 2 * padding)) / (data.length - 1)
-      const y = chartHeight - padding - ((d.xpEarned - minXp) / (maxXp - minXp || 1)) * (chartHeight - 2 * padding)
-      return `${x},${y}`
-    })
-
-    return `M ${points.join(' L ')}`
-  }
-
-  // Generate area path for gradient fill
-  const generateAreaPath = (data: XpTrendData[]) => {
-    if (data.length === 0) return ''
-
-    const linePath = generatePath(data)
-    const firstPoint = data[0]
-    const lastPoint = data[data.length - 1]
-    
-    const firstX = padding
-    const lastX = padding + ((data.length - 1) * (chartWidth - 2 * padding)) / (data.length - 1)
-    const bottomY = chartHeight - padding
-
-    return `${linePath} L ${lastX},${bottomY} L ${firstX},${bottomY} Z`
+  // Toggle metric visibility
+  const toggleMetric = (metric: string) => {
+    setActiveMetrics(prev =>
+      prev.includes(metric)
+        ? prev.filter(m => m !== metric)
+        : [...prev, metric]
+    )
   }
 
   return (
@@ -134,95 +138,119 @@ export default function XpTrendChart({
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {/* SVG Chart */}
-          <div className="relative">
-            <svg
-              width={chartWidth}
-              height={chartHeight}
-              className="w-full h-auto border rounded-lg bg-gradient-to-br from-primary/5 to-accent/5"
-              viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-            >
-              {/* Grid lines */}
-              <defs>
-                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="hsl(var(--border))" strokeWidth="1" opacity="0.5"/>
-                </pattern>
-                <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="hsl(var(--chart-1))" stopOpacity="0.3"/>
-                  <stop offset="100%" stopColor="hsl(var(--chart-1))" stopOpacity="0.05"/>
-                </linearGradient>
-              </defs>
-              
-              <rect width="100%" height="100%" fill="url(#grid)" />
-              
-              {/* Area fill */}
-              <path
-                d={generateAreaPath(data)}
-                fill="url(#areaGradient)"
-              />
-              
-              {/* Line */}
-              <path
-                d={generatePath(data)}
-                fill="none"
-                stroke="hsl(var(--chart-1))"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              
-              {/* Data points */}
-              {data.map((d, index) => {
-                const x = padding + (index * (chartWidth - 2 * padding)) / (data.length - 1)
-                const y = chartHeight - padding - ((d.xpEarned - minXp) / (maxXp - minXp || 1)) * (chartHeight - 2 * padding)
-                
-                return (
-                  <g key={index}>
-                    <circle
-                      cx={x}
-                      cy={y}
-                      r="4"
-                      fill="hsl(var(--chart-1))"
-                      stroke="hsl(var(--background))"
-                      strokeWidth="2"
-                      className="hover:r-6 transition-all cursor-pointer"
-                    />
-                    <title>
-                      Week {d.week}: {d.xpEarned} XP
-                      {'\n'}Submissions: {d.submissions}
-                      {'\n'}Reviews: {d.reviews}
-                      {'\n'}Streaks: {d.streaks}
-                    </title>
-                  </g>
-                )
-              })}
-              
-              {/* Y-axis labels */}
-              <text x="10" y="25" fontSize="12" fill="#6b7280" textAnchor="start">
-                {maxXp}
-              </text>
-              <text x="10" y={chartHeight - 10} fontSize="12" fill="#6b7280" textAnchor="start">
-                {minXp}
-              </text>
-            </svg>
+          {/* Metric Toggle Buttons */}
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(chartConfig).map(([key, config]) => (
+              <Button
+                key={key}
+                variant={activeMetrics.includes(key) ? "default" : "outline"}
+                size="sm"
+                onClick={() => toggleMetric(key)}
+                className="h-8 text-xs"
+              >
+                <div
+                  className="w-2 h-2 rounded-full mr-2"
+                  style={{ backgroundColor: config.color }}
+                />
+                {config.label}
+              </Button>
+            ))}
           </div>
+
+          {/* Interactive Chart */}
+          <ChartContainer config={chartConfig} className="min-h-[300px] w-full">
+            <AreaChart
+              accessibilityLayer
+              data={data}
+              margin={{
+                left: 12,
+                right: 12,
+                top: 12,
+                bottom: 12,
+              }}
+            >
+              <CartesianGrid vertical={false} />
+              <XAxis
+                dataKey="week"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                tickFormatter={(value) => `W${value}`}
+              />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                tickFormatter={(value) => `${value}`}
+              />
+              <ChartTooltip
+                cursor={false}
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(value) => `Week ${value}`}
+                    formatter={(value, name) => [
+                      value,
+                      chartConfig[name as keyof typeof chartConfig]?.label || name
+                    ]}
+                  />
+                }
+              />
+              {activeMetrics.includes('xpEarned') && (
+                <Area
+                  dataKey="xpEarned"
+                  type="monotone"
+                  fill="var(--color-xpEarned)"
+                  fillOpacity={0.4}
+                  stroke="var(--color-xpEarned)"
+                  strokeWidth={2}
+                />
+              )}
+              {activeMetrics.includes('submissions') && (
+                <Area
+                  dataKey="submissions"
+                  type="monotone"
+                  fill="var(--color-submissions)"
+                  fillOpacity={0.2}
+                  stroke="var(--color-submissions)"
+                  strokeWidth={2}
+                />
+              )}
+              {activeMetrics.includes('reviews') && (
+                <Area
+                  dataKey="reviews"
+                  type="monotone"
+                  fill="var(--color-reviews)"
+                  fillOpacity={0.2}
+                  stroke="var(--color-reviews)"
+                  strokeWidth={2}
+                />
+              )}
+              {activeMetrics.includes('streaks') && (
+                <Area
+                  dataKey="streaks"
+                  type="monotone"
+                  fill="var(--color-streaks)"
+                  fillOpacity={0.2}
+                  stroke="var(--color-streaks)"
+                  strokeWidth={2}
+                />
+              )}
+            </AreaChart>
+          </ChartContainer>
 
           {/* Legend and Details */}
           {showDetails && (
             <div className="space-y-4">
               <div className="flex items-center justify-center gap-6 text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                  <span>XP Earned</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                  <span>Submissions</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-                  <span>Reviews</span>
-                </div>
+                {Object.entries(chartConfig).map(([key, config]) => (
+                  <div key={key} className="flex items-center gap-2">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: config.color }}
+                    />
+                    <span>{config.label}</span>
+                  </div>
+                ))}
               </div>
 
               {/* Summary Stats */}
