@@ -1,7 +1,7 @@
 {
-  "buildCommand": "pnpm run build",
+  "buildCommand": "prisma generate && pnpm run build",
   "devCommand": "pnpm run dev",
-  "installCommand": "pnpm install",
+  "installCommand": "pnpm install && prisma generate",
   "framework": "nextjs",
   "regions": ["iad1"],
   "functions": {
