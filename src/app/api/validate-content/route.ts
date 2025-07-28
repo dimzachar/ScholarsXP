@@ -1,48 +1,78 @@
 /**
- * Content Validation API Endpoint
- * 
+ * Content Validation API Endpoint - MIGRATED to Standardized Error Handling
+ *
  * Provides real-time validation feedback for content before submission
  * including mention/hashtag validation and task type suggestions.
+ *
+ * Part of the API Error Handling Standardization Initiative
+ *
+ * Changes Applied:
+ * - Added withErrorHandling wrapper
+ * - Standardized error response format
+ * - Added proper validation with custom error classes
+ * - Maintained existing validation response structure for compatibility
  */
 
-import { NextRequest, NextResponse } from 'next/server'
 import { validateSubmission } from '@/lib/content-validator'
-import { checkForDuplicateContent, checkUrlDuplicate } from '@/lib/duplicate-content-detector'
+import { checkForDuplicateContent } from '@/lib/duplicate-content-detector'
+import { enhancedDuplicateDetectionService } from '@/lib/enhanced-duplicate-detection'
 import { canUserSubmitForTaskTypes } from '@/lib/weekly-task-tracker'
 import { fetchContentFromUrl } from '@/lib/ai-evaluator'
-import { detectPlatform } from '@/lib/utils'
+import { detectPlatform, normalizeUrl } from '@/lib/utils'
 import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { ContentData, TaskTypeId } from '@/types/task-types'
+import { withErrorHandling, createSuccessResponse, validateRequiredFields } from '@/lib/api-middleware'
+import { ValidationError, BusinessLogicError } from '@/lib/api-error-handler'
 
-export const POST = withAuth(async (request: AuthenticatedRequest) => {
-  try {
+export const POST = withAuth(
+  withErrorHandling(async (request: AuthenticatedRequest) => {
     const { url, platform, taskType } = await request.json()
 
-    if (!url) {
-      return NextResponse.json({
-        error: 'URL is required',
-        code: 'MISSING_URL'
-      }, { status: 400 })
-    }
+    validateRequiredFields({ url }, ['url'])
 
     // Detect platform if not provided
     const detectedPlatform = platform || detectPlatform(url)
     if (!detectedPlatform) {
-      return NextResponse.json({
-        error: 'Could not detect platform. Supported platforms: Twitter/X, Medium, Reddit, Notion, LinkedIn, Discord, Telegram',
-        code: 'UNSUPPORTED_PLATFORM'
-      }, { status: 400 })
+      throw new ValidationError(
+        'Could not detect platform. Supported platforms: Twitter/X, Medium, Reddit, Notion, LinkedIn, Discord, Telegram',
+        {
+          supportedPlatforms: ['Twitter/X', 'Medium', 'Reddit', 'Notion', 'LinkedIn', 'Discord', 'Telegram'],
+          detectedPlatform: null
+        }
+      )
     }
 
-    // Check for URL duplicates
-    const urlDuplicateCheck = await checkUrlDuplicate(url, request.user!.id)
+    const normalizedUrl = normalizeUrl(url)
+    console.log(`🔍 [VALIDATE-CONTENT] Checking for URL duplicates:`, {
+      originalUrl: url,
+      normalizedUrl,
+      platform: detectedPlatform
+    })
+
+    // Use enhanced duplicate detection service for consistency
+    const urlDuplicateCheck = await enhancedDuplicateDetectionService.checkForDuplicate(
+      url, // Use original URL as the service will normalize it internally
+      { url, platform: detectedPlatform, content: '', extractedAt: new Date() } as ContentData,
+      request.user!.id
+    )
+
+    if (urlDuplicateCheck.isDuplicate) {
+      console.log(`❌ [VALIDATE-CONTENT] URL duplicate detected:`, {
+        type: urlDuplicateCheck.duplicateType,
+        source: urlDuplicateCheck.duplicateSource,
+        message: urlDuplicateCheck.message
+      })
+    } else {
+      console.log(`✅ [VALIDATE-CONTENT] No URL duplicates found`)
+    }
 
     // Fetch content
     let contentData: ContentData
     try {
       contentData = await fetchContentFromUrl(url)
     } catch (error) {
-      return NextResponse.json({
+      // Return validation failure response instead of throwing error
+      return createSuccessResponse({
         isValid: false,
         errors: [{
           code: 'CONTENT_FETCH_FAILED',
@@ -92,7 +122,7 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
       }
     }
 
-    return NextResponse.json({
+    return createSuccessResponse({
       isValid: validationResult.isValid,
       errors: validationResult.errors,
       warnings: validationResult.warnings,
@@ -112,15 +142,8 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
       },
       recommendations: generateRecommendations(validationResult, duplicateCheck, weeklyLimitCheck)
     })
-
-  } catch (error) {
-    console.error('Error validating content:', error)
-    return NextResponse.json({
-      error: 'Internal server error during validation',
-      code: 'VALIDATION_ERROR'
-    }, { status: 500 })
-  }
-})
+  })
+)
 
 /**
  * Generate recommendations for improving content
@@ -184,30 +207,29 @@ function generateRecommendations(
 }
 
 // GET endpoint for validation rules and requirements
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const platform = searchParams.get('platform')
+export const GET = withErrorHandling(async (request: NextRequest) => {
+  const { searchParams } = new URL(request.url)
+  const platform = searchParams.get('platform')
 
-    const validationRules = {
-      universal: {
-        mention: {
-          required: '@ScholarsOfMove',
-          description: 'Must mention @ScholarsOfMove in content',
-          caseInsensitive: true
-        },
-        hashtag: {
-          required: '#ScholarsOfMove',
-          description: 'Must include #ScholarsOfMove hashtag',
-          caseInsensitive: true
-        },
-        timing: {
-          description: 'Content must be published in current week (Monday-Sunday)'
-        },
-        originality: {
-          description: 'Content must be original and Movement ecosystem focused'
-        }
+  const validationRules = {
+    universal: {
+      mention: {
+        required: '@ScholarsOfMove',
+        description: 'Must mention @ScholarsOfMove in content',
+        caseInsensitive: true
       },
+      hashtag: {
+        required: '#ScholarsOfMove',
+        description: 'Must include #ScholarsOfMove hashtag',
+        caseInsensitive: true
+      },
+      timing: {
+        description: 'Content must be published in current week (Monday-Sunday)'
+      },
+      originality: {
+        description: 'Content must be original and Movement ecosystem focused'
+      }
+    },
       taskTypes: {
         A: {
           name: 'Thread or Long Article',
@@ -250,16 +272,8 @@ export async function GET(request: NextRequest) {
       platformSpecific: platform ? getPlatformSpecificRules(platform) : null
     }
 
-    return NextResponse.json(validationRules)
-
-  } catch (error) {
-    console.error('Error fetching validation rules:', error)
-    return NextResponse.json({
-      error: 'Internal server error',
-      code: 'FETCH_ERROR'
-    }, { status: 500 })
-  }
-}
+    return createSuccessResponse(validationRules)
+  })
 
 function getPlatformSpecificRules(platform: string) {
   switch (platform.toLowerCase()) {
@@ -277,7 +291,7 @@ function getPlatformSpecificRules(platform: string) {
         characterCount: 'Minimum 2000 characters for Task B',
         mentionLocation: 'Mention can be anywhere in the article',
         hashtagLocation: 'Hashtag can be in content or tags',
-        qualifyingTaskTypes: ['A', 'B', 'C', 'D', 'E', 'F']
+        qualifyingTaskTypes: ['B', 'C', 'D', 'E', 'F'] // Task A is NOT for these platforms
       }
     default:
       return {

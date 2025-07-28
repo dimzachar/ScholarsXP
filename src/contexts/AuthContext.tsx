@@ -61,6 +61,18 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Emergency timeout to prevent infinite loading (fallback)
+  useEffect(() => {
+    const emergencyTimeout = setTimeout(() => {
+      if (loading) {
+        console.log('⚠️ AuthProvider: Emergency timeout triggered - auth flow took longer than expected')
+        setLoading(false)
+      }
+    }, 5000) // 5 second timeout as fallback
+
+    return () => clearTimeout(emergencyTimeout)
+  }, [loading])
+
   // Function to fetch user profile from database
   const fetchUserProfile = async (userId: string) => {
     try {
@@ -115,7 +127,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state change:', event, !!session)
 
         if (!mounted) return
 
@@ -187,11 +198,23 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, [])
 
   const createOrUpdateUserProfile = async (user: User) => {
-    // Prevent multiple calls for the same user using a simple cache
+    // Prevent multiple calls for the same user using a robust cache
     const cacheKey = `user_created_${user.id}`
-    if (typeof window !== 'undefined' && window.sessionStorage.getItem(cacheKey)) {
-      // Silently skip user creation if already processed
-      return
+    const mergeCacheKey = `merge_completed_${user.id}`
+
+    if (typeof window !== 'undefined') {
+      const existingCache = window.sessionStorage.getItem(cacheKey)
+      const mergeCompleted = window.sessionStorage.getItem(mergeCacheKey)
+
+      if (existingCache === 'completed' || mergeCompleted === 'true') {
+        console.log('User profile creation/merge already completed, skipping')
+        return
+      }
+
+      if (existingCache === 'processing') {
+        console.log('User profile creation already in progress, skipping')
+        return
+      }
     }
 
     // Set processing flag immediately to prevent concurrent calls
@@ -200,18 +223,110 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
 
     try {
+      // Try multiple Discord metadata fields to get the username
+      const discordHandle = user.user_metadata?.username ||
+                           user.user_metadata?.global_name ||
+                           user.user_metadata?.name ||
+                           user.user_metadata?.preferred_username
+
+      console.log('Discord metadata:', {
+        username: user.user_metadata?.username,
+        global_name: user.user_metadata?.global_name,
+        name: user.user_metadata?.name,
+        preferred_username: user.user_metadata?.preferred_username,
+        full_name: user.user_metadata?.full_name,
+        selected_handle: discordHandle
+      })
+
+      // Check if there's an existing legacy account with this Discord handle
+      let existingLegacyUser = null
+      if (discordHandle) {
+        // Extract base handle without discriminator (e.g., "raki5629#0" -> "raki5629")
+        const baseHandle = discordHandle.split('#')[0]
+
+        try {
+          // First try exact match with full Discord handle
+          const { data: legacyUser, error: legacyError } = await supabase
+            .from('User')
+            .select('*')
+            .eq('discordHandle', discordHandle)
+            .eq('email', `${discordHandle}@legacy.import`)
+            .maybeSingle()
+
+          if (!legacyError && legacyUser) {
+            existingLegacyUser = legacyUser
+            console.log(`Legacy account lookup for ${discordHandle}: FOUND (exact match)`)
+          } else {
+            // Try with base handle (without discriminator)
+            const { data: legacyUserBase, error: baseError } = await supabase
+              .from('User')
+              .select('*')
+              .eq('discordHandle', baseHandle)
+              .eq('email', `${baseHandle}@legacy.import`)
+              .maybeSingle()
+
+            if (!baseError && legacyUserBase) {
+              existingLegacyUser = legacyUserBase
+              console.log(`Legacy account lookup for ${discordHandle}: FOUND (base handle match: ${baseHandle})`)
+            } else {
+              console.log(`Legacy account lookup for ${discordHandle}: NOT FOUND`)
+            }
+          }
+        } catch (error) {
+          console.log(`Legacy account lookup failed for ${discordHandle}:`, error)
+          // Continue without legacy account
+        }
+      }
+
+      // Fallback: If no legacy account found by discordHandle, try by username
+      if (!existingLegacyUser && discordHandle) {
+        const baseHandle = discordHandle.split('#')[0]
+        try {
+          const { data: legacyUserByUsername, error: usernameError } = await supabase
+            .from('User')
+            .select('*')
+            .eq('username', baseHandle)
+            .ilike('email', '%@legacy.import')
+            .maybeSingle()
+
+          if (!usernameError && legacyUserByUsername) {
+            existingLegacyUser = legacyUserByUsername
+            console.log(`Legacy account found by username fallback for ${baseHandle}`)
+          }
+        } catch (error) {
+          console.log(`Legacy username lookup failed for ${baseHandle}:`, error)
+          // Continue without legacy account
+        }
+      }
+
+      if (!discordHandle) {
+        console.log('No Discord handle found in metadata, skipping legacy account lookup')
+      }
+
       // Use upsert to avoid 409 conflicts - insert if new, update if exists
       const userData = {
         id: user.id,
         email: user.email!,
         username: user.user_metadata?.full_name ||
                  user.user_metadata?.name ||
+                 user.user_metadata?.global_name ||
+                 user.user_metadata?.username ||
                  user.email?.split('@')[0] ||
                  'User',
-        totalXp: 0,
-        currentWeekXp: 0,
-        streakWeeks: 0,
-        missedReviews: 0
+        // Discord-specific fields
+        discordId: user.user_metadata?.provider_id || null,
+        discordHandle: discordHandle || null,
+        discordAvatarUrl: user.user_metadata?.avatar_url || null,
+        // Only reset XP to 0 if there's a legacy account to merge
+        // Otherwise preserve existing XP to prevent regression
+        ...(existingLegacyUser ? {
+          // Start with 0 XP - will be recalculated from transferred transactions
+          // DO NOT copy totalXp from legacy account to avoid duplicate XP
+          totalXp: 0,
+          currentWeekXp: 0,
+        } : {}),
+        streakWeeks: existingLegacyUser?.streakWeeks || 0,
+        missedReviews: existingLegacyUser?.missedReviews || 0
       }
 
       // First try to insert, if it fails due to conflict, that's okay
@@ -236,15 +351,186 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
       } else {
         console.log('User profile created/updated successfully')
+
+        // If we merged a legacy account, transfer all associated data and clean it up
+        if (existingLegacyUser && discordHandle) {
+          console.log(`Merging legacy account data for ${discordHandle}`)
+
+          try {
+            // Get legacy XP transactions to transfer with proper type mapping
+            const { data: legacyTransactions, error: fetchError } = await supabase
+              .from('XpTransaction')
+              .select('*')
+              .eq('userId', existingLegacyUser.id)
+
+            if (fetchError) {
+              console.error('Error fetching legacy transactions:', fetchError)
+            } else if (legacyTransactions && legacyTransactions.length > 0) {
+              console.log(`Found ${legacyTransactions.length} legacy transactions to transfer`)
+
+              // Check if transactions have already been transferred to prevent duplicates
+              const { data: existingTransactions } = await supabase
+                .from('XpTransaction')
+                .select('description')
+                .eq('userId', user.id)
+                .ilike('description', '%Legacy transfer:%')
+
+              const existingDescriptions = new Set(existingTransactions?.map(t => t.description) || [])
+
+              // Transfer each transaction with proper type mapping (skip duplicates)
+              let transferredCount = 0
+              for (const transaction of legacyTransactions) {
+                const newDescription = transaction.description.replace('Legacy import:', 'Legacy transfer:')
+
+                // Skip if this transaction was already transferred
+                if (existingDescriptions.has(newDescription)) {
+                  console.log(`Skipping duplicate transaction: ${newDescription}`)
+                  continue
+                }
+
+                // Keep SUBMISSION_REWARD type for legacy transactions (already correct)
+                const newType = transaction.type
+
+                // Create new transaction for real user with corrected type
+                const { error: createError } = await supabase
+                  .from('XpTransaction')
+                  .insert({
+                    userId: user.id,
+                    amount: transaction.amount,
+                    type: newType,
+                    description: newDescription,
+                    sourceId: transaction.sourceId,
+                    weekNumber: transaction.weekNumber,
+                    createdAt: transaction.createdAt
+                  })
+
+                if (createError) {
+                  console.error('Error creating transferred transaction:', createError)
+                } else {
+                  transferredCount++
+                }
+              }
+
+              console.log(`✅ Transferred ${transferredCount} new transactions (${legacyTransactions.length - transferredCount} duplicates skipped)`)
+
+              // Delete the original legacy transactions to allow account cleanup
+              if (transferredCount > 0) {
+                console.log('Cleaning up original legacy transactions...')
+                const { error: deleteTransactionsError } = await supabase
+                  .from('XpTransaction')
+                  .delete()
+                  .eq('userId', existingLegacyUser.id)
+
+                if (deleteTransactionsError) {
+                  console.error('Error deleting legacy transactions:', deleteTransactionsError)
+                } else {
+                  console.log('✅ Legacy transactions cleaned up')
+                }
+              }
+
+              // Delete original legacy transactions
+              const { error: deleteError } = await supabase
+                .from('XpTransaction')
+                .delete()
+                .eq('userId', existingLegacyUser.id)
+
+              if (deleteError) {
+                console.error('Error deleting legacy transactions:', deleteError)
+              } else {
+                console.log('✅ Transferred and converted XP transactions with proper types')
+              }
+            }
+
+            // Transfer WeeklyStats from legacy account to real account
+            const { error: weeklyStatsError } = await supabase
+              .from('WeeklyStats')
+              .update({ userId: user.id })
+              .eq('userId', existingLegacyUser.id)
+
+            if (weeklyStatsError) {
+              console.error('Error transferring WeeklyStats:', weeklyStatsError)
+            } else {
+              console.log('✅ Transferred WeeklyStats')
+            }
+
+            // Note: LegacySubmissions are linked by discordHandle, so they don't need transfer
+
+            // Only recalculate totalXp if we actually transferred transactions
+            if (transferredCount > 0) {
+              console.log('Recalculating totalXp from transferred transactions...')
+
+              // Recalculate totalXp from transferred transactions to avoid duplicate XP
+              const { data: userTransactions } = await supabase
+                .from('XpTransaction')
+                .select('amount')
+                .eq('userId', user.id)
+
+              const calculatedTotalXp = userTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0
+
+              // Update user's totalXp with calculated value
+              const { error: updateXpError } = await supabase
+                .from('User')
+                .update({ totalXp: calculatedTotalXp })
+                .eq('id', user.id)
+
+              if (updateXpError) {
+                console.error('Error updating user totalXp:', updateXpError)
+              } else {
+                console.log(`✅ Recalculated totalXp: ${calculatedTotalXp} from ${userTransactions?.length || 0} transactions`)
+              }
+            } else {
+              console.log('No transactions transferred, skipping XP recalculation')
+            }
+
+            // Now clean up the legacy account
+            console.log(`Cleaning up legacy account for ${discordHandle}`)
+            const { error: deleteError } = await supabase
+              .from('User')
+              .delete()
+              .eq('id', existingLegacyUser.id)
+
+            if (deleteError) {
+              console.error('Error deleting legacy account:', deleteError)
+              // Don't fail the entire process if cleanup fails
+            } else {
+              console.log('✅ Legacy account cleaned up successfully')
+            }
+          } catch (mergeError) {
+            console.error('Error during account merge:', mergeError)
+          }
+        }
       }
 
       // Always cache successful operation and refresh profile
       if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(cacheKey, 'processed')
+        window.sessionStorage.setItem(cacheKey, 'completed')
+        if (existingLegacyUser) {
+          window.sessionStorage.setItem(`merge_completed_${user.id}`, 'true')
+        }
       }
 
-      // Refresh the user profile to get the latest data including role
+      // Small delay to ensure database changes are committed
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      // Refresh the user profile to get the latest data including role and XP
       await fetchUserProfile(user.id)
+
+      // Also clear any cached profile data to ensure fresh data is loaded
+      if (typeof window !== 'undefined') {
+        // Clear profile cache to force refresh of complete profile data
+        const profileCacheKey = `profile-${user.id}`
+        localStorage.removeItem(profileCacheKey)
+        sessionStorage.removeItem(profileCacheKey)
+
+        // Also clear any other related cache keys
+        Object.keys(localStorage).forEach(key => {
+          if (key.includes(user.id) || key.includes('profile') || key.includes('dashboard')) {
+            localStorage.removeItem(key)
+          }
+        })
+      }
+
+      console.log('✅ Account merge completed and profile refreshed')
     } catch (error) {
       console.error('Error managing user profile:', error)
       // Remove processing flag on error

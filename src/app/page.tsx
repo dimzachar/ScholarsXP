@@ -3,10 +3,9 @@
 import React from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import LandingPage from '@/components/LandingPage'
-import { Zap } from 'lucide-react'
 
 export default function Home() {
-  const { user, loading, signOut } = useAuth()
+  const { user, loading } = useAuth()
 
   // Show loading state while checking authentication
   if (loading) {
@@ -14,7 +13,7 @@ export default function Home() {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-sm text-muted-foreground">Loading application...</p>
+          <p className="text-sm text-muted-foreground">Loading application... (Fixed)</p>
         </div>
       </div>
     )

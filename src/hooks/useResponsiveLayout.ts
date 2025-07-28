@@ -112,10 +112,18 @@ export function getResponsiveGridClasses(
 }
 
 // Touch target size utilities for mobile optimization
+// Note: Use the new touch-targets.ts utilities for better Tailwind compatibility
 export const TOUCH_TARGET_SIZE = {
   minimum: 44, // iOS/Android minimum recommended touch target
   comfortable: 48, // More comfortable touch target
   large: 56 // Large touch target for primary actions
+}
+
+// Deprecated: Use getResponsiveTouchTarget from touch-targets.ts instead
+export const getTouchTargetClass = (isMobile: boolean, isTablet: boolean) => {
+  if (isMobile) return 'min-h-11' // 44px
+  if (isTablet) return 'min-h-12' // 48px
+  return 'min-h-10' // 40px desktop
 }
 
 export function getTouchTargetClasses(size: keyof typeof TOUCH_TARGET_SIZE = 'minimum'): string {

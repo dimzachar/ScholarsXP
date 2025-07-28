@@ -36,13 +36,15 @@ export default function Navigation() {
   const getNavItems = () => {
     const baseItems = [
       { href: '/dashboard', label: 'Submit', icon: Home },
-      { href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
     ]
 
     // Add review for reviewers and admins
-    if (isReviewer) {
-      baseItems.splice(1, 0, { href: '/review', label: 'Review', icon: Users })
+    if (isReviewer || isAdmin) {
+      baseItems.push({ href: '/review', label: 'Review', icon: Users })
     }
+
+    // Add leaderboard for everyone
+    baseItems.push({ href: '/leaderboard', label: 'Leaderboard', icon: Trophy })
 
     // Add admin for admins only
     if (isAdmin) {
@@ -54,11 +56,11 @@ export default function Navigation() {
 
   const navItems = getNavItems()
 
-  // Mobile navigation items
+  // Mobile navigation items (same order as desktop)
   const mobileNavItems = [
     createNavItem('/dashboard', 'Submit', Home),
-    createNavItem('/leaderboard', 'Leaderboard', Trophy),
     ...(isReviewer || isAdmin ? [createNavItem('/review', 'Review', Users)] : []),
+    createNavItem('/leaderboard', 'Leaderboard', Trophy),
     ...(isAdmin ? [createNavItem('/admin', 'Admin', Settings)] : []),
   ]
 
@@ -72,7 +74,7 @@ export default function Navigation() {
       />
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 shadow-sm">
       <div className="container flex h-16 items-center max-w-7xl mx-auto px-4">
-        <div className="mr-4 hidden md:flex">
+        <div className="mr-4 hidden lg:flex">
           <Link href="/" className="mr-6 flex items-center space-x-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
               <Zap className="h-5 w-5 text-primary-foreground" />
@@ -105,9 +107,9 @@ export default function Navigation() {
         </div>
 
         {/* Mobile navigation */}
-        <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
-          <div className="w-full flex-1 md:w-auto md:flex-none">
-            <div className="md:hidden">
+        <div className="flex flex-1 items-center justify-between space-x-2 lg:justify-end">
+          <div className="w-full flex-1 lg:w-auto lg:flex-none">
+            <div className="lg:hidden">
               <Link href="/" className="flex items-center space-x-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
                   <Zap className="h-5 w-5 text-primary-foreground" />
@@ -182,34 +184,7 @@ export default function Navigation() {
         </div>
       </div>
 
-      {/* Mobile navigation menu */}
-      <div className="border-t md:hidden bg-background shadow-lg">
-        <div className="container max-w-7xl mx-auto px-4">
-          <div className="flex items-center space-x-2 py-3">
-            {navItems.map((item) => {
-              const Icon = item.icon
-              const isActive = pathname === item.href
 
-              return (
-                <Link key={item.href} href={item.href} className="flex-1">
-                  <Button
-                    variant={isActive ? 'default' : 'ghost'}
-                    size="sm"
-                    className={`w-full flex flex-col items-center gap-2 h-auto py-3 rounded-xl transition-all duration-200 ${
-                      isActive
-                        ? 'bg-primary text-primary-foreground shadow-lg'
-                        : 'hover:bg-accent'
-                    }`}
-                  >
-                    <Icon className="h-5 w-5" />
-                    <span className="text-xs font-medium">{item.label}</span>
-                  </Button>
-                </Link>
-              )
-            })}
-          </div>
-        </div>
-      </div>
     </nav>
     </>
   )

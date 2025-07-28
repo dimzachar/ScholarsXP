@@ -15,7 +15,9 @@ import {
   MessageSquare,
   Settings,
   RefreshCw,
-  ArrowRight
+  ArrowRight,
+  Award,
+  Trophy
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -48,25 +50,30 @@ export default function AdminDashboardPage() {
   const fetchAdminStats = async () => {
     try {
       setLoadingStats(true)
-      
-      // Fetch overview analytics
-      const response = await fetch('/api/admin/analytics?timeframe=last_30_days')
-      
-      if (response.ok) {
-        const data = await response.json()
+
+      // Fetch all-time stats (includes legacy data)
+      const statsResponse = await fetch('/api/admin/stats')
+
+      if (statsResponse.ok) {
+        const statsData = await statsResponse.json()
+
+        // Also fetch recent analytics for additional metrics
+        const analyticsResponse = await fetch('/api/admin/analytics?timeframe=last_30_days')
+        const analyticsData = analyticsResponse.ok ? await analyticsResponse.json() : null
+
         setStats({
-          totalUsers: data.overview.totalUsers,
-          activeUsers: data.overview.activeUsers,
-          totalSubmissions: data.overview.totalSubmissions,
-          pendingSubmissions: data.overview.totalSubmissions - data.overview.completedSubmissions,
-          totalReviews: data.overview.totalReviews,
-          pendingFlags: data.overview.pendingFlags,
-          totalXpAwarded: data.overview.totalXpAwarded,
+          totalUsers: statsData.data.totalUsers,
+          activeUsers: analyticsData?.data?.overview?.activeUsers || 0,
+          totalSubmissions: statsData.data.totalSubmissions, // Includes legacy
+          pendingSubmissions: statsData.data.pendingReviews,
+          totalReviews: statsData.data.totalPeerReviews,
+          pendingFlags: statsData.data.flaggedSubmissions,
+          totalXpAwarded: analyticsData?.data?.overview?.totalXpAwarded || 0,
           systemHealth: {
-            submissionSuccessRate: data.overview.submissionSuccessRate,
-            avgReviewScore: data.overview.avgReviewScore,
-            flagRate: data.overview.totalSubmissions > 0 
-              ? (data.overview.pendingFlags / data.overview.totalSubmissions) * 100 
+            submissionSuccessRate: analyticsData?.data?.overview?.submissionSuccessRate || 0,
+            avgReviewScore: analyticsData?.data?.overview?.avgReviewScore || 0,
+            flagRate: statsData.data.totalSubmissions > 0
+              ? (statsData.data.flaggedSubmissions / statsData.data.totalSubmissions) * 100
               : 0
           }
         })
@@ -90,6 +97,19 @@ export default function AdminDashboardPage() {
         { label: 'Total', value: stats.totalSubmissions },
         { label: 'Pending', value: stats.pendingSubmissions },
         { label: 'Success Rate', value: `${stats.systemHealth.submissionSuccessRate}%` }
+      ] : []
+    },
+    {
+      title: 'XP Management',
+      description: 'Detailed XP oversight and modification tools',
+      icon: Award,
+      href: '/admin/xp-management',
+      color: 'bg-yellow/10 border-yellow/20 hover:bg-yellow/20',
+      iconColor: 'text-yellow',
+      stats: stats ? [
+        { label: 'Total XP', value: stats.totalXpAwarded.toLocaleString() },
+        { label: 'Pending Reviews', value: stats.pendingSubmissions },
+        { label: 'Avg Score', value: stats.systemHealth.avgReviewScore.toFixed(1) }
       ] : []
     },
     {
@@ -140,6 +160,13 @@ export default function AdminDashboardPage() {
       icon: AlertTriangle,
       href: '/admin/moderation?status=PENDING',
       urgent: stats ? stats.pendingFlags > 0 : false
+    },
+    {
+      title: 'View Detailed Leaderboard',
+      description: 'Transparent XP breakdown by submission',
+      icon: Trophy,
+      href: '/leaderboard/detailed',
+      urgent: false
     },
     {
       title: 'Monitor System Health',

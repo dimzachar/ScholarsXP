@@ -179,8 +179,8 @@ export function hasPermission(userRole: UserRole, permission: Permission): boole
 export function createRoleBasedHandler() {
   return {
     withPermission: (permission: Permission) => {
-      return (handler: (request: AuthenticatedRequest) => Promise<NextResponse>) => {
-        return async (request: NextRequest) => {
+      return (handler: (request: AuthenticatedRequest, context?: any) => Promise<NextResponse>) => {
+        return async (request: NextRequest, context?: any) => {
           try {
             // Get token from Authorization header or cookies
             const authHeader = request.headers.get('authorization')
@@ -236,7 +236,7 @@ export function createRoleBasedHandler() {
             authenticatedRequest.userProfile = userProfile
 
             // Call the handler
-            return await handler(authenticatedRequest)
+            return await handler(authenticatedRequest, context)
           } catch (error) {
             if (error instanceof AuthError) {
               return NextResponse.json(
@@ -256,8 +256,8 @@ export function createRoleBasedHandler() {
     },
 
     withRole: (requiredRole: UserRole) => {
-      return (handler: (request: AuthenticatedRequest) => Promise<NextResponse>) => {
-        return async (request: NextRequest) => {
+      return (handler: (request: AuthenticatedRequest, context?: any) => Promise<NextResponse>) => {
+        return async (request: NextRequest, context?: any) => {
           try {
             // Get authenticated user
             const user = await getAuthenticatedUser(request)
@@ -287,7 +287,7 @@ export function createRoleBasedHandler() {
             authenticatedRequest.userProfile = userProfile
 
             // Call the handler
-            return await handler(authenticatedRequest)
+            return await handler(authenticatedRequest, context)
           } catch (error) {
             if (error instanceof AuthError) {
               return NextResponse.json(
@@ -307,8 +307,8 @@ export function createRoleBasedHandler() {
     },
 
     // Simple auth check without role/permission requirements
-    withAuth: (handler: (request: AuthenticatedRequest) => Promise<NextResponse>) => {
-      return async (request: NextRequest) => {
+    withAuth: (handler: (request: AuthenticatedRequest, context?: any) => Promise<NextResponse>) => {
+      return async (request: NextRequest, context?: any) => {
         try {
           // Get authenticated user
           const user = await getAuthenticatedUser(request)
@@ -322,7 +322,7 @@ export function createRoleBasedHandler() {
           authenticatedRequest.userProfile = userProfile
 
           // Call the handler
-          return await handler(authenticatedRequest)
+          return await handler(authenticatedRequest, context)
         } catch (error) {
           if (error instanceof AuthError) {
             return NextResponse.json(

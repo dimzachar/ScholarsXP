@@ -10,21 +10,33 @@ export interface SecurityCheck {
   confidence: number
 }
 
-export function detectPlatform(url: string): 'Twitter' | 'Medium' | null {
+export function detectPlatform(url: string): 'Twitter' | 'Medium' | 'Reddit' | 'Notion' | 'LinkedIn' | null {
   if (!url) return null
-  
+
   try {
     const urlObj = new URL(url)
     const hostname = urlObj.hostname.toLowerCase()
-    
+
     if (hostname.includes('twitter.com') || hostname.includes('x.com')) {
       return 'Twitter'
     }
-    
+
     if (hostname.includes('medium.com')) {
       return 'Medium'
     }
-    
+
+    if (hostname.includes('reddit.com')) {
+      return 'Reddit'
+    }
+
+    if (hostname.includes('notion.so') || hostname.includes('notion.site')) {
+      return 'Notion'
+    }
+
+    if (hostname.includes('linkedin.com')) {
+      return 'LinkedIn'
+    }
+
     return null
   } catch {
     return null
@@ -51,7 +63,7 @@ export function validateURL(url: string): ValidationResult {
     const platform = detectPlatform(url)
     if (!platform) {
       result.isValid = false
-      result.errors.push('Only Twitter/X and Medium links are supported')
+      result.errors.push('Only Twitter/X, Medium, Reddit, Notion, and LinkedIn links are supported')
     }
 
     // Check for HTTPS

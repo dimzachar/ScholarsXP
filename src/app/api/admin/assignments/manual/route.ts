@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { reviewerPoolService } from '@/lib/reviewer-pool'
 
-export const POST = withPermission('admin')(async (request: AuthenticatedRequest) => {
+export const POST = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
     const { submissionId, reviewerIds } = await request.json()
 

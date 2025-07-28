@@ -43,7 +43,7 @@ export function MobileBottomNav({
     return true
   })
 
-  // Don't render on desktop unless forced
+  // Show on mobile and tablet, hide on desktop (lg breakpoint and above)
   if (!isMobile && !isTablet) return null
 
   return (

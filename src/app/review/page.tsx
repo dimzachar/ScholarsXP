@@ -45,7 +45,7 @@ export default function ReviewPage() {
       setPendingReviews(data.submissions || [])
     } catch (error) {
       console.error('Error fetching pending reviews:', error)
-      setMessage(handleApiError(error))
+      setMessage(handleApiError(error).message)
     } finally {
       setLoading(false)
     }
@@ -64,7 +64,7 @@ export default function ReviewPage() {
       setPendingReviews(prev => prev.filter(sub => sub.id !== submissionId))
     } catch (error) {
       console.error('Error submitting review:', error)
-      setMessage(handleApiError(error))
+      setMessage(handleApiError(error).message)
     }
   }
 
@@ -102,10 +102,7 @@ export default function ReviewPage() {
           </div>
           
           <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Peer Review{' '}
-            <span className="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-              Dashboard
-            </span>
+            Peer Review Dashboard{' '}
           </h1>
           
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">

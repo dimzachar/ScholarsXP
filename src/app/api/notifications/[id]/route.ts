@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
-import { markNotificationAsRead } from '@/lib/notifications'
+import { markNotificationAsRead, deleteNotification } from '@/lib/notifications'
 
-export const PATCH = withPermission('authenticated')(async (
-  request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
-) => {
+export const PATCH = withPermission('authenticated')(async (request: AuthenticatedRequest) => {
   try {
-
-    const notificationId = params.id
+    const url = new URL(request.url)
+    const notificationId = url.pathname.split('/').slice(-1)[0] // Extract ID from path
     if (!notificationId) {
       return NextResponse.json(
         { error: 'Notification ID is required' },
@@ -32,6 +29,40 @@ export const PATCH = withPermission('authenticated')(async (
 
   } catch (error) {
     console.error('Error marking notification as read:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+})
+
+export const DELETE = withPermission('authenticated')(async (request: AuthenticatedRequest) => {
+  try {
+    const url = new URL(request.url)
+    const notificationId = url.pathname.split('/').slice(-1)[0] // Extract ID from path
+    if (!notificationId) {
+      return NextResponse.json(
+        { error: 'Notification ID is required' },
+        { status: 400 }
+      )
+    }
+
+    const success = await deleteNotification(request.user.id, notificationId)
+
+    if (success) {
+      return NextResponse.json({
+        message: 'Notification deleted successfully',
+        success: true
+      })
+    } else {
+      return NextResponse.json(
+        { error: 'Notification not found' },
+        { status: 404 }
+      )
+    }
+
+  } catch (error) {
+    console.error('Error deleting notification:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

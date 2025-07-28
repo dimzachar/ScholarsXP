@@ -89,11 +89,23 @@ export function CircularProgress({
       <div className="absolute inset-0 flex items-center justify-center">
         {children || (showValue && (
           <div className="text-center">
-            <div className={cn("text-2xl font-bold", valueClassName)}>
+            <div className={cn(
+              "font-bold",
+              // Dynamic font sizing based on circle size
+              size >= 120 ? "text-3xl" :
+              size >= 100 ? "text-2xl" :
+              size >= 80 ? "text-xl" : "text-lg",
+              valueClassName
+            )}>
               {Math.round(percentage)}%
             </div>
-            <div className="text-xs text-muted-foreground">
-              {value.toLocaleString()} / {max.toLocaleString()}
+            <div className={cn(
+              "text-muted-foreground",
+              // Dynamic subtitle sizing
+              size >= 120 ? "text-sm" :
+              size >= 100 ? "text-xs" : "text-xs"
+            )}>
+              {value.toLocaleString()}
             </div>
           </div>
         ))}

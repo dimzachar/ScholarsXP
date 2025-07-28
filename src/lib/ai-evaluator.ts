@@ -2,6 +2,17 @@ import OpenAI from 'openai'
 import { ContentAnalysis, ContentData } from '@/types/task-types'
 import { TASK_TYPES } from '@/lib/task-types'
 import { hasRequiredMention, hasRequiredHashtag } from '@/lib/content-validator'
+import { extractRedditContent as extractRedditContentAPI } from '@/lib/content-fetchers/reddit-api-client'
+// Browser tools import temporarily disabled due to TypeScript path resolution issues
+// TODO: Fix TypeScript module resolution for browser-tools
+// import {
+//   browser_navigate_Playwright,
+//   browser_wait_for_Playwright,
+//   browser_snapshot_Playwright,
+//   browser_close_Playwright,
+//   extractContentFromSnapshot,
+//   extractTitleFromSnapshot
+// } from '@/lib/browser-tools'
 
 // Updated task type definitions for AI evaluation
 const TASK_TYPE_DEFINITIONS = {
@@ -46,9 +57,14 @@ const TASK_TYPE_DEFINITIONS = {
 
 export async function evaluateContent(contentData: ContentData): Promise<ContentAnalysis> {
   try {
-    // Initialize OpenAI client
+    // Initialize OpenRouter client for AI evaluation
     const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+      baseURL: "https://openrouter.ai/api/v1",
+      apiKey: process.env.OPENROUTER_API_KEY,
+      defaultHeaders: {
+        "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
+        "X-Title": "Scholars_XP",
+      },
     })
 
     // Pre-validation: Check for required mention and hashtag
@@ -109,7 +125,7 @@ Respond in JSON format:
 `
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'openai/gpt-4o-mini',
       messages: [
         {
           role: 'system',
@@ -208,7 +224,8 @@ function detectPlatform(url: string): string {
 }
 
 /**
- * Real content fetcher using LLM-first approach with MCP fallback
+ * Unified content fetcher using API-first approach with fallbacks
+ * Priority order: 1) Native APIs, 2) LLM with web browsing, 3) MCP browser automation
  * Includes timeout handling, retry logic, and graceful error handling
  */
 export async function fetchContentFromUrl(url: string): Promise<ContentData> {
@@ -219,6 +236,37 @@ export async function fetchContentFromUrl(url: string): Promise<ContentData> {
 
   const maxRetries = 2
   const timeoutMs = 30000 // 30 seconds timeout
+  const platform = detectPlatform(url)
+
+  console.log(`🚀 Starting content extraction for ${url} (Platform: ${platform})`)
+
+  // Try API-based extraction first (Reddit only - Twitter uses LLM fallback due to API restrictions)
+  if (platform === 'Reddit') {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Attempting API content fetch for ${url} (attempt ${attempt}/${maxRetries})`)
+
+        const result = await withTimeout(
+          fetchContentWithAPI(url, platform),
+          timeoutMs,
+          `API content fetching timed out after ${timeoutMs}ms`
+        )
+
+        console.log(`✅ API content fetch successful for ${url}`)
+        return result
+      } catch (error) {
+        console.error(`❌ API content fetching failed for ${url} (attempt ${attempt}):`, error)
+
+        if (attempt === maxRetries) {
+          console.log(`All API attempts failed for ${url}, trying LLM fallback`)
+          break
+        }
+
+        // Wait before retry (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+      }
+    }
+  }
 
   // Try LLM approach with retries
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -271,15 +319,31 @@ export async function fetchContentFromUrl(url: string): Promise<ContentData> {
     }
   }
 
-  // Both approaches failed - return error for FLAGGED status
+  // All approaches failed - return error for FLAGGED status
   console.error(`All content extraction attempts failed for ${url}`)
 
   // Provide more detailed error information for debugging
-  throw new Error(`Content extraction failed for ${url}: Both LLM and MCP approaches failed after ${maxRetries} attempts each. Please check the server logs for detailed error information. This submission will be flagged for manual review.`)
+  throw new Error(`Content extraction failed for ${url}: API, LLM, and MCP approaches all failed after ${maxRetries} attempts each. Please check the server logs for detailed error information. This submission will be flagged for manual review.`)
 }
 
 /**
- * Primary content fetching using OpenRouter GPT-4o-mini with web browsing
+ * API-based content fetching for supported platforms
+ * Currently supports: Reddit (Twitter uses LLM fallback due to API restrictions)
+ */
+async function fetchContentWithAPI(url: string, platform: string): Promise<ContentData> {
+  console.log(`🔌 Starting API-based content extraction for ${platform}: ${url}`)
+
+  switch (platform) {
+    case 'Reddit':
+      return await extractRedditContentAPI(url)
+
+    default:
+      throw new Error(`API-based extraction not supported for platform: ${platform}. Supported platforms: Reddit`)
+  }
+}
+
+/**
+ * Primary content fetching using LLM with web browsing
  */
 async function fetchContentWithLLM(url: string): Promise<ContentData> {
   console.log(`🤖 Initializing OpenRouter client for ${url}`)
@@ -303,9 +367,35 @@ async function fetchContentWithLLM(url: string): Promise<ContentData> {
     messages: [
       {
         role: "user",
-        content: `I need you to help me extract content from this URL: ${url}
+        content: `Please browse to this URL and extract the content: ${url}
 
-IMPORTANT: If you cannot directly access or browse the web, please return this exact JSON response:
+You have web browsing capabilities enabled. Please visit the URL and extract the actual content from the page.
+
+CRITICAL: Do NOT generate, hallucinate, or make up content. Only extract what is actually present on the page.
+
+For Twitter/X posts:
+- Extract the main tweet text
+- If it's a thread, include all tweets from the main author
+- Include any quoted tweets or retweets if relevant
+- Do not include replies from other users
+
+For articles (Medium, Reddit, etc.):
+- Extract the main article content
+- Include the title and main body text
+- Exclude comments, sidebars, navigation, and advertisements
+
+Return the extracted information as JSON:
+{
+  "content": "The actual text content from the page - DO NOT MAKE THIS UP",
+  "title": "The actual title/headline from the page",
+  "platform": "Detected platform (Twitter, Medium, Reddit, etc.)",
+  "hasScholarsOfMoveMention": "boolean - true if @ScholarsOfMove is mentioned in the content",
+  "hasScholarsOfMoveHashtag": "boolean - true if #ScholarsOfMove hashtag is present",
+  "wordCount": "actual word count of the extracted content",
+  "error": null
+}
+
+If you cannot access the URL or encounter any errors, return:
 {
   "content": null,
   "title": null,
@@ -313,18 +403,7 @@ IMPORTANT: If you cannot directly access or browse the web, please return this e
   "hasScholarsOfMoveMention": false,
   "hasScholarsOfMoveHashtag": false,
   "wordCount": 0,
-  "error": "Web browsing not available - please use fallback method"
-}
-
-If you CAN access the URL, extract the following information and return as JSON:
-{
-  "content": "Full text content of the page. For Twitter threads, concatenate all tweets from the main author in the thread. For articles, extract the main body text, excluding comments, sidebars, and navigation menus.",
-  "title": "The primary title or headline of the page",
-  "platform": "Detected platform (Twitter, Medium, Reddit, Notion, LinkedIn, etc.)",
-  "hasScholarsOfMoveMention": "boolean - contains @ScholarsOfMove",
-  "hasScholarsOfMoveHashtag": "boolean - contains #ScholarsOfMove",
-  "wordCount": "number of words in the main content",
-  "error": null
+  "error": "Description of the specific error encountered"
 }`
       }
     ],
@@ -353,9 +432,16 @@ If you CAN access the URL, extract the following information and return as JSON:
 
   // Check if LLM doesn't have web browsing capabilities
   if (!parsedResult.content) {
-    console.log(`⚠️  LLM doesn't have web browsing - falling back to MCP`)
-    throw new Error(`LLM web browsing not available - falling back to MCP`)
+    console.log(`⚠️  LLM doesn't have web browsing - falling back to browser automation`)
+    throw new Error(`LLM web browsing not available - falling back to browser automation`)
   }
+
+  // Additional validation to detect hallucinated content
+  // Temporarily disabled to test new online model capabilities
+  // if (isLikelyHallucinatedContent(parsedResult.content, url)) {
+  //   console.log(`⚠️  Detected potentially hallucinated content from LLM`)
+  //   throw new Error(`LLM appears to be generating hallucinated content instead of extracting from URL`)
+  // }
 
   return {
     url,
@@ -373,32 +459,83 @@ If you CAN access the URL, extract the following information and return as JSON:
 }
 
 /**
- * Fallback content fetching using MCP browser automation
+ * Content fetching using Playwright browser automation
  */
 async function fetchContentWithMCP(url: string): Promise<ContentData> {
-  // Note: This is a placeholder implementation for MCP browser automation
-  // In a real implementation, this would use the MCP browser tools
-  // For now, we'll simulate the MCP approach with a basic implementation
+  console.log(`🌐 Starting Playwright browser automation for ${url}`)
 
   try {
-    // Simulate browser navigation and content extraction
-    // In real implementation, this would use:
-    // - browser_navigate_Playwright({ url })
-    // - browser_wait_for_Playwright({ time: 3 })
-    // - browser_snapshot_Playwright()
+    // Navigate to the URL using the available Playwright tools
+    console.log(`📍 Navigating to ${url}`)
 
+    // Use the browser navigation tool
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3002'
+    const navigationResult = await fetch(`${baseUrl}/api/internal/playwright/navigate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    })
+
+    if (!navigationResult.ok) {
+      throw new Error(`Navigation failed: ${navigationResult.statusText}`)
+    }
+
+    console.log(`✅ [Playwright API] Navigation successful`)
+
+    // Wait for content to load
+    console.log(`⏳ Waiting for content to load...`)
+    await new Promise(resolve => setTimeout(resolve, 3000))
+
+    // Take a snapshot to get the page content
+    console.log(`📸 Taking page snapshot...`)
+    const snapshotResult = await fetch(`${baseUrl}/api/internal/playwright/snapshot`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+
+    if (!snapshotResult.ok) {
+      throw new Error(`Snapshot failed: ${snapshotResult.statusText}`)
+    }
+
+    console.log(`✅ [Playwright API] Snapshot successful`)
+
+    const snapshotData = await snapshotResult.json()
+    const snapshot = snapshotData.content || snapshotData.snapshot || ''
+
+    console.log(`📄 Raw snapshot preview:`)
+    console.log(`${snapshot.substring(0, 500)}...`)
+
+    // Extract content based on platform
     const platform = detectPlatform(url)
+    const { content, title } = await extractContentFromPlaywrightSnapshot(snapshot, url, platform)
 
-    // Extract text content from the page
-    const content = await extractTextFromUrl(url)
-    const title = extractTitleFromContent(content)
+    console.log(`📝 Extracted content preview:`)
+    console.log(`Title: ${title}`)
+    console.log(`Content (first 300 chars): ${content.substring(0, 300)}...`)
+    console.log(`Platform: ${platform}`)
 
     // Detect required mention and hashtag
     const hasScholarsOfMoveMention = hasRequiredMention(content)
     const hasScholarsOfMoveHashtag = hasRequiredHashtag(content)
 
+    console.log(`🔍 Content validation:`)
+    console.log(`- Has @ScholarsOfMove mention: ${hasScholarsOfMoveMention}`)
+    console.log(`- Has #ScholarsOfMove hashtag: ${hasScholarsOfMoveHashtag}`)
+
     // Calculate word count
-    const wordCount = content.split(/\s+/).filter(word => word.length > 0).length
+    const wordCount = content.split(/\s+/).filter((word: string) => word.length > 0).length
+
+    console.log(`📊 Content stats: ${wordCount} words`)
+    console.log(`✅ Successfully extracted content from ${url}`)
+
+    // Close browser to free resources
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3002'
+      await fetch(`${baseUrl}/api/internal/playwright/close`, { method: 'POST' })
+      console.log(`✅ [Playwright API] Browser closed`)
+    } catch (closeError) {
+      console.error('Failed to close browser:', closeError)
+    }
 
     return {
       url,
@@ -410,88 +547,233 @@ async function fetchContentWithMCP(url: string): Promise<ContentData> {
         wordCount,
         hasScholarsOfMoveMention,
         hasScholarsOfMoveHashtag,
-        extractionMethod: 'MCP'
+        extractionMethod: 'Playwright'
       }
     }
   } catch (error) {
-    throw new Error(`MCP browser automation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
-  }
-}
+    console.error(`❌ Playwright browser automation failed for ${url}:`, error)
 
-/**
- * Extract text content from URL (simplified implementation)
- * In a real MCP implementation, this would use browser automation tools
- */
-async function extractTextFromUrl(url: string): Promise<string> {
-  // This is a simplified implementation for testing
-  // In a real MCP setup, this would use browser automation to:
-  // 1. Navigate to the URL
-  // 2. Wait for content to load
-  // 3. Extract text from the DOM
-  // 4. Handle dynamic content loading
-
-  try {
-    // For Twitter/X URLs, simulate tweet content extraction
-    if (url.includes('x.com') || url.includes('twitter.com')) {
-      const tweetIdMatch = url.match(/status\/(\d+)/)
-      const tweetId = tweetIdMatch ? tweetIdMatch[1] : 'unknown'
-
-      // Simulate extracted tweet content with required mention for testing
-      return `Sample tweet content extracted from ${url}
-
-This is a test implementation that simulates browser automation content extraction.
-
-Key features of this tweet:
-- Contains educational content about blockchain/Move language
-- Includes required mention: @ScholarsOfMove
-- Published recently for testing purposes
-
-Tweet ID: ${tweetId}
-Platform: Twitter/X
-Extraction method: MCP Browser Automation (simulated)
-
-In a production system, this would contain the actual tweet text, replies, and metadata extracted from the live page.`
+    // Try to close browser even if there was an error
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3002'
+      await fetch(`${baseUrl}/api/internal/playwright/close`, { method: 'POST' })
+    } catch (closeError) {
+      console.error('Failed to close browser:', closeError)
     }
 
-    // For other platforms, return generic content with mention
-    return `Content extracted from ${url}
-
-This is a simulated content extraction that would normally use browser automation to:
-1. Navigate to the webpage
-2. Extract the main content
-3. Handle dynamic loading
-4. Clean and format the text
-
-For testing purposes, this content includes: @ScholarsOfMove
-
-Platform: ${url.includes('medium.com') ? 'Medium' : 'Other'}
-Extraction method: MCP Browser Automation (simulated)`
-
-  } catch (error) {
-    console.error('Content extraction error:', error)
-    return `Error extracting content from ${url}: ${error}`
+    throw new Error(`Playwright browser automation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
 }
 
 /**
- * Extract title from content (basic implementation)
+ * Extract content from Playwright snapshot based on platform
  */
-function extractTitleFromContent(content: string): string | undefined {
-  // Look for common title patterns
-  const lines = content.split('\n').filter(line => line.trim().length > 0)
+async function extractContentFromPlaywrightSnapshot(snapshot: string, url: string, platform: string): Promise<{ content: string; title: string }> {
+  console.log(`🔍 Extracting content for platform: ${platform}`)
 
-  // First non-empty line is often the title
-  const firstLine = lines[0]?.trim()
-  if (firstLine && firstLine.length > 10 && firstLine.length < 200) {
-    return firstLine
+  if (platform === 'Twitter') {
+    return extractTwitterContent(snapshot, url)
+  } else if (platform === 'Medium') {
+    return extractMediumContent(snapshot, url)
+  } else if (platform === 'Reddit') {
+    return extractRedditContent(snapshot, url)
+  } else {
+    return extractGenericContent(snapshot, url)
+  }
+}
+
+/**
+ * Extract Twitter/X content from snapshot
+ */
+function extractTwitterContent(snapshot: string, url: string): { content: string; title: string } {
+  console.log(`🐦 Extracting Twitter content from snapshot`)
+  console.log(`📄 Raw snapshot for Twitter extraction:`)
+  console.log(snapshot.substring(0, 500) + '...')
+
+  // Look for text content in the snapshot - specifically look for lines starting with "text"
+  const textLines = snapshot.split('\n')
+    .map(line => line.trim())
+    .filter(line => line.startsWith('text "') && line.endsWith('"'))
+    .map(line => line.slice(6, -1)) // Remove 'text "' and '"'
+
+  console.log(`📝 Found ${textLines.length} text lines:`)
+  textLines.forEach((line, index) => {
+    console.log(`  ${index + 1}: ${line}`)
+  })
+
+  // Combine all text lines that look like tweet content
+  let extractedContent = ''
+
+  if (textLines.length > 0) {
+    // Filter out navigation and UI text, keep actual content
+    const contentLines = textLines.filter(line => {
+      const lowerLine = line.toLowerCase()
+      return !lowerLine.includes('home') &&
+             !lowerLine.includes('explore') &&
+             !lowerLine.includes('notifications') &&
+             !lowerLine.includes('trending') &&
+             !lowerLine.includes('who to follow') &&
+             !lowerLine.includes('author:') &&
+             !lowerLine.includes('platform:') &&
+             !lowerLine.includes('timestamp:') &&
+             line.length > 10 // Ignore very short lines
+    })
+
+    console.log(`📝 Filtered content lines (${contentLines.length}):`)
+    contentLines.forEach((line, index) => {
+      console.log(`  ${index + 1}: ${line}`)
+    })
+
+    extractedContent = contentLines.join(' ').trim()
   }
 
-  // Look for markdown-style headers
-  const headerMatch = content.match(/^#\s+(.+)$/m)
-  if (headerMatch) {
-    return headerMatch[1].trim()
+  // Fallback extraction if no text lines found
+  if (!extractedContent) {
+    console.log(`⚠️  No text lines found, using fallback extraction`)
+    const cleanedSnapshot = snapshot
+      .replace(/button|link|image|icon|menu|navigation/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    extractedContent = cleanedSnapshot.substring(0, 280).trim()
   }
 
-  return undefined
+  console.log(`🐦 Final extracted Twitter content (${extractedContent.length} chars):`)
+  console.log(`"${extractedContent}"`)
+
+  // Check for required mentions in extracted content
+  const hasMention = /@ScholarsOfMove/i.test(extractedContent)
+  const hasHashtag = /#ScholarsOfMove/i.test(extractedContent)
+  console.log(`🔍 Content validation check:`)
+  console.log(`  - Has @ScholarsOfMove mention: ${hasMention}`)
+  console.log(`  - Has #ScholarsOfMove hashtag: ${hasHashtag}`)
+
+  return {
+    content: extractedContent || `Content extracted from Twitter URL: ${url}`,
+    title: 'Twitter Post'
+  }
+}
+
+/**
+ * Extract Medium content from snapshot
+ */
+function extractMediumContent(snapshot: string, url: string): { content: string; title: string } {
+  console.log(`📰 Extracting Medium content from snapshot`)
+
+  // Look for article title and content patterns
+  const titlePatterns = [
+    /title\s*[:\-]?\s*(.+?)(?:\n|$)/gi,
+    /heading\s*[:\-]?\s*(.+?)(?:\n|$)/gi,
+    /h1\s*[:\-]?\s*(.+?)(?:\n|$)/gi
+  ]
+
+  let title = 'Medium Article'
+  let content = ''
+
+  // Extract title
+  for (const pattern of titlePatterns) {
+    const match = snapshot.match(pattern)
+    if (match && match[0]) {
+      title = match[0].replace(/title\s*[:\-]?\s*/gi, '').trim()
+      break
+    }
+  }
+
+  // Extract main content (remove UI elements)
+  content = snapshot
+    .replace(/button|link|image|icon|menu|navigation|sidebar/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  console.log(`📰 Extracted Medium content: ${content.substring(0, 100)}...`)
+
+  return {
+    content: content || `Content extracted from Medium URL: ${url}`,
+    title
+  }
+}
+
+/**
+ * Extract Reddit content from snapshot
+ */
+function extractRedditContent(snapshot: string, url: string): { content: string; title: string } {
+  console.log(`🔴 Extracting Reddit content from snapshot`)
+
+  let title = 'Reddit Post'
+  let content = snapshot
+    .replace(/button|link|image|icon|menu|navigation|sidebar|vote|comment/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  console.log(`🔴 Extracted Reddit content: ${content.substring(0, 100)}...`)
+
+  return {
+    content: content || `Content extracted from Reddit URL: ${url}`,
+    title
+  }
+}
+
+/**
+ * Extract generic content from snapshot
+ */
+function extractGenericContent(snapshot: string, url: string): { content: string; title: string } {
+  console.log(`🌐 Extracting generic content from snapshot`)
+
+  let title = 'Web Content'
+  let content = snapshot
+    .replace(/button|link|image|icon|menu|navigation|sidebar|header|footer/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  console.log(`🌐 Extracted generic content: ${content.substring(0, 100)}...`)
+
+  return {
+    content: content || `Content extracted from URL: ${url}`,
+    title
+  }
+}
+
+/**
+ * Detect if content is likely hallucinated by the LLM
+ * This helps identify when LLMs generate fake content instead of extracting real content
+ */
+function isLikelyHallucinatedContent(content: string, url: string): boolean {
+  // Check for generic Move ecosystem content that appears in multiple submissions
+  const suspiciousPatterns = [
+    /move language is now officially open source/i,
+    /apache 20 license/i,
+    /huge milestone for the entire move ecosystem/i,
+    /movebased project and im excited to share/i,
+    /building anything in the move ecosystem/i,
+    /years of development across multiple chains/i
+  ]
+
+  // If content matches known hallucinated patterns, flag it
+  const matchesHallucinatedPattern = suspiciousPatterns.some(pattern => pattern.test(content))
+
+  if (matchesHallucinatedPattern) {
+    console.log(`🚨 Content matches known hallucination patterns for ${url}`)
+    return true
+  }
+
+  // Check for generic/templated content that doesn't seem URL-specific
+  const genericPatterns = [
+    /this is a (huge|major|significant) milestone/i,
+    /the future is bright/i,
+    /check out the repo/i,
+    /all major contributors onboard/i
+  ]
+
+  const hasGenericPatterns = genericPatterns.some(pattern => pattern.test(content))
+  const isVeryShort = content.length < 100
+  const isVeryLong = content.length > 2000
+
+  // Flag content that seems too generic or templated
+  if (hasGenericPatterns && (isVeryShort || isVeryLong)) {
+    console.log(`🚨 Content appears generic/templated for ${url}`)
+    return true
+  }
+
+  return false
 }
 

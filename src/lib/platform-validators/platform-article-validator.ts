@@ -327,10 +327,8 @@ function detectArticleTaskTypes(articleData: PlatformArticleData, content: strin
   const taskTypes: string[] = []
   const lowerContent = content.toLowerCase()
 
-  // Task A: Long Article (if 2000+ characters)
-  if (articleData.characterCount >= 2000) {
-    taskTypes.push('A')
-  }
+  // Task A: NOT for Reddit/Notion/Medium articles (those are Task B only)
+  // This function is only called for platform articles, so we don't add Task A here
 
   // Task C: Tutorial/Guide
   if (lowerContent.includes('tutorial') || lowerContent.includes('guide') || 

@@ -386,7 +386,6 @@ export default function PeerReviewCard({
 
             <div className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
-                <AvatarImage src={`/avatars/${submission.user.username}.svg`} />
                 <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                   {submission.user.username.slice(0, 2).toUpperCase()}
                 </AvatarFallback>

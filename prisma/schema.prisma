@@ -22,6 +22,10 @@ model User {
   joinedAt           DateTime     @default(now())
   lastActiveAt       DateTime?
   preferences        Json         @default("{}")
+  // Discord authentication fields
+  discordId          String?      @unique
+  discordHandle      String?
+  discordAvatarUrl   String?
   submissions        Submission[]
   peerReviews        PeerReview[]
   weeklyStats        WeeklyStats[]
@@ -31,21 +35,32 @@ model User {
   adminActions       AdminAction[]
   xpTransactions     XpTransaction[]
   notifications      Notification[]
+  rolePromotionNotifications RolePromotionNotification[]
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
+
+  // Performance indexes for N+1 query optimization
+  @@index([createdAt])             // User registration analytics
+  @@index([lastActiveAt])          // Activity status queries
+  @@index([role, createdAt])       // Role-based analytics
+  @@index([lastActiveAt, createdAt]) // Analytics queries optimization
+  @@index([totalXp(sort: Desc)])   // Leaderboard queries optimization
+  @@index([lastActiveAt, totalXp], map: "idx_user_active_recent") // Active users partial index
 }
 
 model Submission {
   id                 String       @id @default(uuid()) @db.Uuid
   userId             String       @db.Uuid
-  url                String
+  url                String       @unique // Prevent duplicate URLs across all users
+  title              String?      // Optional title for the submission
+  content            String?      // Optional content preview
   platform           String       // e.g. "Twitter", "Medium"
   taskTypes          String[]     // Array of task types for PostgreSQL
   aiXp               Int
   originalityScore   Float?
   peerXp             Int?
   finalXp            Int?
-  status             SubmissionStatus @default(PENDING)
+  status             SubmissionStatus @default(PROCESSING)
   reviewDeadline     DateTime?
   consensusScore     Float?
   reviewCount        Int          @default(0)
@@ -56,7 +71,18 @@ model Submission {
   peerReviews        PeerReview[]
   reviewAssignments  ReviewAssignment[]
   contentFlags       ContentFlag[]
+  aiEvaluation       AiEvaluation?
+  contentFingerprints ContentFingerprint[]
+  xpTransactions     XpTransaction[] @relation("SubmissionXpTransactions")
+  submissionProcessing SubmissionProcessing?
   user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Performance indexes for N+1 query optimization
+  @@index([userId, createdAt])     // User activity queries
+  @@index([status, createdAt])     // Admin filtering and analytics
+  @@index([createdAt])             // Time-based analytics (time series)
+  @@index([platform, createdAt])   // Platform analytics
+  @@index([status, createdAt, platform]) // Enhanced admin analytics
 }
 
 model PeerReview {
@@ -73,6 +99,12 @@ model PeerReview {
 
   reviewer       User       @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
   submission     Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  // Performance indexes for N+1 query optimization
+  @@index([submissionId])          // Review lookups
+  @@index([reviewerId, createdAt]) // Reviewer activity queries
+  @@index([createdAt])             // Time-based analytics
+  @@index([reviewerId, createdAt, xpScore]) // Enhanced reviewer analytics
 }
 
 model WeeklyStats {
@@ -89,6 +121,7 @@ model WeeklyStats {
   user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, weekNumber])
+  @@index([weekNumber, userId, xpTotal]) // Weekly analytics optimization
 }
 
 model ReviewAssignment {
@@ -132,6 +165,7 @@ model UserAchievement {
   achievement    Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
 
   @@unique([userId, achievementId])
+  @@index([earnedAt, userId]) // Achievement analytics optimization
 }
 
 model ContentFlag {
@@ -147,6 +181,8 @@ model ContentFlag {
 
   submission     Submission  @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   flagger        User        @relation(fields: [flaggedBy], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt]) // Content moderation optimization
 }
 
 model AdminAction {
@@ -170,23 +206,35 @@ model XpTransaction {
   description    String
   weekNumber     Int
   createdAt      DateTime          @default(now())
+  sourceType     String?           // Type of source (e.g., 'LEGACY_SUBMISSION')
+  adminId        String?           @db.Uuid // Admin who made the change
 
   user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  submission     Submission?       @relation("SubmissionXpTransactions", fields: [sourceId], references: [id], onDelete: Cascade)
+
+  // Performance indexes for N+1 query optimization
+  @@index([userId, createdAt])     // User XP history queries
+  @@index([type, createdAt])       // Transaction type analytics
+  @@index([createdAt])             // Time-based analytics
+  @@index([userId, type, createdAt]) // Enhanced XP analytics
 }
 
 enum SubmissionStatus {
-  PENDING
-  AI_REVIEWED
-  UNDER_PEER_REVIEW
-  FINALIZED
-  FLAGGED
-  REJECTED
+  PROCESSING           // New: Initial state during background processing
+  PENDING              // Existing: Validation passed, ready for AI
+  AI_REVIEWED          // Existing: AI evaluation complete
+  UNDER_PEER_REVIEW    // Existing: Peer review in progress
+  FINALIZED            // Existing: Final XP awarded
+  FLAGGED              // Existing: Manual review needed
+  REJECTED             // Existing: Failed validation
 }
 
 enum UserRole {
   USER
   REVIEWER
   ADMIN
+
+  @@map("user_role")
 }
 
 enum ReviewAssignmentStatus {
@@ -243,6 +291,9 @@ enum NotificationType {
   REVIEW_ASSIGNED
   REVIEW_COMPLETED
   SUBMISSION_PROCESSED
+  SUBMISSION_PROCESSING
+  SUBMISSION_APPROVED
+  SUBMISSION_REJECTED
   WEEKLY_SUMMARY
   STREAK_ACHIEVED
   PENALTY_APPLIED
@@ -282,4 +333,147 @@ model Notification {
   @@index([userId, read], name: "idx_notifications_user_read")
   @@index([createdAt], name: "idx_notifications_cleanup")
   @@map("notifications")
+}
+
+// AI Evaluation System Tables
+
+model AiEvaluation {
+  id                    String    @id @default(uuid()) @db.Uuid
+  submissionId          String    @unique @db.Uuid
+  status                String    @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  taskTypes             String[]
+  baseXp                Int?
+  originalityScore      Float?
+  qualityScore          Float?
+  confidence            Float?
+  reasoning             String?
+  processingStartedAt   DateTime?
+  processingCompletedAt DateTime?
+  errorMessage          String?
+  retryCount            Int       @default(0)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Relationships
+  submission            Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([status])
+  @@index([createdAt])
+  @@index([retryCount])
+  @@map("AiEvaluation")
+}
+
+model LegacySubmission {
+  id                String              @id @default(uuid()) @db.Uuid
+  url               String              @unique
+  discordHandle     String?
+  submittedAt       DateTime?
+  role              String?
+  notes             String?
+  importedAt        DateTime            @default(now())
+  processed         Boolean             @default(false)
+  aiXp              Int?                @default(0)
+  peerXp            Int?
+  finalXp           Int?
+  contentFingerprints ContentFingerprint[]
+
+  // Indexes
+  @@index([discordHandle])
+  @@index([processed])
+  @@index([submittedAt])
+  @@map("LegacySubmission")
+}
+
+model ContentFingerprint {
+  id                  String            @id @default(uuid()) @db.Uuid
+  submissionId        String?           @db.Uuid
+  legacySubmissionId  String?           @db.Uuid
+  hash                String
+  normalizedContent   String?
+  keyPhrases          String[]
+  contentLength       Int
+  wordCount           Int
+  url                 String
+  platform            String
+  createdAt           DateTime          @default(now())
+
+  // Relationships
+  submission          Submission?       @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  legacySubmission    LegacySubmission? @relation(fields: [legacySubmissionId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([hash])
+  @@index([url])
+  @@index([submissionId])
+  @@index([legacySubmissionId])
+  @@map("ContentFingerprint")
+}
+
+model RolePromotionNotification {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @db.Uuid
+  oldRole          String
+  newRole          String
+  xpAtPromotion    Int
+  notificationSent Boolean  @default(false)
+  discordHandle    String?
+  createdAt        DateTime @default(now())
+
+  // Relationships
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([userId])
+  @@index([notificationSent])
+  @@index([createdAt])
+  @@map("RolePromotionNotification")
+}
+
+model SystemLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  level     String   // INFO, WARN, ERROR
+  message   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  // Indexes
+  @@index([level])
+  @@index([createdAt])
+  @@map("SystemLog")
+}
+
+model SubmissionProcessing {
+  id                    String    @id @default(uuid()) @db.Uuid
+  submissionId          String    @unique @db.Uuid
+  status                String    @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  priority              String    @default("NORMAL") // HIGH, NORMAL, LOW
+  processingStartedAt   DateTime?
+  processingCompletedAt DateTime?
+  errorMessage          String?
+  retryCount            Int       @default(0)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Relationships
+  submission            Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  // Indexes for efficient queue processing
+  @@index([status, priority, createdAt])
+  @@index([status, retryCount])
+  @@map("SubmissionProcessing")
+}
+
+model ApiRateLimit {
+  id           Int      @id @default(autoincrement())
+  platform     String   // e.g., "twitter", "reddit"
+  endpoint     String   // e.g., "tweet_lookup", "post_fetch"
+  requestsMade Int      @default(0)
+  windowStart  DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  // Unique constraint to prevent duplicate records for same platform/endpoint/window
+  @@unique([platform, endpoint, windowStart])
+  @@index([platform, endpoint, windowStart])
+  @@map("api_rate_limits")
 }

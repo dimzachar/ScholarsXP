@@ -21,66 +21,79 @@ interface XpBreakdownChartProps {
   timeframe?: string
 }
 
-export default function XpBreakdownChart({ 
-  data, 
-  title = "XP Breakdown", 
-  timeframe = "Current Week" 
+export default function XpBreakdownChart({
+  data,
+  title = "XP Breakdown",
+  timeframe = "Current Week"
 }: XpBreakdownChartProps) {
+
+
   if (!data || data.total === 0) {
     return (
-      <Card>
+      <Card className="h-full">
         <CardHeader>
-          <CardTitle>{title}</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-muted"></div>
+            {title}
+          </CardTitle>
           <CardDescription>{timeframe}</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground text-center py-8">No XP data available</p>
+          <div className="flex flex-col items-center justify-center py-12 space-y-4">
+            <div className="w-24 h-24 rounded-full bg-muted/20 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-full bg-muted/40"></div>
+            </div>
+            <div className="text-center space-y-2">
+              <p className="text-muted-foreground font-medium">No XP data available</p>
+              <p className="text-sm text-muted-foreground">Start submitting content to see your breakdown</p>
+            </div>
+          </div>
         </CardContent>
       </Card>
     )
   }
 
-  // Calculate percentages and prepare data for visualization
+  // Calculate percentages and prepare data for visualization using theme colors
   const categories = [
     {
       name: 'Submissions',
       value: data.submissions,
-      color: '#3b82f6', // blue
-      bgColor: 'bg-blue-500',
-      lightBg: 'bg-blue-50',
-      textColor: 'text-blue-600'
+      color: 'hsl(var(--chart-1))', // Primary theme color
+      bgColor: 'bg-chart-1',
+      lightBg: 'bg-primary/10',
+      textColor: 'text-chart-1'
     },
     {
       name: 'Reviews',
       value: data.reviews,
-      color: '#10b981', // green
-      bgColor: 'bg-green-500',
-      lightBg: 'bg-green-50',
-      textColor: 'text-green-600'
+      color: 'hsl(var(--chart-2))', // Secondary theme color
+      bgColor: 'bg-chart-2',
+      lightBg: 'bg-secondary/10',
+      textColor: 'text-chart-2'
     },
     {
       name: 'Streaks',
       value: data.streaks,
-      color: '#f59e0b', // orange
-      bgColor: 'bg-orange-500',
-      lightBg: 'bg-orange-50',
-      textColor: 'text-orange-600'
+      color: 'hsl(var(--chart-3))', // Accent theme color
+      bgColor: 'bg-chart-3',
+      lightBg: 'bg-accent/10',
+      textColor: 'text-chart-3'
     },
     {
       name: 'Achievements',
       value: data.achievements,
-      color: '#8b5cf6', // purple
-      bgColor: 'bg-purple-500',
-      lightBg: 'bg-purple-50',
-      textColor: 'text-purple-600'
+      color: 'hsl(var(--purple))', // Purple theme color
+      bgColor: 'bg-purple',
+      lightBg: 'bg-purple/10',
+      textColor: 'text-purple'
     },
     {
       name: 'Admin Adjustments',
       value: data.adminAdjustments,
-      color: '#6b7280', // gray
-      bgColor: 'bg-gray-500',
-      lightBg: 'bg-gray-50',
-      textColor: 'text-gray-600'
+      color: 'hsl(var(--chart-5))', // Muted theme color
+      bgColor: 'bg-chart-5',
+      lightBg: 'bg-muted/20',
+      textColor: 'text-chart-5'
     }
   ].filter(category => category.value !== 0) // Only show categories with values
 
@@ -89,14 +102,16 @@ export default function XpBreakdownChart({
     categories.push({
       name: 'Penalties',
       value: Math.abs(data.penalties),
-      color: '#ef4444', // red
-      bgColor: 'bg-red-500',
-      lightBg: 'bg-red-50',
-      textColor: 'text-red-600'
+      color: 'hsl(var(--destructive))', // Destructive theme color
+      bgColor: 'bg-destructive',
+      lightBg: 'bg-destructive/10',
+      textColor: 'text-destructive'
     })
   }
 
   const totalAbsolute = categories.reduce((sum, cat) => sum + Math.abs(cat.value), 0)
+
+
 
   // Calculate angles for pie chart
   let currentAngle = 0
@@ -116,12 +131,19 @@ export default function XpBreakdownChart({
     }
   })
 
+
+
   // Generate SVG path for pie slice
   const generatePieSlice = (centerX: number, centerY: number, radius: number, startAngle: number, endAngle: number) => {
+    // Handle full circle case (360 degrees)
+    if (Math.abs(endAngle - startAngle) >= 359.9) {
+      return `M ${centerX - radius} ${centerY} A ${radius} ${radius} 0 1 0 ${centerX + radius} ${centerY} A ${radius} ${radius} 0 1 0 ${centerX - radius} ${centerY}`
+    }
+
     const start = polarToCartesian(centerX, centerY, radius, endAngle)
     const end = polarToCartesian(centerX, centerY, radius, startAngle)
     const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1"
-    
+
     return [
       "M", centerX, centerY,
       "L", start.x, start.y,
@@ -138,9 +160,19 @@ export default function XpBreakdownChart({
     }
   }
 
-  const centerX = 120
-  const centerY = 120
-  const radius = 80
+  // Increased size for better visibility
+  const centerX = 180
+  const centerY = 180
+  const radius = 120
+  const labelRadius = radius * 0.7 // Position labels at 70% of radius
+
+  // Helper function to calculate label position
+  const getLabelPosition = (startAngle: number, endAngle: number) => {
+    const midAngle = (startAngle + endAngle) / 2
+    const x = centerX + Math.cos(midAngle) * labelRadius
+    const y = centerY + Math.sin(midAngle) * labelRadius
+    return { x, y, midAngle }
+  }
 
   return (
     <Card>
@@ -152,39 +184,71 @@ export default function XpBreakdownChart({
         <div className="space-y-6">
           {/* Pie Chart */}
           <div className="flex items-center justify-center">
-            <div className="relative">
-              <svg width="240" height="240" className="transform -rotate-90">
+            <div className="relative w-full max-w-md">
+              <svg
+                width="360"
+                height="360"
+                viewBox="0 0 360 360"
+                className="transform -rotate-90 w-full h-auto"
+              >
+                {/* Pie slices */}
                 {pieData.map((slice, index) => (
                   <path
                     key={index}
                     d={generatePieSlice(centerX, centerY, radius, slice.startAngle, slice.endAngle)}
                     fill={slice.color}
                     stroke="white"
-                    strokeWidth="2"
+                    strokeWidth="3"
                     className="hover:opacity-80 transition-opacity cursor-pointer"
                   >
                     <title>{slice.name}: {slice.value} XP ({slice.percentage.toFixed(1)}%)</title>
                   </path>
                 ))}
-                
+
+                {/* Segment labels */}
+                {pieData.map((slice, index) => {
+                  // Only show labels for slices > 5% to avoid clutter
+                  if (slice.percentage < 5) return null
+
+                  const { x, y } = getLabelPosition(slice.startAngle, slice.endAngle)
+
+                  return (
+                    <g key={`label-${index}`} className="transform rotate-90">
+                      <text
+                        x={x}
+                        y={y}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        className="fill-white text-xs font-semibold drop-shadow-sm"
+                        style={{
+                          filter: 'drop-shadow(1px 1px 1px rgba(0,0,0,0.5))',
+                          fontSize: slice.percentage > 15 ? '14px' : '12px'
+                        }}
+                      >
+                        {slice.percentage.toFixed(0)}%
+                      </text>
+                    </g>
+                  )
+                })}
+
                 {/* Center circle with total */}
                 <circle
                   cx={centerX}
                   cy={centerY}
-                  r="45"
+                  r="60"
                   fill="white"
                   stroke="#e5e7eb"
-                  strokeWidth="2"
+                  strokeWidth="3"
                 />
               </svg>
-              
+
               {/* Center text */}
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-gray-900">
+                  <div className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-gray-100">
                     {data.total}
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
                     Total XP
                   </div>
                 </div>
@@ -195,19 +259,19 @@ export default function XpBreakdownChart({
           {/* Legend */}
           <div className="space-y-3">
             {pieData.map((slice, index) => (
-              <div key={index} className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div 
-                    className="w-4 h-4 rounded-full"
+              <div key={index} className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div
+                    className="w-4 h-4 rounded-full flex-shrink-0"
                     style={{ backgroundColor: slice.color }}
                   ></div>
-                  <span className="text-sm font-medium">{slice.name}</span>
+                  <span className="text-sm font-medium truncate">{slice.name}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="text-sm text-muted-foreground font-medium">
                     {slice.percentage.toFixed(1)}%
                   </span>
-                  <Badge variant="outline" className={slice.textColor}>
+                  <Badge variant="outline" className={`${slice.textColor} text-xs`}>
                     {slice.name === 'Penalties' ? '-' : '+'}{slice.value} XP
                   </Badge>
                 </div>

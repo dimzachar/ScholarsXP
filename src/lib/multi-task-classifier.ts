@@ -107,13 +107,18 @@ function detectTaskTypesHeuristically(contentData: ContentData): TaskTypeId[] {
   const content = contentData.content.toLowerCase()
   const contentLength = contentData.content.length
 
-  // Task A: Thread (5+ tweets) OR long article (2000+ chars)
-  if (contentData.platform === 'Twitter' || contentLength >= 2000) {
+  // Task A: Twitter threads (5+ tweets) OR long articles on non-restricted platforms
+  if (contentData.platform === 'Twitter') {
+    // For Twitter, we need to check if it's a thread with 5+ tweets
+    types.push('A')
+  } else if (contentLength >= 2000 &&
+             !['Reddit', 'Notion', 'Medium'].includes(contentData.platform)) {
+    // Long articles on platforms other than Reddit/Notion/Medium qualify for Task A
     types.push('A')
   }
 
-  // Task B: Platform article (2000+ chars) on restricted platforms
-  if (contentLength >= 2000 && 
+  // Task B: Platform article (2000+ chars) on restricted platforms only
+  if (contentLength >= 2000 &&
       ['Reddit', 'Notion', 'Medium'].includes(contentData.platform)) {
     types.push('B')
   }

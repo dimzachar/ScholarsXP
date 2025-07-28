@@ -1,156 +1,146 @@
-import { NextResponse } from 'next/server'
-import { submissionService, userService } from '@/lib/database'
+/**
+ * Submissions API Route - MIGRATED to Standardized Error Handling
+ *
+ * Part of the API Error Handling Standardization Initiative
+ *
+ * Changes Applied:
+ * - Added withErrorHandling wrapper
+ * - Standardized error response format
+ * - Added request ID propagation
+ * - Replaced manual error handling with custom error classes
+ */
+
 import { detectPlatform, getWeekNumber } from '@/lib/utils'
 import { withPermission, withAuth, AuthenticatedRequest } from '@/lib/auth-middleware'
-import { validateSubmission } from '@/lib/content-validator'
-import { checkForDuplicateContent, checkUrlDuplicate } from '@/lib/duplicate-content-detector'
-import { canUserSubmitForTaskTypes } from '@/lib/weekly-task-tracker'
-import { fetchContentFromUrl } from '@/lib/ai-evaluator'
-import { ContentData } from '@/types/task-types'
+import { submissionProcessingQueue } from '@/lib/submission-processing-queue'
 import { createServiceClient } from '@/lib/supabase-server'
+import { submissionService } from '@/lib/database'
+import { enhancedDuplicateDetectionService } from '@/lib/enhanced-duplicate-detection'
+import {
+  withErrorHandling,
+  createSuccessResponse,
+  validateRequiredFields,
+  validateUrl
+} from '@/lib/api-middleware'
+import {
+  ValidationError,
+  ConflictError,
+  BusinessLogicError
+} from '@/lib/api-error-handler'
 
-export const POST = withPermission('submit_content')(async (request: AuthenticatedRequest) => {
-  try {
+/**
+ * Fast submission endpoint - provides immediate response while queuing heavy operations
+ * Target response time: < 3 seconds
+ */
+export const POST = withPermission('submit_content')(
+  withErrorHandling(async (request: AuthenticatedRequest) => {
+    const startTime = Date.now()
+
     const { url } = await request.json()
 
-    if (!url) {
-      return NextResponse.json({
-        error: 'URL is required',
-        code: 'MISSING_URL'
-      }, { status: 400 })
-    }
+    // ========================================
+    // FAST OPERATIONS ONLY (< 2 seconds total)
+    // ========================================
 
+    // 1. Basic URL validation (< 100ms)
+    validateRequiredFields({ url }, ['url'])
+    validateUrl(url)
+
+    // 2. Platform detection (< 100ms)
     const platform = detectPlatform(url)
     if (!platform) {
-      return NextResponse.json({
-        error: 'Platform not supported. Supported platforms: Twitter/X, Medium, Reddit, Notion, LinkedIn, Discord, Telegram',
-        code: 'UNSUPPORTED_PLATFORM'
-      }, { status: 400 })
+      throw new ValidationError(
+        'Platform not supported. Supported platforms: Twitter/X, Medium, Reddit, Notion, LinkedIn, Discord, Telegram',
+        {
+          supportedPlatforms: ['Twitter/X', 'Medium', 'Reddit', 'Notion', 'LinkedIn', 'Discord', 'Telegram'],
+          detectedPlatform: null
+        }
+      )
     }
 
-    // Check for URL duplicates
-    const urlDuplicateCheck = await checkUrlDuplicate(url, request.user!.id)
-    if (urlDuplicateCheck.isDuplicate) {
-      return NextResponse.json({
-        error: 'This URL has already been submitted by another user',
-        code: 'DUPLICATE_URL',
-        existingSubmission: urlDuplicateCheck.existingSubmission
-      }, { status: 400 })
-    }
+    console.log(`⚡ Fast submission processing: ${url} (platform: ${platform})`)
 
-    // Fetch and validate content
-    let contentData: ContentData
-    try {
-      contentData = await fetchContentFromUrl(url)
-    } catch (error) {
-      return NextResponse.json({
-        error: 'Could not fetch content from URL. Please ensure the URL is accessible.',
-        code: 'CONTENT_FETCH_FAILED'
-      }, { status: 400 })
-    }
-
-    // Validate content with new validation system
-    const validationResult = await validateSubmission(contentData, request.user!.id)
-
-    if (!validationResult.isValid) {
-      console.log('Content validation failed:', {
-        url,
-        errors: validationResult.errors,
-        contentPreview: contentData.content?.substring(0, 200) + '...'
-      })
-      return NextResponse.json({
-        error: 'Content validation failed',
-        code: 'VALIDATION_FAILED',
-        validationErrors: validationResult.errors,
-        suggestions: validationResult.errors.map(e => e.suggestion).filter(Boolean)
-      }, { status: 400 })
-    }
-
-    // Check weekly completion limits for qualifying task types
-    const weeklyCheck = await canUserSubmitForTaskTypes(
+    // 3. Fast URL duplicate check using unified service (< 500ms)
+    console.log(`🔍 Fast duplicate check for: ${url}`)
+    const duplicateCheck = await enhancedDuplicateDetectionService.checkForDuplicate(
+      url,
+      null, // No content data needed for URL_ONLY mode
       request.user!.id,
-      validationResult.qualifyingTaskTypes as any[]
+      'URL_ONLY' // Fast mode - only check URL duplicates
     )
 
-    if (!weeklyCheck.canSubmit) {
-      return NextResponse.json({
-        error: 'Weekly submission limits reached for qualifying task types',
-        code: 'WEEKLY_LIMIT_EXCEEDED',
-        blockedTaskTypes: weeklyCheck.blockedTaskTypes,
-        reasons: weeklyCheck.reasons
-      }, { status: 400 })
+    if (duplicateCheck.isDuplicate) {
+      console.log(`❌ Fast duplicate check failed: ${duplicateCheck.duplicateType}`)
+      throw new ConflictError(duplicateCheck.message, {
+        duplicateType: duplicateCheck.duplicateType,
+        duplicateSource: duplicateCheck.duplicateSource
+      })
     }
 
-    // Check for duplicate content
-    const duplicateCheck = await checkForDuplicateContent(contentData, request.user!.id)
-    if (duplicateCheck.isDuplicate && duplicateCheck.duplicateType === 'EXACT') {
-      return NextResponse.json({
-        error: 'This content appears to be a duplicate of previously submitted content',
-        code: 'DUPLICATE_CONTENT',
-        similarSubmissions: duplicateCheck.similarSubmissions
-      }, { status: 400 })
-    }
+    console.log(`✅ Fast duplicate check passed - URL is unique`)
 
-    const weekNumber = getWeekNumber()
-
-    // Create submission with validated task types using service client to bypass RLS
-    // This is necessary because the authenticated user context isn't properly set for RLS
+    // 4. Create submission record with PROCESSING status (< 200ms)
     const supabase = createServiceClient()
+    const weekNumber = getWeekNumber()
     const { data: submission, error: submissionError } = await supabase
       .from('Submission')
       .insert({
         userId: request.user!.id,
         url,
         platform,
-        taskTypes: validationResult.qualifyingTaskTypes,
-        aiXp: 0, // Will be updated by AI evaluation
+        taskTypes: [], // Will be populated during background processing
+        aiXp: 0,
         weekNumber,
-        status: 'PENDING'
+        status: 'PROCESSING' // New fast flow status
       })
       .select()
       .single()
 
     if (submissionError || !submission) {
-      console.error('Error creating submission:', submissionError)
-      return NextResponse.json({
-        error: 'Failed to create submission',
-        code: 'CREATION_FAILED'
-      }, { status: 500 })
+      console.error('❌ Error creating submission:', submissionError)
+      throw new BusinessLogicError('Failed to create submission', {
+        error: submissionError?.message,
+        code: submissionError?.code
+      })
     }
 
-    return NextResponse.json({
-      message: 'Submission created successfully',
+    // 5. Queue for background processing (< 100ms)
+    try {
+      await submissionProcessingQueue.queueSubmission(submission.id, 'NORMAL')
+      console.log(`📥 Queued submission ${submission.id} for background processing`)
+    } catch (queueError) {
+      console.error(`❌ Failed to queue submission ${submission.id}:`, queueError)
+      // Don't fail the submission - mark for manual processing
+      await supabase
+        .from('Submission')
+        .update({ status: 'FLAGGED' })
+        .eq('id', submission.id)
+    }
+
+    // 6. Return immediate success response
+    const responseTime = Date.now() - startTime
+    console.log(`⚡ Fast submission complete: ${submission.id} in ${responseTime}ms`)
+
+    return createSuccessResponse({
+      message: 'Submission received and is being processed',
       submissionId: submission.id,
-      status: 'PENDING',
-      validationResult: {
-        qualifyingTaskTypes: validationResult.qualifyingTaskTypes,
-        warnings: validationResult.warnings,
-        metadata: validationResult.metadata
-      },
-      duplicateCheck: duplicateCheck.duplicateType !== 'UNIQUE' ? {
-        type: duplicateCheck.duplicateType,
-        similarityScore: duplicateCheck.similarityScore
-      } : undefined
+      status: 'PROCESSING',
+      estimatedProcessingTime: '1-3 minutes',
+      trackingUrl: `/submissions/${submission.id}/status`,
+      responseTime: `${responseTime}ms`
     })
+  })
+)
 
-  } catch (error) {
-    console.error('Error creating submission:', error)
-    return NextResponse.json({
-      error: 'Internal server error',
-      code: 'INTERNAL_ERROR'
-    }, { status: 500 })
-  }
-})
-
-export const GET = withAuth(async (request: AuthenticatedRequest) => {
-  try {
+export const GET = withAuth(
+  withErrorHandling(async (request: AuthenticatedRequest) => {
     const { searchParams } = new URL(request.url)
     const limit = parseInt(searchParams.get('limit') || '20')
     const userOnly = searchParams.get('userOnly') === 'true'
 
     let submissions
 
-    if (userOnly || request.user!.role === 'USER') {
+    if (userOnly || request.userProfile!.role === 'USER') {
       // Users can only see their own submissions
       submissions = await submissionService.findManyByUser(request.user!.id, limit)
     } else {
@@ -158,17 +148,10 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
       submissions = await submissionService.findManyWithUser(limit)
     }
 
-    return NextResponse.json({
+    return createSuccessResponse({
       submissions,
-      userRole: request.user!.role
+      userRole: request.userProfile!.role
     })
-
-  } catch (error) {
-    console.error('Error fetching submissions:', error)
-    return NextResponse.json({
-      error: 'Internal server error',
-      code: 'FETCH_ERROR'
-    }, { status: 500 })
-  }
-})
+  })
+)
 

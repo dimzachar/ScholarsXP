@@ -1,0 +1,498 @@
+import { prisma } from '@/lib/prisma'
+import { fetchContentFromUrl, evaluateContent } from '@/lib/ai-evaluator'
+import { validateSubmission } from '@/lib/content-validator'
+import { enhancedDuplicateDetectionService } from '@/lib/enhanced-duplicate-detection'
+import { aiEvaluationQueue } from '@/lib/ai-evaluation-queue'
+import { createNotification, NotificationType } from '@/lib/notifications'
+import { storeContentFingerprint } from '@/lib/duplicate-content-detector'
+
+/**
+ * Background processing queue for submissions
+ * Handles content fetching, validation, and AI evaluation asynchronously
+ */
+export class SubmissionProcessingQueue {
+  private static instance: SubmissionProcessingQueue
+  private isProcessing = false
+  private readonly MAX_RETRIES = 3
+  private readonly PROCESSING_TIMEOUT = 300000 // 5 minutes
+  private readonly CONTENT_FETCH_TIMEOUT = 15000 // 15 seconds (reduced from 30s)
+
+  static getInstance(): SubmissionProcessingQueue {
+    if (!SubmissionProcessingQueue.instance) {
+      SubmissionProcessingQueue.instance = new SubmissionProcessingQueue()
+    }
+    return SubmissionProcessingQueue.instance
+  }
+
+  /**
+   * Queue a submission for background processing
+   */
+  async queueSubmission(submissionId: string, priority: 'HIGH' | 'NORMAL' | 'LOW' = 'NORMAL'): Promise<void> {
+    try {
+      // Check if processing record already exists using raw SQL
+      const existingProcessing = await prisma.$queryRaw`
+        SELECT id FROM "SubmissionProcessing" WHERE "submissionId" = ${submissionId}::uuid
+      ` as any[]
+
+      if (existingProcessing.length > 0) {
+        console.log(`🔄 Submission processing already exists for ${submissionId}`)
+        return
+      }
+
+      // Create processing record using raw SQL
+      await prisma.$executeRaw`
+        INSERT INTO "SubmissionProcessing" ("submissionId", "status", "priority")
+        VALUES (${submissionId}::uuid, 'PENDING', ${priority})
+      `
+
+      console.log(`📥 Queued submission ${submissionId} for processing (priority: ${priority})`)
+
+      // Trigger immediate processing if not already running
+      if (!this.isProcessing) {
+        // Don't await - let it run in background
+        this.processQueue().catch(error => {
+          console.error('❌ Error in background submission processing:', error)
+        })
+      }
+    } catch (error) {
+      console.error(`❌ Failed to queue submission ${submissionId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Process the submission queue
+   */
+  async processQueue(): Promise<{ processed: number; failed: number }> {
+    if (this.isProcessing) {
+      console.log('⏳ Submission processing already in progress')
+      return { processed: 0, failed: 0 }
+    }
+
+    this.isProcessing = true
+    let processed = 0
+    let failed = 0
+
+    try {
+      console.log('🚀 Starting submission processing queue...')
+
+      // Get pending submissions with priority ordering using raw SQL
+      const pendingSubmissions = await prisma.$queryRaw`
+        SELECT
+          sp.id,
+          sp."submissionId",
+          sp.status,
+          sp.priority,
+          sp."retryCount",
+          sp."createdAt",
+          s.id as submission_id,
+          s.url as submission_url,
+          s."userId" as submission_userId,
+          s.platform as submission_platform,
+          u.id as user_id,
+          u.username as user_username,
+          u.email as user_email
+        FROM "SubmissionProcessing" sp
+        JOIN "Submission" s ON sp."submissionId" = s.id
+        JOIN "User" u ON s."userId" = u.id
+        WHERE sp.status = 'PENDING'
+          AND sp."retryCount" < ${this.MAX_RETRIES}
+        ORDER BY
+          CASE sp.priority
+            WHEN 'HIGH' THEN 3
+            WHEN 'NORMAL' THEN 2
+            WHEN 'LOW' THEN 1
+          END DESC,
+          sp."createdAt" ASC
+        LIMIT 5
+      ` as any[]
+
+      if (pendingSubmissions.length === 0) {
+        console.log('📭 No submissions to process')
+        return { processed: 0, failed: 0 }
+      }
+
+      console.log(`🔄 Processing ${pendingSubmissions.length} submissions`)
+
+      // Process each submission
+      for (const processing of pendingSubmissions) {
+        try {
+          // Transform raw SQL result to expected format
+          const transformedProcessing = {
+            id: processing.id,
+            submissionId: processing.submissionId,
+            status: processing.status,
+            priority: processing.priority,
+            retryCount: processing.retryCount,
+            createdAt: processing.createdAt,
+            submission: {
+              id: processing.submission_id,
+              url: processing.submission_url,
+              userId: processing.submission_userId,
+              platform: processing.submission_platform,
+              user: {
+                id: processing.user_id,
+                username: processing.user_username,
+                email: processing.user_email
+              }
+            }
+          }
+
+          const success = await this.processSubmission(transformedProcessing)
+          if (success) {
+            processed++
+          } else {
+            failed++
+          }
+        } catch (error) {
+          console.error(`❌ Error processing submission ${processing.submissionId}:`, error)
+          failed++
+        }
+      }
+
+      console.log(`✅ Submission processing complete: ${processed} processed, ${failed} failed`)
+      return { processed, failed }
+
+    } finally {
+      this.isProcessing = false
+    }
+  }
+
+  /**
+   * Process a single submission
+   */
+  private async processSubmission(processing: any): Promise<boolean> {
+    const { submissionId, submission } = processing
+    const startTime = Date.now()
+
+    try {
+      console.log(`🔄 Processing submission ${submissionId}: ${submission.url}`)
+
+      // Mark as processing using raw SQL
+      await prisma.$executeRaw`
+        UPDATE "SubmissionProcessing"
+        SET status = 'PROCESSING', "processingStartedAt" = NOW()
+        WHERE id = ${processing.id}::uuid
+      `
+
+      // Extract userId from the correct location
+      const userId = submission.submission_userId || submission.userId || submission.user?.id
+
+      // Early platform check: Skip all validation for Twitter (peer review only)
+      if (submission.platform === 'Twitter') {
+        console.log(`🐦 Twitter submission detected - skipping content fetching and validation, routing directly to peer review`)
+
+        // Skip AI evaluation and content validation, go directly to peer review
+        await prisma.submission.update({
+          where: { id: submissionId },
+          data: {
+            status: 'AI_REVIEWED', // Skip AI evaluation step
+            aiXp: 0, // No AI XP for Twitter
+            originalityScore: 0.8, // Default originality score for peer review
+            taskTypes: ['A'] // Default task type for Twitter content (peer reviewers will verify)
+          }
+        })
+
+        // Mark processing as completed
+        await prisma.$executeRaw`
+          UPDATE "SubmissionProcessing"
+          SET status = 'COMPLETED', "processingCompletedAt" = NOW()
+          WHERE id = ${processing.id}::uuid
+        `
+
+        // Platform-specific notification message
+        const notificationMessage = 'Your Twitter submission is ready for peer review. Peer reviewers will verify that it meets all requirements including @ScholarsOfMove mention and #ScholarsOfMove hashtag. You\'ll be notified when reviewers complete their evaluation!'
+
+        // Notify user that submission is ready for peer review
+        await createNotification(
+          userId,
+          NotificationType.SUBMISSION_PROCESSING,
+          '✅ Submission Ready for Review',
+          notificationMessage,
+          { submissionId, platform: submission.platform, skipAI: true, skipValidation: true, taskTypes: ['A'] }
+        )
+
+        console.log(`✅ Twitter submission ${submissionId} routed directly to peer review (no validation or AI evaluation)`)
+        return true
+      }
+
+      // Step 1: Fetch content (URL duplicates already checked in fast API)
+      console.log(`📄 Fetching content for ${submissionId}`)
+      let contentData
+      try {
+        contentData = await this.withTimeout(
+          fetchContentFromUrl(submission.url),
+          this.CONTENT_FETCH_TIMEOUT,
+          'Content fetching timeout'
+        )
+      } catch (fetchError) {
+        // If content fetching fails completely, reject with specific error
+        if (fetchError.message.includes('timeout') || fetchError.message.includes('429')) {
+          throw fetchError // Let the rate limit handler deal with this
+        }
+
+        await this.rejectSubmission(
+          submissionId,
+          processing.id,
+          'CONTENT_FETCH_FAILED',
+          `Unable to fetch content from URL: ${fetchError.message}`
+        )
+        return true
+      }
+
+      // Step 2: Content validation FIRST (fast local operation)
+      // Optimization: Check validation before expensive duplicate detection
+      // This avoids unnecessary database queries for content missing @ScholarsOfMove mentions/hashtags
+      console.log(`✅ Validating content for ${submissionId}`)
+      const validationResult = await validateSubmission(contentData, userId)
+
+      if (!validationResult.isValid) {
+        await this.rejectSubmission(
+          submissionId,
+          processing.id,
+          'VALIDATION_FAILED',
+          'Content validation failed',
+          validationResult.errors
+        )
+        return true
+      }
+
+      // Step 3: Content similarity duplicate check (expensive operation, only for valid content)
+      // Note: URL duplicates already checked in fast API, so we only check content duplicates
+      console.log(`🔍 Checking content duplicates for validated content: ${submissionId}`)
+      const contentDuplicateCheck = await enhancedDuplicateDetectionService.checkForDuplicate(
+        submission.url,
+        contentData,
+        userId,
+        'CONTENT_ONLY' // Only check content duplicates - URL already checked in fast API
+      )
+
+      if (contentDuplicateCheck.isDuplicate) {
+        await this.rejectSubmission(
+          submissionId,
+          processing.id,
+          'DUPLICATE_CONTENT',
+          `Content is a duplicate (${contentDuplicateCheck.duplicateType})`
+        )
+        return true
+      }
+
+      // Step 4: Store content fingerprint for future duplicate detection
+      await storeContentFingerprint(submissionId, contentData)
+
+      // Step 5: Update submission with validated task types
+      await prisma.submission.update({
+        where: { id: submissionId },
+        data: {
+          status: 'PENDING', // Use existing PENDING status for AI evaluation
+          taskTypes: validationResult.qualifyingTaskTypes
+        }
+      })
+
+      // Step 6: Queue for background processing (Twitter already handled earlier)
+      console.log(`📝 Queueing background processing for ${submission.platform} content ${submissionId}`)
+      await aiEvaluationQueue.queueEvaluation(submissionId)
+
+      // Step 7: Mark processing as completed using raw SQL
+      await prisma.$executeRaw`
+        UPDATE "SubmissionProcessing"
+        SET status = 'COMPLETED', "processingCompletedAt" = NOW()
+        WHERE id = ${processing.id}::uuid
+      `
+
+      const processingTime = Date.now() - startTime
+      console.log(`✅ Successfully processed ${submissionId} in ${processingTime}ms`)
+
+      // Notification message for non-Twitter platforms (Twitter handled earlier)
+      const notificationMessage = 'Your submission has been validated and is being prepared for peer review. You\'ll be notified when it\'s ready!'
+
+      // Notify user that submission is being processed
+      await createNotification(
+        userId,
+        NotificationType.SUBMISSION_PROCESSING,
+        '✅ Submission Received',
+        notificationMessage,
+        { submissionId, processingTime, platform: submission.platform }
+      )
+
+      return true
+
+    } catch (error) {
+      console.error(`❌ Error processing submission ${submissionId}:`, error)
+
+      // Handle rate limiting errors with longer delay
+      if (error.message.includes('429') || error.message.includes('Rate limit')) {
+        console.log(`⏳ Rate limit hit for ${submissionId}, will retry with longer delay`)
+        // Don't count rate limit as a regular retry - just delay and try again
+        setTimeout(() => {
+          this.processQueue().catch(console.error)
+        }, 60000) // Wait 1 minute for rate limits
+        return false
+      }
+
+      await this.handleProcessingError(processing, error)
+      return false
+    }
+  }
+
+  /**
+   * Reject a submission with proper notifications
+   * Keep submission in PROCESSING status but mark processing as failed with detailed error
+   */
+  private async rejectSubmission(
+    submissionId: string,
+    processingId: string,
+    reason: string,
+    message: string,
+    validationErrors?: any[]
+  ): Promise<void> {
+    try {
+      // Keep submission in PROCESSING status (don't change to REJECTED)
+      // The detailed error will be in the processing record and notifications
+
+      // Mark processing as failed with detailed error message using raw SQL
+      await prisma.$executeRaw`
+        UPDATE "SubmissionProcessing"
+        SET status = 'FAILED',
+            "processingCompletedAt" = NOW(),
+            "errorMessage" = ${`${reason}: ${message}`}
+        WHERE id = ${processingId}::uuid
+      `
+
+      // Get submission details for notification using raw SQL
+      const submissions = await prisma.$queryRaw`
+        SELECT s.id, s.url, s."userId", u.username, u.email
+        FROM "Submission" s
+        JOIN "User" u ON s."userId" = u.id
+        WHERE s.id = ${submissionId}::uuid
+      ` as any[]
+
+      const submission = submissions[0]
+      if (submission && submission.userId) {
+        // Create detailed user-friendly notification with specific fixes
+        let notificationTitle = '❌ Submission Needs Attention'
+        let notificationMessage = ''
+
+        if (reason === 'DUPLICATE_CONTENT') {
+          notificationMessage = 'This content has already been submitted. Please submit original content only.'
+        } else if (reason === 'VALIDATION_FAILED' && validationErrors) {
+          // Group errors by type to avoid duplicates
+          const errorGroups = {
+            mention: false,
+            hashtag: false,
+            length: [],
+            other: []
+          }
+
+          validationErrors.forEach(error => {
+            if (error.code === 'MISSING_MENTION') {
+              errorGroups.mention = true
+            } else if (error.code === 'MISSING_HASHTAG') {
+              errorGroups.hashtag = true
+            } else if (error.code === 'INSUFFICIENT_LENGTH') {
+              errorGroups.length.push(error.message)
+            } else {
+              errorGroups.other.push(error.message)
+            }
+          })
+
+          const errorMessages = []
+
+          if (errorGroups.mention) {
+            errorMessages.push('📝 Add "@ScholarsOfMove" mention anywhere in your content')
+          }
+
+          if (errorGroups.hashtag) {
+            errorMessages.push('🏷️ Add "#ScholarsOfMove" hashtag to your content')
+          }
+
+          errorGroups.length.forEach(msg => {
+            errorMessages.push(`📏 ${msg}`)
+          })
+
+          errorGroups.other.forEach(msg => {
+            errorMessages.push(`⚠️ ${msg}`)
+          })
+
+          notificationMessage = `Your submission needs attention:\n\n${errorMessages.join('\n')}\n\n✅ Fix these issues and submit again to earn XP!`
+        } else {
+          notificationMessage = 'Please check the submission requirements and try again.'
+        }
+
+        // Create notification using the notification library
+        await createNotification(
+          submission.userId,
+          NotificationType.SUBMISSION_REJECTED,
+          notificationTitle,
+          notificationMessage,
+          {
+            submissionId,
+            reason,
+            validationErrors,
+            url: submission.url,
+            detailedErrors: validationErrors
+          }
+        )
+      }
+
+      console.log(`❌ Rejected submission ${submissionId}: ${reason}`)
+    } catch (error) {
+      console.error(`❌ Error rejecting submission ${submissionId}:`, error)
+    }
+  }
+
+  /**
+   * Handle processing errors with retry logic
+   */
+  private async handleProcessingError(processing: any, error: any): Promise<void> {
+    const { id: processingId, submissionId, retryCount } = processing
+
+    try {
+      if (retryCount < this.MAX_RETRIES - 1) {
+        // Retry with exponential backoff
+        const delay = Math.pow(2, retryCount) * 1000 // 1s, 2s, 4s
+
+        await prisma.$executeRaw`
+          UPDATE "SubmissionProcessing"
+          SET status = 'PENDING',
+              "retryCount" = ${retryCount + 1},
+              "errorMessage" = ${error.message},
+              "processingStartedAt" = NULL
+          WHERE id = ${processingId}::uuid
+        `
+
+        console.log(`🔄 Retrying submission ${submissionId} in ${delay}ms (attempt ${retryCount + 2}/${this.MAX_RETRIES})`)
+
+        // Schedule retry
+        setTimeout(() => {
+          this.processQueue().catch(console.error)
+        }, delay)
+      } else {
+        // Max retries exceeded - mark as failed
+        await this.rejectSubmission(
+          submissionId,
+          processingId,
+          'PROCESSING_FAILED',
+          `Processing failed after ${this.MAX_RETRIES} attempts: ${error.message}`
+        )
+      }
+    } catch (updateError) {
+      console.error(`❌ Error handling processing error for ${submissionId}:`, updateError)
+    }
+  }
+
+  /**
+   * Timeout wrapper for promises
+   */
+  private withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
+    return Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+      })
+    ])
+  }
+}
+
+// Export singleton instance
+export const submissionProcessingQueue = SubmissionProcessingQueue.getInstance()

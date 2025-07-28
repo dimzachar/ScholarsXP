@@ -142,35 +142,45 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
     const hasPrevPage = page > 1
 
     return NextResponse.json({
-      contentFlags,
-      pagination: {
-        page,
-        limit,
-        totalCount,
-        totalPages,
-        hasNextPage,
-        hasPrevPage
-      },
-      filters: {
-        status,
-        reason,
-        severity,
-        dateFrom,
-        dateTo
-      },
-      stats: {
-        statusCounts,
-        reasonCounts,
-        severityCounts,
-        totalFlags: totalCount,
-        pendingFlags: statusCounts.PENDING || 0
+      success: true,
+      data: {
+        contentFlags,
+        pagination: {
+          page,
+          limit,
+          totalCount,
+          totalPages,
+          hasNextPage,
+          hasPrevPage
+        },
+        filters: {
+          status,
+          reason,
+          severity,
+          dateFrom,
+          dateTo
+        },
+        stats: {
+          statusCounts,
+          reasonCounts,
+          severityCounts,
+          totalFlags: totalCount,
+          pendingFlags: statusCounts.PENDING || 0
+        }
       }
     })
 
   } catch (error) {
     console.error('Error in admin moderation endpoint:', error)
     return NextResponse.json(
-      { message: 'Internal server error' },
+      {
+        success: false,
+        error: {
+          error: 'Internal server error',
+          code: 'INTERNAL_ERROR',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        }
+      },
       { status: 500 }
     )
   }

@@ -49,17 +49,11 @@ next-env.d.ts
 *.sqlite3
 *.md
 !README.md
-!MISSING_FEATURES_PLAN.md
-!PHASE_2_IMPLEMENTATION_PLAN.md
-!TASK_TYPE_SYSTEM_IMPLEMENTATION_PLAN.md
-!SECURITY_AND_IMPLEMENTATION_PLAN.md
-!SYSTEM_ARCHITECTURE.md
-# !setup-supabase.md
-!issues.md
-!scholars_xp_dashboard_redesign_plan.md
-!scholars_xp_dashboard_ux_assessment.md
+!ARCHITECTURE.md
 
 
+*.csv
+*.tsv
 # prisma migrations (schema managed by supabase)
 /prisma/migrations/
 
@@ -98,3 +92,51 @@ Thumbs.db
 
 __tests__
 test*
+
+
+check-env.js
+check-env-debug.js
+debug-reddit-simple.js
+get-reddit-token.js
+get-reddit-token-alternative.js
+test-api.js
+test-api-endpoint.js
+test-api-integration.js
+test-content-display.js
+test-content-fetching.js
+test-reddit-api.js
+test-reddit-direct-api.js
+test-reddit-direct.js
+test-specific-post.js
+test-submission-flow.js
+clean_legacy_data.py
+
+# Unused public assets (not referenced in components)
+public/file.svg
+public/globe.svg
+public/next.svg
+public/vercel.svg
+public/window.svg
+public/test-api.html
+public/avatars/example_user.svg
+public/avatars/another_user.svg
+
+# Temporary and backup files
+src/app/globals.css.backup
+validation-report.json
+tsx
+
+# Generated test reports and documentation
+test-reports/
+tests/memory-leak-test.md
+
+# Generated validation and analysis files
+*.validation.json
+*-report.json
+*-analysis.json
+
+*.ps1
+*.html
+
+# Supabase Temporary Files (only files that actually exist)
+supabase/.temp/

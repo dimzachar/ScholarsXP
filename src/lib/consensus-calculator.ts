@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { xpAnalyticsService } from './xp-analytics'
+import { prisma } from '@/lib/prisma'
+import { getWeekNumber } from '@/lib/utils'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -361,35 +363,85 @@ export class ConsensusCalculatorService {
   }
 
   /**
-   * Update submission with consensus results
+   * Update submission with consensus results using atomic transaction
    */
   private async updateSubmissionWithConsensus(submissionId: string, result: ConsensusResult): Promise<void> {
-    const { error } = await supabase
-      .from('Submission')
-      .update({
-        finalXp: result.finalXp,
-        consensusScore: result.consensusScore,
-        status: 'FINALIZED'
-      })
-      .eq('id', submissionId)
+    // ✅ SAFE: All operations in single atomic transaction
+    await prisma.$transaction(async (tx) => {
+      const startTime = Date.now()
 
-    if (error) {
-      console.error('Error updating submission with consensus:', error)
-      throw error
-    }
+      try {
+        // 1. Get submission to find userId
+        const submission = await tx.submission.findUnique({
+          where: { id: submissionId },
+          select: { userId: true, url: true }
+        })
 
-    // Update user's total XP
-    const { error: userError } = await supabase
-      .from('User')
-      .update({
-        totalXp: supabase.sql`"totalXp" + ${result.finalXp}`,
-        currentWeekXp: supabase.sql`"currentWeekXp" + ${result.finalXp}`
-      })
-      .eq('id', (await supabase.from('Submission').select('userId').eq('id', submissionId).single()).data?.userId)
+        if (!submission) {
+          throw new Error(`Submission ${submissionId} not found`)
+        }
 
-    if (userError) {
-      console.error('Error updating user XP:', userError)
-    }
+        // 2. Update submission with consensus results
+        await tx.submission.update({
+          where: { id: submissionId },
+          data: {
+            finalXp: result.finalXp,
+            consensusScore: result.consensusScore,
+            status: 'FINALIZED'
+          }
+        })
+
+        // 3. Update user's total XP (atomic increment)
+        await tx.user.update({
+          where: { id: submission.userId },
+          data: {
+            totalXp: { increment: result.finalXp },
+            currentWeekXp: { increment: result.finalXp }
+          }
+        })
+
+        // 4. Update weekly stats (atomic upsert)
+        const currentWeek = getWeekNumber(new Date())
+        await tx.weeklyStats.upsert({
+          where: {
+            userId_weekNumber: {
+              userId: submission.userId,
+              weekNumber: currentWeek
+            }
+          },
+          update: {
+            xpTotal: { increment: result.finalXp }
+          },
+          create: {
+            userId: submission.userId,
+            weekNumber: currentWeek,
+            xpTotal: result.finalXp,
+            reviewsDone: 0,
+            reviewsMissed: 0
+          }
+        })
+
+        // 5. Create audit trail
+        await tx.xpTransaction.create({
+          data: {
+            userId: submission.userId,
+            amount: result.finalXp,
+            type: 'SUBMISSION_REWARD',
+            sourceId: submissionId,
+            description: `Consensus XP awarded for submission: ${submission.url}`,
+            weekNumber: currentWeek
+          }
+        })
+
+        const duration = Date.now() - startTime
+        console.log(`✅ Consensus transaction completed in ${duration}ms for submission ${submissionId}: ${result.finalXp} XP`)
+
+      } catch (error) {
+        const duration = Date.now() - startTime
+        console.error(`❌ Consensus transaction failed after ${duration}ms for submission ${submissionId}:`, error)
+        throw error // This will rollback the transaction
+      }
+    })
   }
 
   /**

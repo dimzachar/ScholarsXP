@@ -1,292 +1,423 @@
-# ScholarXP Evaluation System
+# Scholars_XP - Gamified Content Evaluation Platform
 
-A Next.js-based XP evaluation system where users submit content for review, AI agents assign XP automatically, and peer reviewers help ensure fairness. The system supports incentive mechanics like streaks, caps, and leaderboards while providing admin oversight and structured review workflows.
+**Scholars_XP** is a comprehensive gamified content evaluation platform built with Next.js 15, Supabase, and PostgreSQL. The system enables users to submit content from various platforms (Twitter/X, Medium, Reddit, Notion) for AI-powered evaluation and peer review, implementing a sophisticated role-based access control system with three distinct user roles: USER, REVIEWER, and ADMIN.
 
-## 🚀 Features
+## 🎯 Project Overview
 
-### Core Functionality
-- **Content Submission**: Users can submit Twitter/X or Medium links for evaluation
-- **AI Evaluation**: Automated content analysis and XP assignment using GPT-4
-- **Peer Review System**: Community-driven validation with reviewer incentives
-- **XP Aggregation**: Weighted combination of AI and peer scores with weekly caps
-- **Weekly Management**: Automated streak tracking, penalties, and leaderboard generation
+Scholars_XP transforms content evaluation into an engaging, gamified experience where users earn XP (Experience Points) for submitting quality content and participating in peer reviews. The platform combines AI-powered content analysis with community-driven validation to ensure fair and accurate scoring.
 
-### User Experience
-- **Real-time Notifications**: In-app notification system for XP awards and review assignments
-- **Leaderboards**: Weekly and all-time rankings with detailed statistics
-- **Admin Panel**: Comprehensive management interface for flagged content and system operations
-- **Responsive Design**: Mobile-friendly interface with modern UI components
+### Key Features
 
-### Security & Quality
-- **Content Validation**: Automatic detection of spam, AI-generated content, and duplicates
-- **Rate Limiting**: Protection against abuse with configurable limits
-- **Error Handling**: Comprehensive error tracking and retry mechanisms
-- **Security Headers**: Protection against common web vulnerabilities
+- **🚀 Content Submission & Evaluation**: Multi-platform content submission with AI-powered assessment
+- **🤖 AI-Powered Assessment**: LLM evaluates content and assigns XP scores based on quality and task classification
+- **👥 Peer Review System**: Community-driven review process with reviewer incentives and quality assurance
+- **🎮 Gamification**: XP tracking, weekly streaks, leaderboards, achievements, and role progression
+- **🛡️ Admin Management**: Comprehensive administrative oversight with user management and system operations
+- **📱 Real-time Notifications**: Supabase Realtime integration for instant updates without page reloads
+- **🔐 Role-Based Access Control**: Three-tier permission system (USER, REVIEWER, ADMIN)
+- **📊 Analytics & Insights**: Detailed XP breakdowns, weekly trends, and performance analytics
 
-## 🛠 Tech Stack
+## 🛠️ Technology Stack
 
-| Component | Technology |
-|-----------|------------|
-| Frontend | Next.js 15 (App Router), React, TypeScript |
-| Backend | Next.js API Routes, Server Actions |
-| Database | PostgreSQL with Prisma ORM |
-| AI | OpenAI GPT-4 for content evaluation |
-| Styling | Tailwind CSS, shadcn/ui components |
-| Authentication | NextAuth.js (ready for integration) |
-| Scheduling | node-cron for weekly operations |
-| Deployment | Vercel-ready configuration |
+| Component | Technology | Version |
+|-----------|------------|---------|
+| **Frontend** | Next.js (App Router) | 15.3.5 |
+| **Backend** | Next.js API Routes | 15.3.5 |
+| **Database** | PostgreSQL via Supabase | Latest |
+| **ORM** | Prisma | 6.11.1 |
+| **Authentication** | Supabase Auth | 2.50.5 |
+| **Real-time** | Supabase Realtime | 2.50.5 |
+| **AI Evaluation** | OpenRouter (GPT-4) | Latest |
+| **Styling** | Tailwind CSS + shadcn/ui | Latest |
+| **Deployment** | Vercel (Serverless) | Latest |
+| **Background Jobs** | Supabase pg_cron | Latest |
 
-## 📋 System Requirements
+## 📋 Prerequisites
 
-- Node.js 18+ 
-- PostgreSQL database
-- OpenAI API key (for AI evaluation)
+Before setting up Scholars_XP, ensure you have:
 
-## 🚀 Quick Start
+- **Node.js**: Version 18.0 or higher
+- **npm/pnpm**: Latest version (project uses pnpm)
+- **Supabase Account**: For database and authentication
+- **OpenRouter API Key**: For AI content evaluation
+- **Vercel Account**: For production deployment (optional)
 
-### 1. Clone and Install
+## 🚀 Installation Instructions
+
+### 1. Clone and Install Dependencies
+
 ```bash
 git clone <repository-url>
-cd xp-evaluation-system
-npm install
+cd Scholars_XP
+pnpm install
 ```
 
-### 2. Environment Setup
-Create a `.env` file with:
+### 2. Environment Variable Configuration
+
+Create a `.env` file in the project root with the following variables:
+
 ```env
-DATABASE_URL="postgresql://username:password@localhost:5432/xpeval"
-OPENAI_API_KEY="your-openai-api-key"
-NEXTAUTH_SECRET="your-nextauth-secret"
-NEXTAUTH_URL="http://localhost:3000"
+# Database Configuration
+DATABASE_URL="postgresql://postgres:[PASSWORD]@db.[PROJECT-ID].supabase.co:5432/postgres"
+DIRECT_URL="postgresql://postgres:[PASSWORD]@db.[PROJECT-ID].supabase.co:5432/postgres"
+
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL="https://[PROJECT-ID].supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="[ANON-KEY]"
+SUPABASE_SERVICE_ROLE_KEY="[SERVICE-ROLE-KEY]"
+
+# AI Evaluation - OpenRouter (Primary)
+OPENROUTER_API_KEY="your_openrouter_api_key_here"
+
+# Feature Flags
+ENABLE_AI_EVALUATION=true
+ENABLE_LEGACY_DUPLICATE_CHECK=true
+AI_EVALUATION_TIMEOUT=120000
+ROLE_PROMOTION_BATCH_SIZE=100
+
+
 ```
 
-### 3. Database Setup
+### 3. Database Setup and Migration
+
 ```bash
 # Generate Prisma client
 npx prisma generate
 
-# Run database migrations
+# Run database migrations (if using local Prisma)
 npx prisma migrate dev
 
-# (Optional) Seed with sample data
-npx prisma db seed
+# For Supabase: Run migrations in Supabase dashboard
+# Go to SQL Editor and execute the migration files in supabase/migrations/
 ```
 
-### 4. Start Development Server
+### 4. Development Server Startup
+
 ```bash
+# Start development server on port 3002
+pnpm dev
+
+# Alternative: Use npm
 npm run dev
 ```
 
-Visit `http://localhost:3000` to see the application.
+Visit `http://localhost:3002` to access the application.
 
-## 📊 Database Schema
+### 5. Initial Setup Verification
 
-### Core Models
+1. **Database Connection**: Verify Supabase connection in the dashboard
+2. **Authentication**: Test user registration and login
+3. **AI Evaluation**: Submit test content to verify OpenRouter integration
+4. **Real-time Features**: Check notifications and live updates
 
-**User**
-- Tracks total XP, weekly XP, streaks, and missed reviews
-- Supports authentication integration
+## 🚀 Production Deployment
 
-**Submission**
-- Content submissions with URL, platform, and evaluation status
-- Links to AI evaluation results and peer reviews
+### Vercel Deployment (Recommended)
 
-**PeerReview**
-- Individual peer review scores and comments
-- Tracks reviewer participation for incentives
+1. **Connect Repository**:
+   - Import your GitHub repository to Vercel
+   - Vercel will automatically detect Next.js configuration
 
-**WeeklyStats**
-- Historical weekly performance data
-- Supports leaderboard generation and analytics
+2. **Environment Variables**:
+   - Add all environment variables from your `.env` file to Vercel dashboard
+   - Ensure Supabase URLs and keys are correctly configured
 
-### Status Flow
-```
-PENDING → AI_REVIEWED → UNDER_PEER_REVIEW → FINALIZED
-                    ↓
-                 FLAGGED/REJECTED
-```
+3. **Deploy**:
+   ```bash
+   # Using Vercel CLI
+   npm i -g vercel
+   vercel --prod
+   ```
+
+4. **Post-Deployment**:
+   - Verify database connections
+   - Test authentication flows
+   - Monitor application logs
+
+### Supabase Configuration
+
+1. **Database Setup**:
+   - Create new Supabase project
+   - Run migrations in SQL Editor
+   - Configure Row Level Security (RLS) policies
+
+2. **Authentication**:
+   - Enable email authentication
+   - Configure OAuth providers (optional)
+   - Set up custom SMTP (production)
+
+3. **Real-time Features**:
+   - Enable Realtime for notifications table
+   - Configure proper database triggers
+
+## 📖 Usage Guide
+
+### For Users (USER Role)
+
+1. **Content Submission**:
+   - Navigate to Submit tab in dashboard
+   - Paste Twitter/X, Medium, Reddit, or Notion URL
+   - Select applicable task types (A-F)
+   - Submit for AI evaluation
+
+2. **Track Progress**:
+   - Monitor XP earnings in Overview tab
+   - View submission history and status
+   - Check weekly progress toward goals
+
+3. **Achievements**:
+   - Earn streaks for consistent weekly activity
+   - Unlock achievements for milestones
+   - Compete on leaderboards
+
+### For Reviewers (REVIEWER Role)
+
+1. **Review Assignments**:
+   - Access pending reviews in dashboard
+   - Evaluate content quality and assign XP
+   - Provide constructive feedback
+
+2. **Earn Review XP**:
+   - +5 XP per completed review
+   - Bonus XP for high-quality reviews
+   - Penalties for missed deadlines
+
+### For Administrators (ADMIN Role)
+
+1. **User Management**:
+   - Promote users to reviewer status
+   - Manually adjust XP scores
+   - Handle user disputes
+
+2. **Content Moderation**:
+   - Review flagged submissions
+   - Manage duplicate content
+   - Override AI evaluations when needed
+
+3. **System Operations**:
+   - Trigger weekly operations
+   - Monitor system health
+   - Access detailed analytics
+
+## 🎯 XP System & Task Types
+
+### Task Classification System
+
+The platform supports 6 distinct task types, each with specific XP ranges and weekly limits:
+
+| Task Type | Description | XP Range | Weekly Limit | Max Completions |
+|-----------|-------------|----------|--------------|-----------------|
+| **Task A** | Thread or Long Article (Twitter 5+ tweets OR 2000+ chars) | 20-30 | 90 XP | 3 |
+| **Task B** | Platform Article (Reddit/Notion/Medium only) | 75-150 | 450 XP | 3 |
+| **Task C** | Tutorial/Guide | 20-30 | 90 XP | 3 |
+| **Task D** | Protocol Explanation | 50-75 | 225 XP | 3 |
+| **Task E** | Correction Bounty | 50-75 | 225 XP | 3 |
+| **Task F** | Strategies | 50-75 | 150-225 XP | 3 |
+
+### Scoring & Evaluation Process
+
+1. **Content Submission**: User submits URL with #ScholarXP hashtag
+2. **AI Evaluation**: OpenRouter GPT-4 analyzes content for:
+   - Quality assessment (0-100 score)
+   - Task type classification
+   - Originality detection (0-1 score)
+   - Content validation
+3. **Peer Review**: 3 community reviewers evaluate within 72 hours
+4. **XP Aggregation**: Final score calculated using weighted average
+5. **Weekly Caps**: Applied per task type to prevent gaming
+
+### Quality Assurance
+
+- **Duplicate Detection**: Content fingerprinting prevents resubmissions
+- **AI Content Detection**: Flags potentially generated content
+- **Spam Prevention**: Pattern analysis for promotional content
+- **Review Incentives**: +5 XP per completed review, penalties for missed reviews
+- **Streak System**: Bonus XP every 4 weeks for consistent activity
 
 ## 🔧 API Endpoints
 
 ### Content Management
-- `POST /api/submissions` - Submit new content
-- `GET /api/submissions` - List submissions
-- `POST /api/evaluate` - Trigger AI evaluation
+- `POST /api/submissions` - Submit new content for evaluation
+- `GET /api/submissions` - List user submissions with filtering
+- `POST /api/validate-content` - Real-time content validation
+- `POST /api/evaluate` - Trigger AI evaluation process
 
-### Peer Review
-- `GET /api/peer-reviews/pending` - Get pending reviews
-- `POST /api/peer-reviews` - Submit peer review
+### Peer Review System
+- `GET /api/peer-reviews/pending` - Get pending review assignments
+- `POST /api/peer-reviews` - Submit peer review with score
+- `GET /api/assignments/my` - Get reviewer assignments
 
-### System Operations
+### User & Analytics
+- `GET /api/user/profile` - Get user profile and XP data
+- `GET /api/user/xp-breakdown` - Detailed XP analytics
+- `GET /api/user/achievements` - User achievements and progress
+- `GET /api/leaderboard` - Weekly and all-time rankings
+
+### Administrative
+- `GET /api/admin/stats` - System statistics and metrics
+- `POST /api/admin/users` - User management operations
+- `PATCH /api/admin/submissions/[id]` - Manage specific submissions
+- `POST /api/admin/update-xp` - Manual XP adjustments
 - `POST /api/aggregate-xp` - Process XP aggregation
 - `POST /api/weekly` - Trigger weekly operations
-- `GET /api/leaderboard` - Get leaderboard data
 
-### Admin
-- `GET /api/admin/stats` - System statistics
-- `PATCH /api/admin/submissions` - Manage submissions
+### Background Processing
+- `POST /api/cron/process-submissions` - Process submission queue
+- `POST /api/cron/weekly-operations` - Automated weekly tasks
 
-## 🎯 XP System
+## 🛡️ Security & Quality Features
 
-### Task Categories & Caps
-- **Task A** (Thread or Long Article): 20-30 XP, max 90/week (3 completions)
-- **Task B** (Platform Article): 75-150 XP, max 450/week (3 completions) - Reddit/Notion/Medium only
-- **Task C** (Tutorial/Guide): 20-30 XP, max 90/week (3 completions)
-- **Task D** (Protocol Explanation): 50-75 XP, max 225/week (3 completions)
-- **Task E** (Correction Bounty): 50-75 XP, max 225/week (3 completions)
-- **Task F** (Strategies): 50-75 XP, max 225/week (3 completions)
+### Authentication & Authorization
+- **Supabase Auth**: Secure user authentication with JWT tokens
+- **Role-Based Access Control**: Three-tier permission system (USER, REVIEWER, ADMIN)
+- **Row Level Security**: Database-level access control via Supabase RLS
+- **Session Management**: Secure session handling with automatic refresh
 
-### Scoring Algorithm
-1. **AI Evaluation**: GPT-4 analyzes content for quality, originality, and task classification
-2. **Peer Review**: 3 community reviewers validate and score (48-72 hour deadline)
-3. **Final XP**: Weighted average (40% AI, 60% peer) with weekly caps applied
-4. **Bonuses**: Streak bonuses every 4 weeks, review participation rewards
+### Input Validation & Security
+- **URL Validation**: Platform-specific URL format verification
+- **Content Requirements**: #ScholarXP hashtag validation
+- **XP Bounds Checking**: Prevents invalid score submissions
+- **SQL Injection Protection**: Prisma ORM with parameterized queries
+- **XSS Prevention**: Input sanitization and CSP headers
 
-### Quality Controls
-- **Originality Detection**: AI flags potentially generated content
-- **Spam Prevention**: Pattern detection for promotional content
-- **Duplicate Checking**: Content similarity analysis
-- **Review Penalties**: -50 XP per missed review assignment
+### Rate Limiting & Abuse Prevention
+- **PostgreSQL-based Rate Limiting**: Database-backed rate limiting for serverless environments
+- **Submission Limits**: Configurable per-user submission caps
+- **Review Deadlines**: Automatic penalty system for missed reviews
+- **Duplicate Detection**: Content fingerprinting prevents resubmissions
 
-## 🔐 Security Features
+### Data Protection
+- **Environment Variable Security**: Sensitive keys stored securely
+- **API Key Rotation**: Support for key rotation without downtime
+- **Audit Logging**: Comprehensive logging for security monitoring
+- **Error Handling**: Secure error messages without information leakage
 
-### Input Validation
-- URL format and platform verification
-- Content length and hashtag requirements
-- XP score bounds checking
+## 🎨 User Interface & Experience
 
-### Rate Limiting
-- 10 submissions per hour per user
-- 20 reviews per hour per user
-- 60 general API requests per minute
+### Design System
+- **shadcn/ui Components**: Consistent, accessible component library
+- **Tailwind CSS**: Utility-first styling with custom design tokens
+- **Dark/Light Mode**: System preference detection with manual toggle
+- **Responsive Design**: Mobile-first approach with breakpoint optimization
 
-### Content Security
-- XSS protection headers
-- CSRF protection
-- Content Security Policy
-- Input sanitization
+### Key Components
+- **Dashboard**: Tabbed interface with Overview, Submit, Analytics, Achievements
+- **SubmissionForm**: Multi-step content submission with real-time validation
+- **NotificationCenter**: Real-time notifications with Supabase Realtime
+- **Leaderboard**: Interactive rankings with filtering and search
+- **AdminPanel**: Comprehensive management interface for system operations
 
-## 🎨 UI Components
+### Mobile Optimization
+- **Touch-Friendly**: 44px minimum touch targets
+- **Single Navigation**: Bottom navigation for mobile screens
+- **Content Overflow**: Proper handling of long content on small screens
+- **Performance**: Optimized for mobile network conditions
 
-Built with shadcn/ui for consistent, accessible design:
+## 🔄 Background Processing & Automation
 
-- **SubmissionForm**: Content submission interface
-- **PeerReviewCard**: Review assignment interface  
-- **NotificationCenter**: Real-time notification system
-- **Leaderboard**: Rankings and statistics display
-- **AdminPanel**: System management interface
+### Automated Weekly Operations
+1. **Streak Calculation**: Award streaks for users with 100+ weekly XP
+2. **Penalty Application**: Deduct XP for missed review assignments
+3. **Leaderboard Updates**: Generate weekly and all-time rankings
+4. **XP Aggregation**: Process pending submissions and finalize scores
+5. **Role Promotions**: Auto-promote users with 1000+ XP to REVIEWER
+6. **Cleanup Operations**: Archive old notifications and maintain data hygiene
 
-## 📱 Mobile Support
+### Background Job Processing
+- **Supabase pg_cron**: Reliable scheduled task execution
+- **Database-backed Queues**: Persistent job queues for serverless environments
+- **Error Recovery**: Automatic retry mechanisms for failed operations
+- **Monitoring**: Comprehensive logging and alerting for background processes
 
-- Responsive design for all screen sizes
-- Touch-friendly interface elements
-- Mobile navigation optimization
-- Progressive Web App ready
+## 🧪 Testing & Quality Assurance
 
-## 🔄 Weekly Operations
+### Available Test Scripts
 
-Automated weekly processes:
-1. **Streak Calculation**: Award streaks for 100+ XP weeks
-2. **Penalty Application**: Deduct XP for missed reviews
-3. **Leaderboard Generation**: Create weekly rankings
-4. **XP Reset**: Clear weekly counters
-5. **Bonus Awards**: Parthenon XP for 4-week streaks
-
-## 🚀 Deployment
-
-### Vercel (Recommended)
 ```bash
-# Install Vercel CLI
-npm i -g vercel
+# Run all tests
+pnpm test
 
-# Deploy
-vercel
+# Run tests in watch mode
+pnpm test:watch
 
-# Set environment variables in Vercel dashboard
+# Run tests with coverage
+pnpm test:coverage
+
+# Run CI tests
+pnpm test:ci
+
+# Test race condition fixes
+pnpm test:race-conditions
+
+# Monitor XP consistency
+pnpm monitor-xp
+
+# Test analytics optimization
+pnpm test:analytics-optimization
 ```
-
-### Docker
-```bash
-# Build image
-docker build -t xp-evaluation-system .
-
-# Run container
-docker run -p 3000:3000 xp-evaluation-system
-```
-
-## 🧪 Testing
 
 ### Manual Testing Checklist
-- [ ] Content submission flow
-- [ ] AI evaluation process
-- [ ] Peer review assignment
-- [ ] XP aggregation logic
-- [ ] Weekly operations
-- [ ] Admin panel functions
-- [ ] Notification system
-- [ ] Mobile responsiveness
 
-### Automated Testing (Future)
+- [ ] **Authentication Flow**: Registration, login, logout, session management
+- [ ] **Content Submission**: URL validation, task type selection, AI evaluation
+- [ ] **Peer Review Process**: Assignment, scoring, deadline management
+- [ ] **XP Calculation**: Aggregation, weekly caps, streak bonuses
+- [ ] **Admin Functions**: User management, content moderation, system operations
+- [ ] **Real-time Features**: Notifications, live updates, Supabase Realtime
+- [ ] **Mobile Responsiveness**: Touch targets, navigation, content overflow
+- [ ] **Security**: Rate limiting, input validation, authorization checks
+
+## 🤝 Contributing Guidelines
+
+### Development Workflow
+
+1. **Fork & Clone**: Fork the repository and clone locally
+2. **Branch**: Create feature branch from `main`
+3. **Development**: Make changes following code standards
+4. **Testing**: Add tests for new functionality
+5. **Documentation**: Update relevant documentation
+6. **Pull Request**: Submit PR with detailed description
+
+### Code Standards
+
+- **TypeScript**: Strict type checking enabled
+- **ESLint**: Follow configured linting rules
+- **Prettier**: Consistent code formatting
+- **Commit Messages**: Use conventional commit format
+- **File Structure**: Follow established patterns
+
+### Testing Requirements
+
 - Unit tests for utility functions
 - Integration tests for API endpoints
-- E2E tests for user workflows
+- Component tests for UI elements
+- Manual testing for user workflows
 
-## 🔧 Configuration
+## 📄 License and Contact
 
-### AI Evaluation
-Customize evaluation prompts and scoring in `src/lib/ai-evaluator.ts`
+### License
 
-### XP Caps
-Modify weekly limits in `src/lib/xp-aggregator.ts`
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-### Rate Limits
-Adjust limits in `src/middleware.ts`
+### Contact Information
 
-### Notifications
-Configure notification types in `src/lib/notifications.ts`
+- **Project Repository**: [GitHub Repository URL]
+- **Documentation**: [Documentation URL]
+- **Issues**: [GitHub Issues URL]
+- **Discussions**: [GitHub Discussions URL]
 
-## 🤝 Contributing
+### Support
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+For technical support and questions:
 
-## 📄 License
-
-MIT License - see LICENSE file for details
-
-## 🆘 Support
-
-For issues and questions:
-1. Check the GitHub issues
-2. Review the documentation
-3. Contact the development team
-
-## 🗺 Roadmap
-
-### Phase 1 (Current)
-- [x] Core submission and review system
-- [x] AI evaluation integration
-- [x] Basic admin panel
-- [x] Notification system
-
-### Phase 2 (Future)
-- [ ] User authentication system
-- [ ] Advanced analytics dashboard
-- [ ] Mobile app development
-- [ ] API rate limiting with Redis
-- [ ] Automated testing suite
-
-### Phase 3 (Future)
-- [ ] Multi-language support
-- [ ] Advanced AI models
-- [ ] Blockchain integration
-- [ ] Social media integration
-- [ ] Advanced gamification
+1. **Check Documentation**: Review this README and ARCHITECTURE.md
+2. **Search Issues**: Look for existing solutions in GitHub issues
+3. **Create Issue**: Submit detailed bug reports or feature requests
+4. **Community**: Join discussions for general questions
 
 ---
 
-Built with ❤️ using Next.js and modern web technologies.
+**Scholars_XP** - Transforming content evaluation through gamification and community collaboration.
+
+Built with ❤️ using Next.js 15, Supabase, and modern web technologies.
 

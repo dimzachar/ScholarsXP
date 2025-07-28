@@ -33,6 +33,8 @@ interface Achievement {
 
 interface AchievementGalleryProps {
   achievements?: Achievement[]
+  recentlyEarned?: any[]
+  loading?: boolean
   className?: string
 }
 
@@ -197,50 +199,84 @@ function AchievementCard({ achievement }: { achievement: Achievement }) {
   )
 }
 
-export function AchievementGallery({ achievements = [], className }: AchievementGalleryProps) {
+export function AchievementGallery({
+  achievements = [],
+  recentlyEarned = [],
+  loading = false,
+  className
+}: AchievementGalleryProps) {
   const { currentBreakpoint } = useResponsiveLayout()
-  const completedCount = achievements.filter(a => a.completed).length
-  const unlockedCount = achievements.filter(a => a.unlocked).length
-  const hasAchievements = achievements.length > 0
+  const hasRecentAchievements = recentlyEarned.length > 0
+
+  if (loading) {
+    return (
+      <Card className={cn("", className)}>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Award className="h-5 w-5" />
+            Recent Achievements
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-4 p-4 border rounded-lg animate-pulse">
+                <div className="h-12 w-12 bg-muted rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-muted rounded w-3/4" />
+                  <div className="h-3 bg-muted rounded w-1/2" />
+                </div>
+                <div className="h-6 w-16 bg-muted rounded" />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
-    <div className={cn("space-y-6", className)}>
-      {/* Achievement Stats */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold">Achievement Gallery</h3>
-          <p className="text-sm text-muted-foreground">
-            {hasAchievements ? (
-              `${completedCount} completed • ${unlockedCount} unlocked • ${achievements.length} total`
-            ) : (
-              'No achievements data available'
-            )}
-          </p>
-        </div>
-        {hasAchievements && (
-          <Badge variant="outline" className="text-sm">
-            {Math.round((completedCount / achievements.length) * 100)}% Complete
-          </Badge>
+    <Card className={cn("", className)}>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Award className="h-5 w-5" />
+          Recent Achievements
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {hasRecentAchievements ? (
+          <div className="space-y-4">
+            {recentlyEarned.map((userAchievement) => (
+              <div key={userAchievement.id} className="flex items-center gap-4 p-4 bg-success/5 border border-success/20 rounded-lg">
+                <div className="h-12 w-12 bg-success/10 rounded-full flex items-center justify-center">
+                  <Award className="h-6 w-6 text-success" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium">{userAchievement.achievement.name}</h4>
+                  <p className="text-sm text-muted-foreground">
+                    {userAchievement.achievement.description}
+                  </p>
+                  <p className="text-xs text-success mt-1">
+                    Earned {new Date(userAchievement.earnedAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <Badge className="bg-success/10 text-success border-success/20">
+                  +{userAchievement.achievement.xpReward} XP
+                </Badge>
+              </div>
+            ))}
+          </div>
+        ) : (
+          /* Empty State */
+          <div className="text-center py-8">
+            <Trophy className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
+            <h4 className="text-lg font-medium text-muted-foreground mb-2">No Recent Achievements</h4>
+            <p className="text-sm text-muted-foreground/70 max-w-md mx-auto">
+              Keep submitting content and engaging with the community to unlock achievements!
+            </p>
+          </div>
         )}
-      </div>
-
-      {/* Achievement Grid or Empty State */}
-      {hasAchievements ? (
-        <div className={getResponsiveGridClasses(currentBreakpoint, 1, 2, 3)}>
-          {achievements.map((achievement) => (
-            <MobileAchievementCard key={achievement.id} achievement={achievement} />
-          ))}
-        </div>
-      ) : (
-        /* Empty State */
-        <div className="text-center py-12">
-          <Trophy className="h-16 w-16 text-muted-foreground/50 mx-auto mb-4" />
-          <h4 className="text-lg font-medium text-muted-foreground mb-2">No Achievements Yet</h4>
-          <p className="text-sm text-muted-foreground/70 max-w-md mx-auto">
-            Start submitting content and engaging with the community to unlock your first achievements!
-          </p>
-        </div>
-      )}
-    </div>
+      </CardContent>
+    </Card>
   )
 }

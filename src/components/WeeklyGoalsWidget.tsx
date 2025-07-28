@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { getTaskType } from '@/lib/task-types'
+import type { TaskTypeId } from '@/types/task-types'
 import {
   Target,
   Calendar,
@@ -70,21 +72,32 @@ export default function WeeklyGoalsWidget({
     return sum + (maxXp * goal.current)
   }, 0)
 
-  // Get task type details
+  // Get task type details using the actual task type configuration
   const getTaskTypeDetails = (taskType: string) => {
-    const details = {
-      'A': { name: 'Thread/Article', color: 'bg-blue-500', lightBg: 'bg-blue-50', textColor: 'text-blue-600' },
-      'B': { name: 'Partner Platform', color: 'bg-green-500', lightBg: 'bg-green-50', textColor: 'text-green-600' },
-      'C': { name: 'Tutorial/Guide', color: 'bg-purple-500', lightBg: 'bg-purple-50', textColor: 'text-purple-600' },
-      'D': { name: 'Protocol Explanation', color: 'bg-orange-500', lightBg: 'bg-orange-50', textColor: 'text-orange-600' },
-      'E': { name: 'Correction Bounty', color: 'bg-red-500', lightBg: 'bg-red-50', textColor: 'text-red-600' },
-      'F': { name: 'Strategies', color: 'bg-yellow-500', lightBg: 'bg-yellow-50', textColor: 'text-yellow-600' }
-    }
-    return details[taskType as keyof typeof details] || { 
-      name: 'Unknown', 
-      color: 'bg-gray-500', 
-      lightBg: 'bg-gray-50', 
-      textColor: 'text-gray-600' 
+    try {
+      const taskConfig = getTaskType(taskType as TaskTypeId)
+      const colorMap = {
+        'A': { color: 'bg-chart-1', lightBg: 'bg-primary/10', textColor: 'text-chart-1' },
+        'B': { color: 'bg-chart-2', lightBg: 'bg-secondary/10', textColor: 'text-chart-2' },
+        'C': { color: 'bg-chart-3', lightBg: 'bg-accent/10', textColor: 'text-chart-3' },
+        'D': { color: 'bg-warning', lightBg: 'bg-warning/10', textColor: 'text-warning' },
+        'E': { color: 'bg-destructive', lightBg: 'bg-destructive/10', textColor: 'text-destructive' },
+        'F': { color: 'bg-purple', lightBg: 'bg-purple/10', textColor: 'text-purple' }
+      }
+      const colors = colorMap[taskType as keyof typeof colorMap] || { color: 'bg-chart-5', lightBg: 'bg-muted/10', textColor: 'text-muted-foreground' }
+
+      return {
+        name: taskConfig.name,
+        ...colors
+      }
+    } catch (error) {
+      // Fallback for invalid task types
+      return {
+        name: taskType,
+        color: 'bg-chart-5',
+        lightBg: 'bg-muted/10',
+        textColor: 'text-muted-foreground'
+      }
     }
   }
 
@@ -173,7 +186,7 @@ export default function WeeklyGoalsWidget({
                       <div key={goal.taskType} className="flex items-center justify-between p-2 rounded-lg border">
                         <div className="flex items-center gap-2">
                           <div className={`w-3 h-3 rounded-full ${details.color}`}></div>
-                          <span className="text-sm font-medium">Task {goal.taskType}</span>
+                          <span className="text-sm font-medium">{details.name}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-sm text-muted-foreground">
@@ -344,7 +357,7 @@ export default function WeeklyGoalsWidget({
                   return (
                     <div key={goal.taskType} className="flex items-center gap-2 text-sm">
                       <div className={`w-2 h-2 rounded-full ${details.color}`}></div>
-                      <span>{goal.taskType}: {goal.current}/{goal.maximum}</span>
+                      <span>{details.name}: {goal.current}/{goal.maximum}</span>
                     </div>
                   )
                 })}

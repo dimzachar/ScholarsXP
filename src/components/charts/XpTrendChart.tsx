@@ -19,21 +19,38 @@ interface XpTrendChartProps {
   data: XpTrendData[]
   title?: string
   showDetails?: boolean
+  totalSubmissions?: number
 }
 
-export default function XpTrendChart({ 
-  data, 
-  title = "XP Trend (Last 12 Weeks)", 
-  showDetails = true 
+export default function XpTrendChart({
+  data,
+  title = "XP Trend (Last 12 Weeks)",
+  showDetails = true,
+  totalSubmissions
 }: XpTrendChartProps) {
+
+
   if (!data || data.length === 0) {
     return (
-      <Card>
+      <Card className="h-full">
         <CardHeader>
-          <CardTitle>{title}</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-muted-foreground" />
+            {title}
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground text-center py-8">No data available</p>
+          <div className="flex flex-col items-center justify-center py-12 space-y-4">
+            <div className="w-24 h-16 bg-muted/20 rounded-lg flex items-end justify-center space-x-1 p-2">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className={`w-2 bg-muted/40 rounded-sm`} style={{ height: `${i * 25}%` }}></div>
+              ))}
+            </div>
+            <div className="text-center space-y-2">
+              <p className="text-muted-foreground font-medium">No trend data available</p>
+              <p className="text-sm text-muted-foreground">Complete activities over multiple weeks to see trends</p>
+            </div>
+          </div>
         </CardContent>
       </Card>
     )
@@ -93,9 +110,9 @@ export default function XpTrendChart({
           <div>
             <CardTitle className="flex items-center gap-2">
               {title}
-              {isPositiveTrend && <TrendingUp className="h-4 w-4 text-green-600" />}
-              {isNegativeTrend && <TrendingDown className="h-4 w-4 text-red-600" />}
-              {!isPositiveTrend && !isNegativeTrend && <Minus className="h-4 w-4 text-gray-600" />}
+              {isPositiveTrend && <TrendingUp className="h-4 w-4 text-success" />}
+              {isNegativeTrend && <TrendingDown className="h-4 w-4 text-destructive" />}
+              {!isPositiveTrend && !isNegativeTrend && <Minus className="h-4 w-4 text-muted-foreground" />}
             </CardTitle>
             <CardDescription>
               Weekly XP progression over time
@@ -106,7 +123,7 @@ export default function XpTrendChart({
               {Math.round(recentAvg)}
             </div>
             <div className={`text-sm flex items-center gap-1 ${
-              isPositiveTrend ? 'text-green-600' : isNegativeTrend ? 'text-red-600' : 'text-gray-600'
+              isPositiveTrend ? 'text-success' : isNegativeTrend ? 'text-destructive' : 'text-muted-foreground'
             }`}>
               {isPositiveTrend && <TrendingUp className="h-3 w-3" />}
               {isNegativeTrend && <TrendingDown className="h-3 w-3" />}
@@ -119,20 +136,20 @@ export default function XpTrendChart({
         <div className="space-y-4">
           {/* SVG Chart */}
           <div className="relative">
-            <svg 
-              width={chartWidth} 
-              height={chartHeight} 
-              className="w-full h-auto border rounded-lg bg-gradient-to-br from-blue-50 to-purple-50"
+            <svg
+              width={chartWidth}
+              height={chartHeight}
+              className="w-full h-auto border rounded-lg bg-gradient-to-br from-primary/5 to-accent/5"
               viewBox={`0 0 ${chartWidth} ${chartHeight}`}
             >
               {/* Grid lines */}
               <defs>
                 <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e5e7eb" strokeWidth="1" opacity="0.5"/>
+                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="hsl(var(--border))" strokeWidth="1" opacity="0.5"/>
                 </pattern>
                 <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.3"/>
-                  <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.05"/>
+                  <stop offset="0%" stopColor="hsl(var(--chart-1))" stopOpacity="0.3"/>
+                  <stop offset="100%" stopColor="hsl(var(--chart-1))" stopOpacity="0.05"/>
                 </linearGradient>
               </defs>
               
@@ -148,7 +165,7 @@ export default function XpTrendChart({
               <path
                 d={generatePath(data)}
                 fill="none"
-                stroke="#3b82f6"
+                stroke="hsl(var(--chart-1))"
                 strokeWidth="3"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -165,8 +182,8 @@ export default function XpTrendChart({
                       cx={x}
                       cy={y}
                       r="4"
-                      fill="#3b82f6"
-                      stroke="white"
+                      fill="hsl(var(--chart-1))"
+                      stroke="hsl(var(--background))"
                       strokeWidth="2"
                       className="hover:r-6 transition-all cursor-pointer"
                     />
@@ -218,7 +235,7 @@ export default function XpTrendChart({
                 </div>
                 <div className="text-center p-3 bg-green-50 rounded-lg">
                   <div className="text-lg font-bold text-green-600">
-                    {data.reduce((sum, d) => sum + d.submissions, 0)}
+                    {totalSubmissions || data.reduce((sum, d) => sum + d.submissions, 0)}
                   </div>
                   <div className="text-xs text-green-600">Submissions</div>
                 </div>

@@ -7,13 +7,11 @@ interface RouteParams {
   }
 }
 
-export const PATCH = withPermission('review_content')(async (
-  request: AuthenticatedRequest,
-  { params }: RouteParams
-) => {
+export const PATCH = withPermission('review_content')(async (request: AuthenticatedRequest) => {
   try {
     const { status, notes } = await request.json()
-    const assignmentId = params.id
+    const url = new URL(request.url)
+    const assignmentId = url.pathname.split('/').slice(-2)[0] // Extract assignment ID from path
     const reviewerId = request.user.id
 
     if (!status) {

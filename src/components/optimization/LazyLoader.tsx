@@ -226,6 +226,13 @@ export const MobileLazyComponents = {
   AchievementGallery: lazy(() => import('@/components/dashboard/AchievementGallery').then(module => ({ default: module.AchievementGallery }))),
   LeaderboardWidget: lazy(() => import('@/components/dashboard/LeaderboardWidget').then(module => ({ default: module.LeaderboardWidget }))),
   SubmissionForm: lazy(() => import('@/components/SubmissionForm')),
+
+  // New analytics components
+  GoalProgressWidget: lazy(() => import('@/components/dashboard/GoalProgressWidget').then(module => ({ default: module.GoalProgressWidget }))),
+  UserRankingCard: lazy(() => import('@/components/dashboard/UserRankingCard').then(module => ({ default: module.UserRankingCard }))),
+  AnalyticsInsights: lazy(() => import('@/components/dashboard/AnalyticsInsights').then(module => ({ default: module.AnalyticsInsights }))),
+  XpBreakdownChart: lazy(() => import('@/components/charts/XpBreakdownChart')),
+  XpTrendChart: lazy(() => import('@/components/charts/XpTrendChart')),
 }
 
 // Performance monitoring hook

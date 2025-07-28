@@ -42,7 +42,7 @@ const sizeConfig = {
     padding: 'p-4',
     titleSize: 'text-sm',
     valueSize: 'text-2xl',
-    progressSize: 60,
+    progressSize: 80,  // Increased from 60
     chartWidth: 80,
     chartHeight: 20
   },
@@ -50,7 +50,7 @@ const sizeConfig = {
     padding: 'p-6',
     titleSize: 'text-sm',
     valueSize: 'text-4xl',
-    progressSize: 80,
+    progressSize: 110, // Increased from 80
     chartWidth: 120,
     chartHeight: 30
   },
@@ -58,7 +58,7 @@ const sizeConfig = {
     padding: 'p-8',
     titleSize: 'text-base',
     valueSize: 'text-5xl',
-    progressSize: 100,
+    progressSize: 140, // Increased from 100
     chartWidth: 140,
     chartHeight: 40
   }
@@ -120,8 +120,8 @@ export function ResponsiveStatCard({
 
   // Mobile-specific adjustments
   const isMobileLayout = effectiveVariant === 'mobile'
-  const shouldShowProgress = showProgress && data.progress && !isMobileLayout
-  const shouldShowTrend = showTrend && data.trend && !isMobileLayout
+  const shouldShowProgress = showProgress && data.progress
+  const shouldShowTrend = showTrend && data.trend && !isMobileLayout // Keep trends desktop-only for now
 
   return (
     <Card 
@@ -139,7 +139,7 @@ export function ResponsiveStatCard({
     >
       <CardContent className={config.padding}>
         {isMobileLayout ? (
-          // Mobile Layout: Simplified, single column
+          // Mobile Layout: Optimized for touch with progress indicator
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -152,28 +152,51 @@ export function ResponsiveStatCard({
               </div>
               {data.trend && (
                 <div className={cn('text-xs', colors.textMuted)}>
-                  {data.trend.direction === 'up' ? '↗' : 
+                  {data.trend.direction === 'up' ? '↗' :
                    data.trend.direction === 'down' ? '↘' : '→'}
                   {data.trend.percentage && `${data.trend.percentage}%`}
                 </div>
               )}
             </div>
-            
-            <div className={cn(config.valueSize, 'font-bold', colors.text)}>
-              <AnimatedCounter value={data.value} />
-            </div>
-            
-            {data.subtitle && (
-              <p className={cn('text-xs', colors.textMuted)}>
-                {data.subtitle}
-              </p>
-            )}
-            
-            {data.additionalInfo && (
-              <div className="text-xs">
-                {data.additionalInfo}
+
+            {/* Mobile layout with progress indicator */}
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <div className={cn(config.valueSize, 'font-bold', colors.text)}>
+                  <AnimatedCounter value={data.value} />
+                </div>
+
+                {data.subtitle && (
+                  <p className={cn('text-xs mt-1', colors.textMuted)}>
+                    {data.subtitle}
+                  </p>
+                )}
+
+                {data.additionalInfo && (
+                  <div className="text-xs mt-2">
+                    {data.additionalInfo}
+                  </div>
+                )}
               </div>
-            )}
+
+              {shouldShowProgress && (
+                <div className="ml-4 flex-shrink-0">
+                  <CircularProgress
+                    value={data.progress!.current}
+                    max={data.progress!.max}
+                    size={config.progressSize * 0.8} // Slightly smaller for mobile
+                    strokeWidth={config.progressSize >= 120 ? 8 : config.progressSize >= 100 ? 6 : 4}
+                    color="contrast"
+                    className="mb-1"
+                  />
+                  {data.progress!.label && (
+                    <p className={cn('text-xs text-center', colors.textMuted)}>
+                      {data.progress!.label}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           // Desktop Layout: Two-column with progress/chart
@@ -223,13 +246,13 @@ export function ResponsiveStatCard({
                   value={data.progress!.current}
                   max={data.progress!.max}
                   size={config.progressSize}
-                  strokeWidth={6}
+                  strokeWidth={config.progressSize >= 120 ? 10 : config.progressSize >= 100 ? 8 : 6}
                   color="contrast"
                   className="mb-2"
                 />
                 {data.progress!.label && (
                   <p className={cn('text-xs', colors.textMuted)}>
-                    {data.progress.label}
+                    {data.progress!.label}
                   </p>
                 )}
               </div>

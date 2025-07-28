@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import SubmissionsManagement from '@/components/Admin/SubmissionsManagement'
 
 interface AdminStats {
   totalUsers: number
@@ -60,40 +61,45 @@ const getHealthColor = (health: { submissionSuccessRate: number; avgReviewScore:
 }
 
 export default function AdminDashboardPage() {
-  const { user, loading } = useAuth()
+  const { user, userProfile, loading } = useAuth()
   const router = useRouter()
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [loadingStats, setLoadingStats] = useState(true)
   const [message, setMessage] = useState<string>('')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
-  const [submissionsLoading, setSubmissionsLoading] = useState(false)
-  const [submissions, setSubmissions] = useState<any[]>([])
 
   useEffect(() => {
     fetchAdminStats()
-    fetchSubmissions() // Also load submissions on component mount
   }, [])
 
   const fetchAdminStats = async () => {
     try {
       setLoadingStats(true)
 
-      // Fetch overview analytics using authenticated API client
-      const data = await api.get('/api/admin/analytics?timeframe=last_30_days')
+      // Fetch all-time stats (includes legacy data)
+      const statsData = await api.get('/api/admin/stats')
+
+      // Also fetch recent analytics for additional metrics
+      let analyticsData = null
+      try {
+        analyticsData = await api.get('/api/admin/analytics?timeframe=last_30_days')
+      } catch (analyticsError) {
+        console.warn('Analytics API failed, using stats only:', analyticsError)
+      }
 
       setStats({
-        totalUsers: data.overview.totalUsers,
-        activeUsers: data.overview.activeUsers,
-        totalSubmissions: data.overview.totalSubmissions,
-        pendingSubmissions: data.overview.totalSubmissions - data.overview.completedSubmissions,
-        totalReviews: data.overview.totalReviews,
-        pendingFlags: data.overview.pendingFlags,
-        totalXpAwarded: data.overview.totalXpAwarded,
+        totalUsers: statsData.totalUsers,
+        activeUsers: analyticsData?.overview?.activeUsers || 0,
+        totalSubmissions: statsData.totalSubmissions, // Includes legacy
+        pendingSubmissions: statsData.pendingReviews,
+        totalReviews: statsData.totalPeerReviews,
+        pendingFlags: statsData.flaggedSubmissions,
+        totalXpAwarded: analyticsData?.overview?.totalXpAwarded || 0,
         systemHealth: {
-          submissionSuccessRate: data.overview.submissionSuccessRate,
-          avgReviewScore: data.overview.avgReviewScore,
-          flagRate: data.overview.totalSubmissions > 0
-            ? (data.overview.pendingFlags / data.overview.totalSubmissions) * 100
+          submissionSuccessRate: analyticsData?.overview?.submissionSuccessRate || 0,
+          avgReviewScore: analyticsData?.overview?.avgReviewScore || 0,
+          flagRate: statsData.totalSubmissions > 0
+            ? (statsData.flaggedSubmissions / statsData.totalSubmissions) * 100
             : 0
         }
       })
@@ -137,25 +143,7 @@ export default function AdminDashboardPage() {
     }
   }
 
-  const fetchSubmissions = async () => {
-    try {
-      setSubmissionsLoading(true)
-      console.log('🔄 Fetching submissions...')
 
-      // Fetch submissions from the admin API using authenticated client
-      const data = await api.get('/api/admin/submissions?limit=10')
-      console.log('📊 Submissions data:', data)
-
-      setSubmissions(data.submissions || [])
-      setMessage(`Loaded ${data.submissions?.length || 0} submissions`)
-      console.log('✅ Submissions loaded:', data.submissions?.length || 0)
-    } catch (error) {
-      console.error('💥 Error fetching submissions:', error)
-      setMessage('Failed to fetch submissions')
-    } finally {
-      setSubmissionsLoading(false)
-    }
-  }
 
   const adminModules = [
     {
@@ -209,10 +197,56 @@ export default function AdminDashboardPage() {
         { label: 'Avg Review', value: stats.systemHealth.avgReviewScore.toFixed(1) },
         { label: 'Health Score', value: `${Math.round((stats.systemHealth.submissionSuccessRate + (stats.systemHealth.avgReviewScore * 20) + (100 - stats.systemHealth.flagRate)) / 3)}%` }
       ] : []
+    },
+    {
+      title: 'Legacy Data Import',
+      description: 'Import Google Forms data for duplicate detection',
+      icon: Database,
+      href: '/admin/legacy-import',
+      color: 'bg-orange/10 border-orange/20 hover:bg-orange/20',
+      iconColor: 'text-orange',
+      stats: [
+        { label: 'Import', value: 'CSV Data' },
+        { label: 'Prevent', value: 'Duplicates' },
+        { label: 'Status', value: 'Ready' }
+      ]
+    },
+    {
+      title: 'XP Management',
+      description: 'Manually adjust user XP for legacy sync',
+      icon: Award,
+      href: '/admin/xp-management',
+      color: 'bg-yellow/10 border-yellow/20 hover:bg-yellow/20',
+      iconColor: 'text-yellow',
+      stats: [
+        { label: 'Adjust', value: 'User XP' },
+        { label: 'Sync', value: 'Legacy' },
+        { label: 'Audit', value: 'Trail' }
+      ]
+    },
+    {
+      title: 'Detailed Leaderboard',
+      description: 'View comprehensive submission analytics and user performance',
+      icon: TrendingUp,
+      href: '/leaderboard/detailed',
+      color: 'bg-blue/10 border-blue/20 hover:bg-blue/20',
+      iconColor: 'text-blue',
+      stats: stats ? [
+        { label: 'Total Subs', value: stats.totalSubmissions },
+        { label: 'Avg XP', value: Math.round(stats.totalXpAwarded / Math.max(stats.totalSubmissions, 1)) },
+        { label: 'Users', value: stats.totalUsers }
+      ] : []
     }
   ]
 
   const quickActions = [
+    {
+      title: 'Import Legacy Data',
+      description: 'Import Google Forms submissions for duplicate detection',
+      icon: Database,
+      href: '/admin/legacy-import',
+      urgent: false
+    },
     {
       title: 'Review Pending Flags',
       description: 'Address content moderation issues',
@@ -270,10 +304,7 @@ export default function AdminDashboardPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">
-                Admin{' '}
-                <span className="bg-gradient-to-r from-info to-purple bg-clip-text text-transparent">
-                  Dashboard
-                </span>
+                Admin Dashboard{' '}
               </h1>
               <p className="text-lg text-muted-foreground">
                 Manage submissions, review flags, and oversee system operations
@@ -284,7 +315,12 @@ export default function AdminDashboardPage() {
               <div className="flex items-center gap-2">
                 {getHealthIcon(stats.systemHealth)}
                 <span className={`font-medium ${getHealthColor(stats.systemHealth)}`}>
-                  System {stats.systemHealth}
+                  System {(() => {
+                    const overallScore = (stats.systemHealth.submissionSuccessRate + stats.systemHealth.avgReviewScore - stats.systemHealth.flagRate) / 2
+                    if (overallScore >= 80) return 'Healthy'
+                    if (overallScore >= 60) return 'Warning'
+                    return 'Critical'
+                  })()}
                 </span>
               </div>
             )}
@@ -498,10 +534,38 @@ export default function AdminDashboardPage() {
                       </p>
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">Status:</span>
-                        <Badge variant={stats?.systemHealth === 'healthy' ? 'default' : 'destructive'}>
-                          {stats?.systemHealth || 'Unknown'}
+                        <Badge variant={stats?.systemHealth && (stats.systemHealth.submissionSuccessRate + stats.systemHealth.avgReviewScore - stats.systemHealth.flagRate) / 2 >= 60 ? 'default' : 'destructive'}>
+                          {stats?.systemHealth ?
+                            (() => {
+                              const overallScore = (stats.systemHealth.submissionSuccessRate + stats.systemHealth.avgReviewScore - stats.systemHealth.flagRate) / 2
+                              if (overallScore >= 80) return 'Healthy'
+                              if (overallScore >= 60) return 'Warning'
+                              return 'Critical'
+                            })() : 'Unknown'}
                         </Badge>
                       </div>
+                    </div>
+                  </div>
+
+
+
+                  <div className="space-y-4">
+                    <div className="p-4 bg-muted/50 border border-border rounded-lg">
+                      <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4" />
+                        Detailed Leaderboard
+                      </h3>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        View comprehensive submission analytics and user performance
+                      </p>
+                      <Button
+                        onClick={() => window.open('/leaderboard/detailed', '_blank')}
+                        className="w-full"
+                        variant="outline"
+                      >
+                        <ArrowRight className="mr-2 h-4 w-4" />
+                        Open Leaderboard
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -515,108 +579,31 @@ export default function AdminDashboardPage() {
                 <CardTitle>User Management</CardTitle>
                 <CardDescription>Manage user roles and permissions</CardDescription>
               </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">User management interface coming soon...</p>
+              <CardContent className="space-y-4">
+                <p className="text-muted-foreground">
+                  Access the comprehensive user management interface to view, filter, and manage all users in the system.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <Button
+                    onClick={() => router.push('/admin/users')}
+                    className="flex items-center gap-2"
+                  >
+                    <Users className="h-4 w-4" />
+                    Open User Management
+                  </Button>
+                  <div className="text-sm text-muted-foreground space-y-1">
+                    <p>• View and search all users</p>
+                    <p>• Manage user roles and permissions</p>
+                    <p>• Bulk operations and XP adjustments</p>
+                    <p>• User activity and performance metrics</p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="submissions" className="space-y-6">
-            <Card className="border-0 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileText className="h-5 w-5" />
-                    Submissions Management
-                  </CardTitle>
-                  <CardDescription>
-                    Review and manage all submissions in the system
-                  </CardDescription>
-                </div>
-                <Button
-                  onClick={fetchSubmissions}
-                  disabled={submissionsLoading}
-                  variant="outline"
-                  size="sm"
-                >
-                  {submissionsLoading ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Loading...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                      Refresh
-                    </>
-                  )}
-                </Button>
-              </CardHeader>
-              <CardContent>
-                {submissionsLoading ? (
-                  <div className="text-center py-8">
-                    <RefreshCw className="h-8 w-8 text-muted-foreground mx-auto mb-4 animate-spin" />
-                    <p className="text-muted-foreground">Loading submissions...</p>
-                  </div>
-                ) : submissions.length === 0 ? (
-                  <div className="text-center py-8">
-                    <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground mb-2">No submissions found</p>
-                    <p className="text-sm text-muted-foreground/70">
-                      Submissions will appear here once users start submitting content.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {submissions.map((submission) => (
-                      <div key={submission.id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <Badge variant={submission.status === 'PENDING' ? 'secondary' : 'default'}>
-                                {submission.status}
-                              </Badge>
-                              <Badge variant="outline">
-                                {submission.platform}
-                              </Badge>
-                              <Badge variant="outline">
-                                Task {submission.taskTypes}
-                              </Badge>
-                            </div>
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-muted-foreground">URL:</span>
-                                <a
-                                  href={submission.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-primary hover:text-primary/80 text-sm truncate max-w-md"
-                                >
-                                  {submission.url}
-                                </a>
-                              </div>
-                              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                <span>User: {submission.user.username}</span>
-                                <span>Week: {submission.weekNumber}</span>
-                                <span>Submitted: {new Date(submission.createdAt).toLocaleDateString()}</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm text-muted-foreground mb-1">XP Breakdown</div>
-                            <div className="space-y-1 text-sm">
-                              <div>AI: {submission.aiXp}</div>
-                              <div>Peer: {submission.peerXp || 'N/A'}</div>
-                              <div className="font-semibold">Final: {submission.finalXp || 'Pending'}</div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <SubmissionsManagement />
           </TabsContent>
 
           <TabsContent value="analytics" className="space-y-6">
@@ -637,7 +624,7 @@ export default function AdminDashboardPage() {
                     <div className="space-y-2">
                       <div className="flex justify-between">
                         <span className="text-sm text-muted-foreground">XP Awarded This Week</span>
-                        <span className="font-medium">{stats?.weeklyXpAwarded || 0}</span>
+                        <span className="font-medium">{stats?.totalXpAwarded || 0}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm text-muted-foreground">Active Participants</span>
@@ -663,8 +650,14 @@ export default function AdminDashboardPage() {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm text-muted-foreground">System Status</span>
-                        <Badge variant={stats?.systemHealth === 'healthy' ? 'default' : 'destructive'}>
-                          {stats?.systemHealth || 'Unknown'}
+                        <Badge variant={stats?.systemHealth && (stats.systemHealth.submissionSuccessRate + stats.systemHealth.avgReviewScore - stats.systemHealth.flagRate) / 2 >= 60 ? 'default' : 'destructive'}>
+                          {stats?.systemHealth ?
+                            (() => {
+                              const overallScore = (stats.systemHealth.submissionSuccessRate + stats.systemHealth.avgReviewScore - stats.systemHealth.flagRate) / 2
+                              if (overallScore >= 80) return 'Healthy'
+                              if (overallScore >= 60) return 'Warning'
+                              return 'Critical'
+                            })() : 'Unknown'}
                         </Badge>
                       </div>
                     </div>

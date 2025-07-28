@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { getTaskType } from '@/lib/task-types'
+import type { TaskTypeId } from '@/types/task-types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -322,10 +324,17 @@ export default function AdminAnalyticsPage() {
                     <div className="space-y-4">
                       {Object.entries(analyticsData.distributions.taskTypes).map(([taskType, count]) => {
                         const percentage = (count / analyticsData.overview.totalSubmissions) * 100
+                        let taskTypeName = taskType
+                        try {
+                          const taskConfig = getTaskType(taskType as TaskTypeId)
+                          taskTypeName = taskConfig.name
+                        } catch (error) {
+                          // Keep original taskType if not found
+                        }
                         return (
                           <div key={taskType} className="space-y-2">
                             <div className="flex justify-between text-sm">
-                              <span className="font-medium">Task Type {taskType}</span>
+                              <span className="font-medium">{taskTypeName}</span>
                               <span>{count} ({percentage.toFixed(1)}%)</span>
                             </div>
                             <Progress value={percentage} className="h-2" />
@@ -535,15 +544,24 @@ export default function AdminAnalyticsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {analyticsData.qualityMetrics.taskTypeSuccessRates.map((taskType) => (
-                      <div key={taskType.taskType} className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="font-medium">Task Type {taskType.taskType}</span>
-                          <span>{taskType.completed}/{taskType.total} ({taskType.successRate}%)</span>
+                    {analyticsData.qualityMetrics.taskTypeSuccessRates.map((taskType) => {
+                      let taskTypeName = `Task Type ${taskType.taskType}`
+                      try {
+                        const taskConfig = getTaskType(taskType.taskType as TaskTypeId)
+                        taskTypeName = taskConfig.name
+                      } catch (error) {
+                        // Keep original name if not found
+                      }
+                      return (
+                        <div key={taskType.taskType} className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="font-medium">{taskTypeName}</span>
+                            <span>{taskType.completed}/{taskType.total} ({taskType.successRate}%)</span>
+                          </div>
+                          <Progress value={taskType.successRate} className="h-2" />
                         </div>
-                        <Progress value={taskType.successRate} className="h-2" />
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </CardContent>
               </Card>

@@ -286,13 +286,19 @@ async function autoDetectQualifyingTaskTypes(
   // Basic heuristics for task type detection
   // This will be enhanced with AI evaluation later
 
-  // Task A: Thread (5+ tweets) OR long article (2000+ chars)
-  if (contentData.platform === 'Twitter' || metadata.contentLength >= 2000) {
+  // Task A: Twitter threads (5+ tweets) OR long articles on non-restricted platforms
+  if (contentData.platform === 'Twitter') {
+    // For Twitter, we need to check if it's a thread with 5+ tweets
+    // This will be validated later in the Twitter-specific validator
+    qualifyingTypes.push('A')
+  } else if (metadata.contentLength >= 2000 &&
+             !['Reddit', 'Notion', 'Medium'].includes(contentData.platform)) {
+    // Long articles on platforms other than Reddit/Notion/Medium qualify for Task A
     qualifyingTypes.push('A')
   }
 
-  // Task B: Platform article (2000+ chars) on restricted platforms
-  if (metadata.contentLength >= 2000 && 
+  // Task B: Platform article (2000+ chars) on restricted platforms only
+  if (metadata.contentLength >= 2000 &&
       ['Reddit', 'Notion', 'Medium'].includes(contentData.platform)) {
     qualifyingTypes.push('B')
   }

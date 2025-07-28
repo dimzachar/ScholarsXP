@@ -96,7 +96,7 @@ export async function checkForDuplicateContent(
 /**
  * Generate content fingerprint for duplicate detection
  */
-function generateContentFingerprint(content: string): ContentFingerprint {
+export function generateContentFingerprint(content: string): ContentFingerprint {
   // Normalize content for comparison
   const normalizedContent = normalizeContent(content)
   
@@ -164,23 +164,84 @@ async function findExactDuplicates(
   contentHash: string,
   currentUserId: string
 ): Promise<SimilarSubmission[]> {
-  // This would query a content_fingerprints table in a real implementation
-  // For now, return empty array as we don't have the table structure
-  
-  // In a real implementation:
-  // const duplicates = await prisma.contentFingerprint.findMany({
-  //   where: {
-  //     hash: contentHash,
-  //     submission: {
-  //       userId: { not: currentUserId } // Don't flag user's own content
-  //     }
-  //   },
-  //   include: {
-  //     submission: true
-  //   }
-  // })
-  
-  return []
+  try {
+    // Check against existing submissions
+    const existingFingerprints = await prisma.contentFingerprint.findMany({
+      where: {
+        hash: contentHash,
+        submission: {
+          userId: { not: currentUserId }, // Don't flag user's own content
+          status: { not: 'REJECTED' } // Don't count rejected submissions
+        }
+      },
+      include: {
+        submission: {
+          select: {
+            id: true,
+            url: true,
+            platform: true,
+            userId: true,
+            createdAt: true
+          }
+        }
+      }
+    })
+
+    // Check against legacy submissions
+    const legacyFingerprints = await prisma.contentFingerprint.findMany({
+      where: {
+        hash: contentHash,
+        legacySubmissionId: { not: null }
+      },
+      include: {
+        legacySubmission: {
+          select: {
+            id: true,
+            url: true,
+            discordHandle: true,
+            submittedAt: true
+          }
+        }
+      }
+    })
+
+    const duplicates: SimilarSubmission[] = []
+
+    // Add existing submission duplicates
+    existingFingerprints.forEach(fp => {
+      if (fp.submission) {
+        duplicates.push({
+          submissionId: fp.submission.id,
+          url: fp.submission.url,
+          platform: fp.submission.platform,
+          userId: fp.submission.userId,
+          similarityScore: 1.0, // Exact match
+          createdAt: fp.submission.createdAt,
+          contentFingerprint: fp.hash
+        })
+      }
+    })
+
+    // Add legacy submission duplicates
+    legacyFingerprints.forEach(fp => {
+      if (fp.legacySubmission) {
+        duplicates.push({
+          submissionId: `legacy-${fp.legacySubmission.id}`,
+          url: fp.legacySubmission.url,
+          platform: 'Legacy',
+          userId: 'legacy-user',
+          similarityScore: 1.0, // Exact match
+          createdAt: fp.legacySubmission.submittedAt || new Date(),
+          contentFingerprint: fp.hash
+        })
+      }
+    })
+
+    return duplicates
+  } catch (error) {
+    console.error('Error finding exact duplicates:', error)
+    return []
+  }
 }
 
 /**
@@ -225,21 +286,59 @@ export async function storeContentFingerprint(
   submissionId: string,
   contentData: ContentData
 ): Promise<void> {
-  const fingerprint = generateContentFingerprint(contentData.content)
-  
-  // In a real implementation, this would store the fingerprint:
-  // await prisma.contentFingerprint.create({
-  //   data: {
-  //     submissionId,
-  //     hash: fingerprint.hash,
-  //     normalizedContent: fingerprint.normalizedContent,
-  //     keyPhrases: fingerprint.keyPhrases,
-  //     contentLength: fingerprint.contentLength,
-  //     wordCount: fingerprint.wordCount
-  //   }
-  // })
-  
-  console.log(`Stored content fingerprint for submission ${submissionId}: ${fingerprint.hash}`)
+  try {
+    const fingerprint = generateContentFingerprint(contentData.content)
+
+    await prisma.contentFingerprint.create({
+      data: {
+        submissionId,
+        hash: fingerprint.hash,
+        normalizedContent: fingerprint.normalizedContent,
+        keyPhrases: fingerprint.keyPhrases,
+        contentLength: fingerprint.contentLength,
+        wordCount: fingerprint.wordCount,
+        url: contentData.url,
+        platform: contentData.platform
+      }
+    })
+
+    console.log(`Stored content fingerprint for submission ${submissionId}: ${fingerprint.hash}`)
+  } catch (error) {
+    console.error(`Error storing content fingerprint for submission ${submissionId}:`, error)
+    throw error
+  }
+}
+
+/**
+ * Store legacy content fingerprint for duplicate detection
+ */
+export async function storeLegacyContentFingerprint(
+  legacySubmissionId: string,
+  url: string,
+  content: string,
+  platform: string = 'Legacy'
+): Promise<void> {
+  try {
+    const fingerprint = generateContentFingerprint(content)
+
+    await prisma.contentFingerprint.create({
+      data: {
+        legacySubmissionId,
+        hash: fingerprint.hash,
+        normalizedContent: fingerprint.normalizedContent,
+        keyPhrases: fingerprint.keyPhrases,
+        contentLength: fingerprint.contentLength,
+        wordCount: fingerprint.wordCount,
+        url,
+        platform
+      }
+    })
+
+    console.log(`Stored legacy content fingerprint for submission ${legacySubmissionId}: ${fingerprint.hash}`)
+  } catch (error) {
+    console.error(`Error storing legacy content fingerprint for submission ${legacySubmissionId}:`, error)
+    throw error
+  }
 }
 
 /**

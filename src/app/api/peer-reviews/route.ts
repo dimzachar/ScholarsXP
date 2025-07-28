@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { createAuthenticatedClient } from '@/lib/supabase-server'
 import { getTaskType } from '@/lib/task-types'
+import { withErrorHandling, createSuccessResponse, validateRequiredFields } from '@/lib/api-middleware'
+import { ValidationError } from '@/lib/api-error-handler'
 
-export const POST = withPermission('review_content')(async (request: AuthenticatedRequest) => {
-  try {
+export const POST = withPermission('review_content')(
+  withErrorHandling(async (request: AuthenticatedRequest) => {
     const {
       submissionId,
       xpScore,
@@ -14,18 +15,14 @@ export const POST = withPermission('review_content')(async (request: Authenticat
       qualityRating
     } = await request.json()
 
-    if (!submissionId || xpScore === undefined) {
-      return NextResponse.json(
-        { message: 'Submission ID and XP score are required' },
-        { status: 400 }
-      )
-    }
+    validateRequiredFields({ submissionId, xpScore }, ['submissionId', 'xpScore'])
 
     if (!comments || comments.trim().length < 20) {
-      return NextResponse.json(
-        { message: 'Comments are required and must be at least 20 characters' },
-        { status: 400 }
-      )
+      throw new ValidationError('Comments are required and must be at least 20 characters', {
+        field: 'comments',
+        minLength: 20,
+        currentLength: comments?.trim().length || 0
+      })
     }
 
     // Get reviewer ID from authenticated user
@@ -50,10 +47,14 @@ export const POST = withPermission('review_content')(async (request: Authenticat
       .single()
 
     if (submissionError || !submission) {
-      return NextResponse.json(
-        { message: 'Submission not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({
+        success: false,
+        error: {
+          error: 'Submission not found',
+          code: 'NOT_FOUND',
+          details: submissionError?.message
+        }
+      }, { status: 404 })
     }
 
     // Validate XP score against task-specific ranges
@@ -63,18 +64,26 @@ export const POST = withPermission('review_content')(async (request: Authenticat
       const { min, max } = taskTypeConfig.xpRange
 
       if (xpScore < min || xpScore > max) {
-        return NextResponse.json(
-          { message: `XP score must be between ${min} and ${max} for task type ${primaryTaskType}` },
-          { status: 400 }
-        )
+        return NextResponse.json({
+          success: false,
+          error: {
+            error: `XP score must be between ${min} and ${max} for task type ${primaryTaskType}`,
+            code: 'VALIDATION_ERROR',
+            details: { min, max, taskType: primaryTaskType, provided: xpScore }
+          }
+        }, { status: 400 })
       }
     } else {
       // Fallback to old validation if no task types (legacy submissions)
       if (xpScore < 0 || xpScore > 100) {
-        return NextResponse.json(
-          { message: 'XP score must be between 0 and 100' },
-          { status: 400 }
-        )
+        return NextResponse.json({
+          success: false,
+          error: {
+            error: 'XP score must be between 0 and 100',
+            code: 'VALIDATION_ERROR',
+            details: { min: 0, max: 100, provided: xpScore }
+          }
+        }, { status: 400 })
       }
     }
 
@@ -87,17 +96,25 @@ export const POST = withPermission('review_content')(async (request: Authenticat
       .single()
 
     if (assignmentError || !assignment) {
-      return NextResponse.json(
-        { message: 'No active review assignment found for this submission' },
-        { status: 403 }
-      )
+      return NextResponse.json({
+        success: false,
+        error: {
+          error: 'No active review assignment found for this submission',
+          code: 'FORBIDDEN',
+          details: assignmentError?.message
+        }
+      }, { status: 403 })
     }
 
     if (assignment.status === 'COMPLETED') {
-      return NextResponse.json(
-        { message: 'Review has already been submitted for this assignment' },
-        { status: 400 }
-      )
+      return NextResponse.json({
+        success: false,
+        error: {
+          error: 'Review has already been submitted for this assignment',
+          code: 'ALREADY_EXISTS',
+          details: { assignmentId: assignment.id, status: assignment.status }
+        }
+      }, { status: 400 })
     }
 
     // Check if review is late
@@ -122,10 +139,14 @@ export const POST = withPermission('review_content')(async (request: Authenticat
 
     if (reviewError) {
       console.error('Error creating peer review:', reviewError)
-      return NextResponse.json(
-        { message: 'Failed to save review' },
-        { status: 500 }
-      )
+      return NextResponse.json({
+        success: false,
+        error: {
+          error: 'Failed to save review',
+          code: 'DATABASE_ERROR',
+          details: reviewError.message
+        }
+      }, { status: 500 })
     }
 
     // Update the assignment status
@@ -170,7 +191,7 @@ export const POST = withPermission('review_content')(async (request: Authenticat
 
     console.log(`✅ Review submitted by ${reviewerId} for submission ${submissionId}: ${xpScore} XP, quality: ${qualityRating}/5, time: ${timeSpent}min, late: ${isLate}`)
 
-    return NextResponse.json({
+    return createSuccessResponse({
       message: 'Review submitted successfully',
       reviewId: review.id,
       reward: rewardDetails,
@@ -183,13 +204,6 @@ export const POST = withPermission('review_content')(async (request: Authenticat
         pendingReviews: remainingAssignments?.length || 0
       }
     })
-
-  } catch (error) {
-    console.error('Error submitting peer review:', error)
-    return NextResponse.json(
-      { message: 'Internal server error' },
-      { status: 500 }
-    )
-  }
-})
+  })
+)
 

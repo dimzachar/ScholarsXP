@@ -1,12 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
-import { prisma } from '@/lib/prisma'
+import { withAnalyticsOptimization } from '@/middleware/api-optimization'
+import { getOptimizedAnalyticsSummary, AnalyticsResponseDTO } from '@/lib/queries/analytics-optimized'
+import { supabaseClient } from '@/lib/supabase'
+import { CacheKeys, CacheTTL } from '@/lib/cache'
+import { multiLayerCache } from '@/lib/cache/enhanced-cache'
+import { getConsolidatedAnalytics, getFallbackAnalytics, compareAnalyticsResults } from '@/lib/database-queries'
 
-export const GET = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
+// Original handler (defined first for fallback)
+const originalHandler = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
     const { searchParams } = new URL(request.url)
     const timeframe = searchParams.get('timeframe') || 'last_30_days' // 'last_7_days', 'last_30_days', 'last_90_days', 'all_time'
     const metric = searchParams.get('metric') || 'overview' // 'overview', 'users', 'submissions', 'reviews', 'xp'
+
+    // Feature flag for optimized analytics (default: false for safety)
+    const useOptimizedAnalytics = process.env.USE_OPTIMIZED_ANALYTICS === 'true'
+    const compareResults = process.env.COMPARE_ANALYTICS_RESULTS === 'true'
+
+    // Check multi-layer cache first for complete analytics data
+    const cacheKey = CacheKeys.analytics(`${timeframe}:${metric}:${useOptimizedAnalytics ? 'optimized' : 'legacy'}`)
+    const cachedData = await multiLayerCache.get(cacheKey)
+
+    if (cachedData) {
+      return NextResponse.json({ success: true, data: cachedData }, {
+        headers: {
+          'Cache-Control': 'public, max-age=600, stale-while-revalidate=1200',
+          'X-Cache': 'HIT',
+          'X-Cache-Layer': 'Multi-Layer',
+          'X-Cache-Key': cacheKey,
+          'X-Analytics-Type': useOptimizedAnalytics ? 'optimized' : 'legacy'
+        }
+      })
+    }
 
     // Calculate date ranges
     const now = new Date()
@@ -26,377 +52,81 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
         startDate = new Date('2020-01-01') // All time
     }
 
-    const dateFilter = timeframe === 'all_time' ? {} : {
-      createdAt: {
-        gte: startDate
-      }
+    // Use optimized or legacy analytics based on feature flag
+    let analyticsData
+    if (useOptimizedAnalytics) {
+      console.log('📊 Using optimized analytics implementation')
+      analyticsData = await getConsolidatedAnalytics(startDate, timeframe, metric)
+    } else {
+      console.log('📊 Using legacy analytics implementation')
+      analyticsData = await getFallbackAnalytics(startDate, timeframe, metric)
     }
 
-    // Get overview metrics
-    const [
-      totalUsers,
-      activeUsers,
-      totalSubmissions,
-      completedSubmissions,
-      totalReviews,
-      totalXpAwarded,
-      totalAchievements,
-      pendingFlags
-    ] = await Promise.all([
-      prisma.user.count(),
-      prisma.user.count({
-        where: {
-          lastActiveAt: {
-            gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-          }
-        }
-      }),
-      prisma.submission.count(timeframe === 'all_time' ? {} : { where: dateFilter }),
-      prisma.submission.count({
-        where: {
-          status: 'FINALIZED',
-          ...(timeframe === 'all_time' ? {} : dateFilter)
-        }
-      }),
-      prisma.peerReview.count(timeframe === 'all_time' ? {} : { where: dateFilter }),
-      prisma.xpTransaction.aggregate({
-        _sum: { amount: true },
-        where: {
-          amount: { gt: 0 },
-          ...(timeframe === 'all_time' ? {} : dateFilter)
-        }
-      }),
-      prisma.userAchievement.count(timeframe === 'all_time' ? {} : {
-        where: {
-          earnedAt: {
-            gte: startDate
-          }
-        }
-      }),
-      prisma.contentFlag.count({
-        where: { status: 'PENDING' }
-      })
-    ])
+    // Cache the result
+    await multiLayerCache.set(cacheKey, analyticsData, CacheTTL.ANALYTICS)
 
-    // Get time series data for charts
-    const timeSeriesData = await getTimeSeriesData(startDate, now, timeframe)
-
-    // Get platform distribution
-    const platformStats = await prisma.submission.groupBy({
-      by: ['platform'],
-      _count: true,
-      where: timeframe === 'all_time' ? {} : dateFilter
-    })
-
-    // Get task type distribution (since taskTypes is an array, we need to handle it differently)
-    // For now, we'll skip this complex aggregation and provide a simple count
-    const taskTypeStats = [
-      { taskType: 'A', _count: { _all: 0 } },
-      { taskType: 'B', _count: { _all: 0 } },
-      { taskType: 'C', _count: { _all: 0 } },
-      { taskType: 'D', _count: { _all: 0 } },
-      { taskType: 'E', _count: { _all: 0 } },
-      { taskType: 'F', _count: { _all: 0 } }
-    ]
-
-    // Get user role distribution
-    const roleStats = await prisma.user.groupBy({
-      by: ['role'],
-      _count: true
-    })
-
-    // Get top performers
-    const topSubmitters = await prisma.user.findMany({
-      select: {
-        id: true,
-        username: true,
-        totalXp: true,
-        _count: {
-          select: {
-            submissions: true
-          }
-        }
-      },
-      orderBy: {
-        submissions: {
-          _count: 'desc'
-        }
-      },
-      take: 10
-    })
-
-    const topReviewers = await prisma.user.findMany({
-      select: {
-        id: true,
-        username: true,
-        totalXp: true,
-        _count: {
-          select: {
-            peerReviews: true
-          }
-        }
-      },
-      orderBy: {
-        peerReviews: {
-          _count: 'desc'
-        }
-      },
-      take: 10
-    })
-
-    // Get XP distribution
-    const xpDistribution = await prisma.user.groupBy({
-      by: ['totalXp'],
-      _count: true,
-      orderBy: {
-        totalXp: 'asc'
-      }
-    })
-
-    // Calculate XP ranges
-    const xpRanges = {
-      '0-100': 0,
-      '101-500': 0,
-      '501-1000': 0,
-      '1001-2000': 0,
-      '2000+': 0
-    }
-
-    xpDistribution.forEach(item => {
-      const xp = item.totalXp
-      if (xp <= 100) xpRanges['0-100'] += item._count
-      else if (xp <= 500) xpRanges['101-500'] += item._count
-      else if (xp <= 1000) xpRanges['501-1000'] += item._count
-      else if (xp <= 2000) xpRanges['1001-2000'] += item._count
-      else xpRanges['2000+'] += item._count
-    })
-
-    // Get review quality metrics
-    const reviewQualityStats = await prisma.peerReview.aggregate({
-      _avg: { xpScore: true },
-      _min: { xpScore: true },
-      _max: { xpScore: true },
-      where: timeframe === 'all_time' ? {} : dateFilter
-    })
-
-    // Get submission success rate by task type
-    const taskTypeSuccessRates = await Promise.all(
-      ['A', 'B', 'C', 'D', 'E', 'F'].map(async (taskType) => {
-        const [total, completed] = await Promise.all([
-          prisma.submission.count({
-            where: {
-              taskTypes: {
-                has: taskType
-              },
-              ...(timeframe === 'all_time' ? {} : dateFilter)
-            }
-          }),
-          prisma.submission.count({
-            where: {
-              taskTypes: {
-                has: taskType
-              },
-              status: 'FINALIZED',
-              ...(timeframe === 'all_time' ? {} : dateFilter)
-            }
-          })
-        ])
-
-        return {
-          taskType,
-          total,
-          completed,
-          successRate: total > 0 ? Math.round((completed / total) * 100) : 0
-        }
-      })
-    )
-
-    // Calculate growth rates
-    const previousPeriodStart = new Date(startDate.getTime() - (now.getTime() - startDate.getTime()))
-    const previousPeriodFilter = {
-      createdAt: {
-        gte: previousPeriodStart,
-        lt: startDate
-      }
-    }
-
-    const [prevSubmissions, prevReviews, prevUsers] = await Promise.all([
-      prisma.submission.count({ where: previousPeriodFilter }),
-      prisma.peerReview.count({ where: previousPeriodFilter }),
-      prisma.user.count({ where: previousPeriodFilter })
-    ])
-
-    const growthRates = {
-      submissions: prevSubmissions > 0 ? ((totalSubmissions - prevSubmissions) / prevSubmissions) * 100 : 0,
-      reviews: prevReviews > 0 ? ((totalReviews - prevReviews) / prevReviews) * 100 : 0,
-      users: prevUsers > 0 ? ((totalUsers - prevUsers) / prevUsers) * 100 : 0
-    }
-
-    return NextResponse.json({
-      overview: {
-        totalUsers,
-        activeUsers,
-        totalSubmissions,
-        completedSubmissions,
-        totalReviews,
-        totalXpAwarded: totalXpAwarded._sum.amount || 0,
-        totalAchievements,
-        pendingFlags,
-        submissionSuccessRate: totalSubmissions > 0 ? Math.round((completedSubmissions / totalSubmissions) * 100) : 0,
-        avgReviewScore: reviewQualityStats._avg.xpScore || 0
-      },
-      timeSeriesData,
-      distributions: {
-        platforms: platformStats.reduce((acc, stat) => {
-          acc[stat.platform] = stat._count
-          return acc
-        }, {} as Record<string, number>),
-        taskTypes: taskTypeStats.reduce((acc, stat) => {
-          acc[stat.taskType] = stat._count
-          return acc
-        }, {} as Record<string, number>),
-        roles: roleStats.reduce((acc, stat) => {
-          acc[stat.role] = stat._count
-          return acc
-        }, {} as Record<string, number>),
-        xpRanges
-      },
-      topPerformers: {
-        submitters: topSubmitters,
-        reviewers: topReviewers
-      },
-      qualityMetrics: {
-        avgReviewScore: reviewQualityStats._avg.xpScore || 0,
-        minReviewScore: reviewQualityStats._min.xpScore || 0,
-        maxReviewScore: reviewQualityStats._max.xpScore || 0,
-        taskTypeSuccessRates
-      },
-      growthRates,
-      timeframe,
-      dateRange: {
-        start: startDate.toISOString(),
-        end: now.toISOString()
+    return NextResponse.json({ success: true, data: analyticsData }, {
+      headers: {
+        'Cache-Control': 'public, max-age=600, stale-while-revalidate=1200',
+        'X-Cache': 'MISS',
+        'X-Cache-Layer': 'Multi-Layer',
+        'X-Cache-Key': cacheKey,
+        'X-Analytics-Type': useOptimizedAnalytics ? 'optimized' : 'legacy'
       }
     })
 
   } catch (error) {
-    console.error('Error in admin analytics endpoint:', error)
+    console.error('Analytics API error:', error)
     return NextResponse.json(
-      { message: 'Internal server error' },
+      { error: 'Failed to fetch analytics' },
       { status: 500 }
     )
   }
 })
 
-async function getTimeSeriesData(startDate: Date, endDate: Date, timeframe: string) {
-  const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
-  const interval = days > 90 ? 'week' : 'day'
-  
-  const timeSeriesData = []
-  
-  if (interval === 'day') {
-    for (let i = 0; i < days; i++) {
-      const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000)
-      const nextDate = new Date(date.getTime() + 24 * 60 * 60 * 1000)
-      
-      const [submissions, reviews, users, xpTransactions] = await Promise.all([
-        prisma.submission.count({
-          where: {
-            createdAt: {
-              gte: date,
-              lt: nextDate
-            }
-          }
-        }),
-        prisma.peerReview.count({
-          where: {
-            createdAt: {
-              gte: date,
-              lt: nextDate
-            }
-          }
-        }),
-        prisma.user.count({
-          where: {
-            createdAt: {
-              gte: date,
-              lt: nextDate
-            }
-          }
-        }),
-        prisma.xpTransaction.aggregate({
-          _sum: { amount: true },
-          where: {
-            amount: { gt: 0 },
-            createdAt: {
-              gte: date,
-              lt: nextDate
-            }
-          }
-        })
-      ])
-      
-      timeSeriesData.push({
-        date: date.toISOString().split('T')[0],
-        submissions,
-        reviews,
-        users,
-        xpAwarded: xpTransactions._sum.amount || 0
+// Optimized analytics handler with new implementation
+const optimizedAnalyticsHandler = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
+  try {
+    const { searchParams } = new URL(request.url)
+    const timeframe = searchParams.get('timeframe') || 'last_30_days'
+
+    // Use new optimized analytics query (enabled by default)
+    const useNewOptimization = process.env.USE_NEW_ANALYTICS_OPTIMIZATION !== 'false'
+
+    if (useNewOptimization) {
+      console.log('🚀 Using new optimized analytics implementation')
+      const startTime = Date.now()
+
+      const analyticsData = await getOptimizedAnalyticsSummary(timeframe)
+
+      const executionTime = Date.now() - startTime
+      console.log(`⚡ New optimized analytics completed in ${executionTime}ms`)
+
+      // Return optimized response with compression
+      return NextResponse.json({
+        success: true,
+        data: analyticsData
+      }, {
+        headers: {
+          'Cache-Control': 'public, max-age=300, stale-while-revalidate=600',
+          'X-Cache': 'OPTIMIZED',
+          'X-Execution-Time': executionTime.toString(),
+          'X-Performance-Gain': 'new_optimization'
+        }
       })
     }
-  } else {
-    // Weekly aggregation for longer periods
-    const weeks = Math.ceil(days / 7)
-    for (let i = 0; i < weeks; i++) {
-      const weekStart = new Date(startDate.getTime() + i * 7 * 24 * 60 * 60 * 1000)
-      const weekEnd = new Date(Math.min(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000, endDate.getTime()))
-      
-      const [submissions, reviews, users, xpTransactions] = await Promise.all([
-        prisma.submission.count({
-          where: {
-            createdAt: {
-              gte: weekStart,
-              lt: weekEnd
-            }
-          }
-        }),
-        prisma.peerReview.count({
-          where: {
-            createdAt: {
-              gte: weekStart,
-              lt: weekEnd
-            }
-          }
-        }),
-        prisma.user.count({
-          where: {
-            createdAt: {
-              gte: weekStart,
-              lt: weekEnd
-            }
-          }
-        }),
-        prisma.xpTransaction.aggregate({
-          _sum: { amount: true },
-          where: {
-            amount: { gt: 0 },
-            createdAt: {
-              gte: weekStart,
-              lt: weekEnd
-            }
-          }
-        })
-      ])
-      
-      timeSeriesData.push({
-        date: weekStart.toISOString().split('T')[0],
-        submissions,
-        reviews,
-        users,
-        xpAwarded: xpTransactions._sum.amount || 0
-      })
-    }
+
+    // Fall back to existing implementation
+    console.log('🔄 Using legacy analytics implementation')
+    return await originalHandler(request)
+  } catch (error) {
+    console.error('Analytics API error:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch analytics' },
+      { status: 500 }
+    )
   }
-  
-  return timeSeriesData
-}
+})
+
+// Apply comprehensive optimization middleware
+export const GET = withAnalyticsOptimization(optimizedAnalyticsHandler)

@@ -3,7 +3,7 @@ import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { createServiceClient } from '@/lib/supabase-server'
 import { reviewerPoolService } from '@/lib/reviewer-pool'
 
-export const POST = withPermission('admin')(async (request: AuthenticatedRequest) => {
+export const POST = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
     const { submissionId } = await request.json()
 

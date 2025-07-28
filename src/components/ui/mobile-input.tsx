@@ -54,12 +54,12 @@ export function MobileInput({
     return 'px-4'
   }
 
-  // Touch target optimization
+  // Touch target optimization - using static Tailwind classes
   const getTouchTargetClass = () => {
     if (!mobileOptimized) return ''
-    
-    if (isMobile) return `min-h-[${TOUCH_TARGET_SIZE.minimum}px]`
-    if (isTablet) return `min-h-[${TOUCH_TARGET_SIZE.comfortable}px]`
+
+    if (isMobile) return 'min-h-11' // 44px minimum touch target
+    if (isTablet) return 'min-h-12' // 48px comfortable touch target
     return ''
   }
 
@@ -210,8 +210,8 @@ export function MobileTextarea({
           isMobile ? 'px-1' : 'px-2'
         )}>
           {error && (
-            <div className="flex items-center gap-2 text-destructive">
-              <div className="w-1 h-1 bg-destructive rounded-full" />
+            <div className="flex items-center gap-2 text-red-700 dark:text-destructive">
+              <div className="w-1 h-1 bg-red-700 dark:bg-destructive rounded-full" />
               <span>{error}</span>
             </div>
           )}

@@ -3,17 +3,24 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack -p 3000",
+    "dev": "next dev -p 3002",
     "build": "next build",
+    "build:analyze": "ANALYZE=true next build",
+    "analyze": "pnpm run build:analyze",
     "start": "next start",
     "lint": "next lint",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:ci": "jest --ci --coverage --watchAll=false"
+    "test:ci": "jest --ci --coverage --watchAll=false",
+    "test:race-conditions": "jest __tests__/race-condition-fix.test.ts",
+    "monitor-xp": "tsx scripts/monitor-xp-consistency.ts",
+    "test:analytics-optimization": "tsx scripts/test-analytics-optimization.ts",
+    "test:analytics-api": "tsx scripts/test-analytics-api.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.11.1",
+    "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-checkbox": "^1.3.2",
     "@radix-ui/react-dialog": "^1.1.14",
@@ -34,7 +41,9 @@
     "@types/node-cron": "^3.0.11",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dotenv": "^17.2.1",
     "framer-motion": "^12.23.6",
+    "lru-cache": "^11.1.0",
     "lucide-react": "^0.525.0",
     "next": "15.3.5",
     "next-auth": "^4.24.11",
@@ -44,14 +53,17 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-swipeable": "^7.0.2",
+    "snoowrap": "^1.23.0",
     "sonner": "^2.0.6",
-    "tailwind-merge": "^3.3.1"
+    "tailwind-merge": "^3.3.1",
+    "twitter-api-v2": "^1.24.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
+    "@types/lru-cache": "^7.10.10",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -59,11 +71,13 @@
     "eslint": "^9",
     "eslint-config-next": "15.3.5",
     "jest": "^30.0.4",
+    "jest-axe": "^10.0.0",
     "jest-environment-jsdom": "^30.0.4",
     "postcss": "^8.5.6",
     "prisma": "^6.11.1",
     "supabase": "^2.30.4",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.20.3",
     "typescript": "^5"
   }
 }

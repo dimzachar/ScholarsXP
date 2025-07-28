@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
+import { CacheKeys, CacheTTL } from '@/lib/cache'
+import { withEnhancedCache, EnhancedCacheKeys, EnhancedCacheTTL } from '@/lib/cache/enhanced-utils'
 
 export const GET = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
@@ -22,208 +24,334 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
     const sortOrder = searchParams.get('sortOrder') || 'desc'
     const status = searchParams.get('status') // 'active', 'inactive', 'suspended'
 
-    // Build where clause
-    const where: any = {}
+    // Create cache key based on all parameters
+    const cacheKey = `${EnhancedCacheKeys.userMetrics(page, limit)}:${role || ''}:${search || ''}:${xpMin || ''}:${xpMax || ''}:${lastActiveFrom || ''}:${lastActiveTo || ''}:${sortBy}:${sortOrder}:${status || ''}`
 
-    if (role) {
-      where.role = role
-    }
+    // Disable caching for admin users table to prevent stale data issues
+    // Admin operations need real-time data, especially after account merges/deletions
+    const shouldCache = false // Temporarily disabled to fix phantom account issues
 
-    if (search) {
-      where.OR = [
-        { username: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } }
-      ]
-    }
+    let responseData
+    if (shouldCache) {
+      responseData = await withEnhancedCache(
+        cacheKey,
+        60, // Reduced from 300 to 60 seconds for admin operations
+        async () => {
+          return await fetchUserMetricsData(page, limit, offset, role, search, xpMin, xpMax, lastActiveFrom, lastActiveTo, sortBy, sortOrder, status)
+        },
+        { fallbackToOldCache: false } // Don't fallback to old cache for admin data
+      )
 
-    if (xpMin !== undefined || xpMax !== undefined) {
-      where.totalXp = {}
-      if (xpMin !== undefined) {
-        where.totalXp.gte = xpMin
-      }
-      if (xpMax !== undefined) {
-        where.totalXp.lte = xpMax
-      }
-    }
-
-    if (lastActiveFrom || lastActiveTo) {
-      where.lastActiveAt = {}
-      if (lastActiveFrom) {
-        where.lastActiveAt.gte = new Date(lastActiveFrom)
-      }
-      if (lastActiveTo) {
-        where.lastActiveAt.lte = new Date(lastActiveTo)
-      }
-    }
-
-    // Handle status filter
-    if (status === 'inactive') {
-      where.lastActiveAt = {
-        lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // 30 days ago
-      }
-    }
-
-    // Build orderBy clause
-    const orderBy: any = {}
-    if (sortBy === 'submissions') {
-      orderBy._count = { submissions: sortOrder }
-    } else if (sortBy === 'reviews') {
-      orderBy._count = { peerReviews: sortOrder }
-    } else {
-      orderBy[sortBy] = sortOrder
-    }
-
-    // Get users with related data
-    const [users, totalCount] = await Promise.all([
-      prisma.user.findMany({
-        where,
-        orderBy,
-        skip: offset,
-        take: limit,
-        include: {
-          _count: {
-            select: {
-              submissions: true,
-              peerReviews: true,
-              userAchievements: true
-            }
-          },
-          submissions: {
-            select: {
-              id: true,
-              status: true,
-              xpAwarded: true,
-              createdAt: true
-            },
-            orderBy: {
-              createdAt: 'desc'
-            },
-            take: 5 // Recent submissions
-          },
-          peerReviews: {
-            select: {
-              id: true,
-              xpScore: true,
-              createdAt: true
-            },
-            orderBy: {
-              createdAt: 'desc'
-            },
-            take: 5 // Recent reviews
-          }
-        }
-      }),
-      prisma.user.count({ where })
-    ])
-
-    // Calculate additional metrics for each user
-    const usersWithMetrics = await Promise.all(
-      users.map(async (user) => {
-        // Get XP breakdown for current week
-        const weekStart = new Date()
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay())
-        weekStart.setHours(0, 0, 0, 0)
-
-        const weeklyXpTransactions = await prisma.xpTransaction.findMany({
-          where: {
-            userId: user.id,
-            createdAt: {
-              gte: weekStart
-            }
-          }
-        })
-
-        const weeklyXp = weeklyXpTransactions.reduce((sum, tx) => sum + tx.amount, 0)
-
-        // Calculate submission success rate
-        const completedSubmissions = user.submissions.filter(s => s.status === 'COMPLETED').length
-        const submissionSuccessRate = user._count.submissions > 0
-          ? (completedSubmissions / user._count.submissions) * 100
-          : 0
-
-        // Calculate average review score given
-        const avgReviewScore = user.peerReviews.length > 0
-          ? user.peerReviews.reduce((sum, review) => sum + (review.xpScore || 0), 0) / user.peerReviews.length
-          : 0
-
-        // Determine activity status
-        const daysSinceLastActive = user.lastActiveAt
-          ? Math.floor((Date.now() - new Date(user.lastActiveAt).getTime()) / (1000 * 60 * 60 * 24))
-          : null
-
-        let activityStatus = 'unknown'
-        if (daysSinceLastActive !== null) {
-          if (daysSinceLastActive <= 7) activityStatus = 'active'
-          else if (daysSinceLastActive <= 30) activityStatus = 'recent'
-          else activityStatus = 'inactive'
-        }
-
-        return {
-          ...user,
-          metrics: {
-            weeklyXp,
-            submissionSuccessRate: Math.round(submissionSuccessRate),
-            avgReviewScore: Math.round(avgReviewScore * 10) / 10,
-            daysSinceLastActive,
-            activityStatus,
-            totalSubmissions: user._count.submissions,
-            totalReviews: user._count.peerReviews,
-            totalAchievements: user._count.userAchievements
-          }
+      return NextResponse.json(responseData, {
+        headers: {
+          'Cache-Control': 'private, max-age=60, must-revalidate',
+          'X-Cache': 'HIT',
+          'X-Cache-Layer': 'Multi-Layer',
+          'X-Cache-Key': cacheKey
         }
       })
-    )
+    } else {
+      // Always fetch fresh data for admin users table
+      responseData = await fetchUserMetricsData(
+        page, limit, offset, role, search, xpMin, xpMax,
+        lastActiveFrom, lastActiveTo, sortBy, sortOrder, status
+      )
 
-    // Get summary statistics
-    const roleStats = await prisma.user.groupBy({
-      by: ['role'],
-      _count: true,
-      where: Object.keys(where).length > 0 ? where : undefined
-    })
-
-    const roleCounts = roleStats.reduce((acc, stat) => {
-      acc[stat.role] = stat._count
-      return acc
-    }, {} as Record<string, number>)
-
-    // Calculate pagination info
-    const totalPages = Math.ceil(totalCount / limit)
-    const hasNextPage = page < totalPages
-    const hasPrevPage = page > 1
-
-    return NextResponse.json({
-      users: usersWithMetrics,
-      pagination: {
-        page,
-        limit,
-        totalCount,
-        totalPages,
-        hasNextPage,
-        hasPrevPage
-      },
-      filters: {
-        role,
-        search,
-        xpMin,
-        xpMax,
-        lastActiveFrom,
-        lastActiveTo,
-        status
-      },
-      stats: {
-        roleCounts,
-        totalUsers: totalCount
-      }
-    })
+      return NextResponse.json(responseData, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'X-Cache': 'MISS',
+          'X-Cache-Layer': 'None',
+          'X-Fresh-Data': 'true'
+        }
+      })
+    }
 
   } catch (error) {
     console.error('Error in admin users endpoint:', error)
     return NextResponse.json(
-      { message: 'Internal server error' },
+      {
+        success: false,
+        error: {
+          error: 'Internal server error',
+          code: 'INTERNAL_ERROR',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        }
+      },
       { status: 500 }
     )
   }
 })
+
+// Extracted data fetching function for caching
+async function fetchUserMetricsData(
+  page: number,
+  limit: number,
+  offset: number,
+  role?: string | null,
+  search?: string | null,
+  xpMin?: number,
+  xpMax?: number,
+  lastActiveFrom?: string | null,
+  lastActiveTo?: string | null,
+  sortBy: string = 'createdAt',
+  sortOrder: string = 'desc',
+  status?: string | null
+) {
+  // Build where clause
+  const where: any = {}
+
+  if (role) {
+    where.role = role
+  }
+
+  if (search) {
+    where.OR = [
+      { username: { contains: search, mode: 'insensitive' } },
+      { email: { contains: search, mode: 'insensitive' } }
+    ]
+  }
+
+  if (xpMin !== undefined || xpMax !== undefined) {
+    where.totalXp = {}
+    if (xpMin !== undefined) where.totalXp.gte = xpMin
+    if (xpMax !== undefined) where.totalXp.lte = xpMax
+  }
+
+  if (lastActiveFrom || lastActiveTo) {
+    where.lastActiveAt = {}
+    if (lastActiveFrom) where.lastActiveAt.gte = new Date(lastActiveFrom)
+    if (lastActiveTo) where.lastActiveAt.lte = new Date(lastActiveTo)
+  }
+
+  if (status) {
+    // Map status to actual database fields
+    switch (status) {
+      case 'active':
+        where.lastActiveAt = {
+          gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // Active in last 7 days
+        }
+        break
+      case 'recent':
+        where.lastActiveAt = {
+          gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+          lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+        }
+        break
+      case 'inactive':
+        where.lastActiveAt = {
+          lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+          gte: new Date('2020-01-01') // Exclude deactivated users
+        }
+        break
+      case 'deactivated':
+        where.lastActiveAt = {
+          lt: new Date('2020-01-01') // Deactivated users have very old lastActiveAt
+        }
+        break
+    }
+  }
+
+  // Build orderBy clause
+  const orderBy: any = {}
+  if (sortBy === 'submissions') {
+    orderBy._count = { submissions: sortOrder }
+  } else if (sortBy === 'reviews') {
+    orderBy._count = { peerReviews: sortOrder }
+  } else {
+    orderBy[sortBy] = sortOrder
+  }
+
+  // Calculate week start for XP transactions
+  const weekStart = new Date()
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay())
+  weekStart.setHours(0, 0, 0, 0)
+
+  // Get users with related data - Optimized to include XP transactions in single query
+  const [users, totalCount] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      orderBy,
+      skip: offset,
+      take: limit,
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        totalXp: true,
+        currentWeekXp: true,
+        streakWeeks: true,
+        createdAt: true,
+        lastActiveAt: true,
+        _count: {
+          select: {
+            submissions: true,
+            peerReviews: true,
+            userAchievements: true
+          }
+        },
+        submissions: {
+          select: {
+            id: true,
+            status: true,
+            finalXp: true,
+            createdAt: true
+          },
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 5 // Recent submissions
+        },
+        peerReviews: {
+          select: {
+            id: true,
+            xpScore: true,
+            createdAt: true
+          },
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 5 // Recent reviews
+        },
+        xpTransactions: {
+          where: {
+            createdAt: {
+              gte: weekStart
+            }
+          },
+          select: {
+            amount: true,
+            createdAt: true
+          }
+        }
+      }
+    }),
+    prisma.user.count({ where })
+  ])
+
+  // Get legacy submission counts for all users in parallel
+  const userIds = users.map(u => u.id)
+  const legacyCounts = await Promise.all(
+    users.map(async (user) => {
+      const discordHandle = user.discordHandle || user.username
+      if (!discordHandle) return 0
+
+      const result = await prisma.$queryRaw`
+        SELECT COUNT(*) as count
+        FROM "LegacySubmission"
+        WHERE "discordHandle" = ${discordHandle}
+      ` as any[]
+
+      return parseInt(result[0]?.count || '0')
+    })
+  )
+
+  // Calculate additional metrics for each user - Optimized in-memory processing
+  const usersWithMetrics = users.map((user, index) => {
+    // Calculate weekly XP from included transactions (no additional query needed)
+    const weeklyXp = user.xpTransactions.reduce((sum, tx) => sum + tx.amount, 0)
+
+    // Calculate submission success rate including legacy submissions
+    const completedSubmissions = user.submissions.filter(s => s.status === 'COMPLETED').length
+    const legacySubmissionCount = legacyCounts[index]
+    const totalSubmissions = user._count.submissions + legacySubmissionCount
+    const submissionSuccessRate = totalSubmissions > 0
+      ? ((completedSubmissions + legacySubmissionCount) / totalSubmissions) * 100
+      : 0
+
+    // Calculate average review score given
+    const avgReviewScore = user.peerReviews.length > 0
+      ? user.peerReviews.reduce((sum, review) => sum + (review.xpScore || 0), 0) / user.peerReviews.length
+      : 0
+
+    // Determine activity status
+    const daysSinceLastActive = user.lastActiveAt
+      ? Math.floor((Date.now() - new Date(user.lastActiveAt).getTime()) / (1000 * 60 * 60 * 24))
+      : null
+
+    let activityStatus = 'unknown'
+    if (daysSinceLastActive !== null) {
+      // Check if user is deactivated (lastActiveAt set to very old date)
+      const lastActiveYear = new Date(user.lastActiveAt).getFullYear()
+      if (lastActiveYear < 2020) {
+        activityStatus = 'deactivated'
+      } else if (daysSinceLastActive <= 7) {
+        activityStatus = 'active'
+      } else if (daysSinceLastActive <= 30) {
+        activityStatus = 'recent'
+      } else {
+        activityStatus = 'inactive'
+      }
+    }
+
+    return {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      totalXp: user.totalXp,
+      currentWeekXp: user.currentWeekXp || 0,
+      streakWeeks: user.streakWeeks || 0,
+      createdAt: user.createdAt,
+      lastActiveAt: user.lastActiveAt,
+      metrics: {
+        weeklyXp,
+        submissionSuccessRate: Math.round(submissionSuccessRate),
+        avgReviewScore: Math.round(avgReviewScore * 10) / 10,
+        daysSinceLastActive,
+        activityStatus,
+        totalSubmissions: totalSubmissions, // Include legacy submissions
+        totalReviews: user._count.peerReviews,
+        totalAchievements: user._count.userAchievements
+      }
+    }
+  })
+
+  // Get summary statistics
+  const roleStats = await prisma.user.groupBy({
+    by: ['role'],
+    _count: true,
+    where: Object.keys(where).length > 0 ? where : undefined
+  })
+
+  const roleCounts = roleStats.reduce((acc, stat) => {
+    acc[stat.role] = stat._count
+    return acc
+  }, {} as Record<string, number>)
+
+  // Calculate pagination info
+  const totalPages = Math.ceil(totalCount / limit)
+  const hasNextPage = page < totalPages
+  const hasPrevPage = page > 1
+
+  return {
+    users: usersWithMetrics,
+    pagination: {
+      page,
+      limit,
+      totalCount,
+      totalPages,
+      hasNextPage,
+      hasPrevPage
+    },
+    filters: {
+      role,
+      search,
+      xpMin,
+      xpMax,
+      lastActiveFrom,
+      lastActiveTo,
+      status
+    },
+    stats: {
+      roleCounts,
+      totalUsers: totalCount
+    }
+  }
+}
 
 // PATCH endpoint for bulk operations
 export const PATCH = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
@@ -316,6 +444,48 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
         }
 
         result = { count: userIds.length }
+        break
+
+      case 'toggleStatus':
+        if (!data?.action || !['deactivate', 'reactivate'].includes(data.action)) {
+          return NextResponse.json(
+            { message: 'Valid action (deactivate/reactivate) is required for toggleStatus' },
+            { status: 400 }
+          )
+        }
+
+        const isDeactivating = data.action === 'deactivate'
+
+        // For deactivation, set lastActiveAt to a very old date to mark as inactive
+        // For reactivation, set lastActiveAt to current time to mark as active
+        const lastActiveAt = isDeactivating
+          ? new Date('2000-01-01') // Very old date to indicate deactivated
+          : new Date() // Current time to indicate reactivated
+
+        result = await prisma.user.updateMany({
+          where: { id: { in: userIds } },
+          data: {
+            lastActiveAt,
+            updatedAt: new Date()
+          }
+        })
+
+        // Create admin action audit for each user
+        for (const userId of userIds) {
+          await prisma.adminAction.create({
+            data: {
+              adminId: request.user.id,
+              action: isDeactivating ? 'USER_DEACTIVATED' : 'USER_REACTIVATED',
+              targetType: 'user',
+              targetId: userId,
+              details: {
+                action: data.action,
+                reason: data.reason,
+                timestamp: new Date().toISOString()
+              }
+            }
+          })
+        }
         break
 
       default:

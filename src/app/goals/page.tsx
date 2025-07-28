@@ -22,6 +22,18 @@ import {
   AlertTriangle
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { getTaskType } from '@/lib/task-types'
+import type { TaskTypeId } from '@/types/task-types'
+
+// Helper function to get task type display name
+const getTaskTypeDisplayName = (taskType: string): string => {
+  try {
+    const taskConfig = getTaskType(taskType as TaskTypeId)
+    return taskConfig.name
+  } catch (error) {
+    return `Task ${taskType}`
+  }
+}
 
 export default function GoalsPage() {
   const { user, loading } = useAuth()
@@ -212,7 +224,7 @@ export default function GoalsPage() {
                               <span className="text-sm font-bold text-primary">{goal.taskType}</span>
                             </div>
                             <div>
-                              <p className="font-medium text-sm">Task Type {goal.taskType}</p>
+                              <p className="font-medium text-sm">{getTaskTypeDisplayName(goal.taskType)}</p>
                               <p className="text-xs text-muted-foreground">
                                 {goal.current} of {goal.maximum} completed
                               </p>

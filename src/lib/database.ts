@@ -119,6 +119,32 @@ export const userService = {
       return null
     }
     return data
+  },
+
+  async findTopUsers(limit: number = 10, offset: number = 0): Promise<User[]> {
+    const { data, error } = await supabaseClient
+      .from('User')
+      .select('*')
+      .order('totalXp', { ascending: false })
+      .range(offset, offset + limit - 1)
+
+    if (error) {
+      console.error('Error finding top users:', error)
+      return []
+    }
+    return data || []
+  },
+
+  async countAll(): Promise<number> {
+    const { count, error } = await supabaseClient
+      .from('User')
+      .select('*', { count: 'exact', head: true })
+
+    if (error) {
+      console.error('Error counting users:', error)
+      return 0
+    }
+    return count || 0
   }
 }
 
@@ -177,9 +203,28 @@ export const submissionService = {
       `)
       .order('createdAt', { ascending: false })
       .limit(limit)
-    
+
     if (error) {
       console.error('Error finding submissions with user:', error)
+      return []
+    }
+    return data || []
+  },
+
+  async findManyByUser(userId: string, limit: number = 20): Promise<any[]> {
+    const { data, error } = await supabaseClient
+      .from('Submission')
+      .select(`
+        *,
+        user:User(username),
+        peerReviews:PeerReview(*)
+      `)
+      .eq('userId', userId)
+      .order('createdAt', { ascending: false })
+      .limit(limit)
+
+    if (error) {
+      console.error('Error finding submissions by user:', error)
       return []
     }
     return data || []
@@ -371,7 +416,7 @@ export const weeklyStatsService = {
     return data || []
   },
 
-  async findLeaderboard(weekNumber: number, limit: number = 10): Promise<any[]> {
+  async findLeaderboard(weekNumber: number, limit: number = 10, offset: number = 0): Promise<any[]> {
     const { data, error } = await supabaseClient
       .from('WeeklyStats')
       .select(`
@@ -380,12 +425,25 @@ export const weeklyStatsService = {
       `)
       .eq('weekNumber', weekNumber)
       .order('xpTotal', { ascending: false })
-      .limit(limit)
+      .range(offset, offset + limit - 1)
 
     if (error) {
       console.error('Error finding leaderboard:', error)
       return []
     }
     return data || []
+  },
+
+  async countByWeek(weekNumber: number): Promise<number> {
+    const { count, error } = await supabaseClient
+      .from('WeeklyStats')
+      .select('*', { count: 'exact', head: true })
+      .eq('weekNumber', weekNumber)
+
+    if (error) {
+      console.error('Error counting weekly stats:', error)
+      return 0
+    }
+    return count || 0
   }
 }

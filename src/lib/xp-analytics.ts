@@ -194,6 +194,10 @@ export class XpAnalyticsService {
           case 'STREAK_BONUS':
             data.streaks++
             break
+          case 'ADMIN_ADJUSTMENT':
+            // Legacy data and admin adjustments - count as submissions for trend display
+            data.submissions++
+            break
         }
       })
 
@@ -263,7 +267,7 @@ export class XpAnalyticsService {
       })
 
       // Build goal progress array
-      return Object.entries(taskTypeLimits).map(([taskType, limits]) => {
+      const goalProgressArray = Object.entries(taskTypeLimits).map(([taskType, limits]) => {
         const progress = taskTypeProgress.get(taskType) || { count: 0, xp: 0 }
         return {
           taskType,
@@ -272,6 +276,8 @@ export class XpAnalyticsService {
           percentage: Math.round((progress.count / limits.max) * 100)
         }
       })
+
+      return goalProgressArray
 
     } catch (error) {
       console.error('Error in getGoalProgress:', error)
@@ -286,22 +292,57 @@ export class XpAnalyticsService {
     try {
       const currentWeek = this.getCurrentWeekNumber()
 
-      // Get weekly rank
-      const { data: weeklyRankData, error: weeklyError } = await supabase
-        .rpc('get_weekly_rank', { user_id: userId, week_number: currentWeek })
+      // Get user's current XP
+      const { data: user, error: userError } = await supabase
+        .from('User')
+        .select('totalXp, currentWeekXp')
+        .eq('id', userId)
+        .single()
 
-      // Get all-time rank
-      const { data: allTimeRankData, error: allTimeError } = await supabase
-        .rpc('get_alltime_rank', { user_id: userId })
+      if (userError || !user) {
+        console.error('Error fetching user data for rank:', userError)
+        return { weekly: 0, allTime: 0, totalUsers: 0 }
+      }
 
-      // Get total users count
+
+
+      // Get all-time rank by counting users with higher totalXp
+      const { count: allTimeRank, error: allTimeError } = await supabase
+        .from('User')
+        .select('*', { count: 'exact', head: true })
+        .gt('totalXp', user.totalXp)
+        .neq('role', 'ADMIN')
+
+      // Get weekly rank from WeeklyStats
+      const { data: userWeeklyStats, error: weeklyStatsError } = await supabase
+        .from('WeeklyStats')
+        .select('xpTotal')
+        .eq('userId', userId)
+        .eq('weekNumber', currentWeek)
+        .single()
+
+      let weeklyRank = 0
+      if (!weeklyStatsError && userWeeklyStats) {
+        const { count: weeklyRankCount, error: weeklyRankError } = await supabase
+          .from('WeeklyStats')
+          .select('*', { count: 'exact', head: true })
+          .eq('weekNumber', currentWeek)
+          .gt('xpTotal', userWeeklyStats.xpTotal)
+
+        if (!weeklyRankError) {
+          weeklyRank = (weeklyRankCount || 0) + 1
+        }
+      }
+
+      // Get total users count (excluding admins)
       const { count: totalUsers } = await supabase
         .from('User')
         .select('*', { count: 'exact', head: true })
+        .neq('role', 'ADMIN')
 
       return {
-        weekly: weeklyRankData || 0,
-        allTime: allTimeRankData || 0,
+        weekly: weeklyRank,
+        allTime: (allTimeRank || 0) + 1, // Add 1 because count gives users above
         totalUsers: totalUsers || 0
       }
     } catch (error) {

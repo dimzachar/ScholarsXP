@@ -8,12 +8,10 @@ interface RouteParams {
   }
 }
 
-export const POST = withPermission('admin')(async (
-  request: AuthenticatedRequest,
-  { params }: RouteParams
-) => {
+export const POST = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
-    const submissionId = params.id
+    const url = new URL(request.url)
+    const submissionId = url.pathname.split('/').slice(-2)[0] // Extract submission ID from path
 
     if (!submissionId) {
       return NextResponse.json(
@@ -47,12 +45,10 @@ export const POST = withPermission('admin')(async (
 })
 
 // Allow reviewers to view consensus results
-export const GET = withPermission('review_content')(async (
-  request: AuthenticatedRequest,
-  { params }: RouteParams
-) => {
+export const GET = withPermission('review_content')(async (request: AuthenticatedRequest) => {
   try {
-    const submissionId = params.id
+    const url = new URL(request.url)
+    const submissionId = url.pathname.split('/').slice(-2)[0] // Extract submission ID from path
 
     // Import the secure client factory
     const { createAuthenticatedClient } = await import('@/lib/supabase-server')

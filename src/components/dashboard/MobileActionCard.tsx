@@ -3,7 +3,8 @@
 import React from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { useResponsiveLayout, TOUCH_TARGET_SIZE } from '@/hooks/useResponsiveLayout'
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout'
+import { getResponsiveTouchTarget, ACCESSIBILITY_HELPERS } from '@/lib/touch-targets'
 import { cn } from '@/lib/utils'
 import { LucideIcon, ChevronRight } from 'lucide-react'
 
@@ -101,6 +102,9 @@ export function MobileActionCard({
   const colors = colorConfig[data.color || 'primary']
   const isMobileLayout = effectiveVariant === 'mobile'
 
+  // Get appropriate touch target class
+  const touchTargetClass = getResponsiveTouchTarget('button', isMobile, isTablet)
+
   const handleClick = () => {
     if (data.disabled) return
     
@@ -112,12 +116,14 @@ export function MobileActionCard({
   }
 
   return (
-    <Card 
+    <Card
       className={cn(
         'group relative overflow-hidden border-0 transition-all duration-300 cursor-pointer',
         colors.background,
         colors.hoverBackground,
         colors.borderColor,
+        touchTargetClass, // Ensure proper touch target size
+        ACCESSIBILITY_HELPERS.touchAccessible, // Add accessibility helpers
         !data.disabled && 'hover:shadow-xl',
         isMobileLayout && 'hover:scale-[1.02]',
         !isMobileLayout && 'hover:scale-105',

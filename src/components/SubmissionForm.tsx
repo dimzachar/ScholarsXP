@@ -17,7 +17,9 @@ import {
   Loader2,
   ExternalLink,
   Twitter,
-  FileText
+  FileText,
+  MessageSquare,
+  Briefcase
 } from 'lucide-react'
 
 export default function SubmissionForm() {
@@ -43,7 +45,7 @@ export default function SubmissionForm() {
     }
 
     if (!platform) {
-      setMessage('Only Twitter/X and Medium links are supported')
+      setMessage('Only Twitter/X, Medium, Reddit, Notion, and LinkedIn links are supported')
       setIsSubmitting(false)
       return
     }
@@ -82,6 +84,9 @@ export default function SubmissionForm() {
   const getPlatformIcon = () => {
     if (platform === 'Twitter') return <Twitter className="h-4 w-4" />
     if (platform === 'Medium') return <FileText className="h-4 w-4" />
+    if (platform === 'Reddit') return <MessageSquare className="h-4 w-4" />
+    if (platform === 'Notion') return <FileText className="h-4 w-4" />
+    if (platform === 'LinkedIn') return <Briefcase className="h-4 w-4" />
     return <ExternalLink className="h-4 w-4" />
   }
 
@@ -91,14 +96,18 @@ export default function SubmissionForm() {
         <MobileInput
           type="url"
           label="Content URL"
-          placeholder="https://twitter.com/... or https://medium.com/..."
+          placeholder="https://twitter.com/... or https://reddit.com/... or https://medium.com/..."
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           disabled={isSubmitting}
-          error={url && !platform ? "Only Twitter/X and Medium links are supported" : undefined}
+          error={url && !platform ? "Only Twitter/X, Medium, Reddit, Notion, and LinkedIn links are supported" : undefined}
           badge={platform ? {
             text: platform,
-            icon: platform === 'Twitter' ? Twitter : platform === 'Medium' ? FileText : ExternalLink,
+            icon: platform === 'Twitter' ? Twitter :
+                  platform === 'Medium' ? FileText :
+                  platform === 'Reddit' ? MessageSquare :
+                  platform === 'Notion' ? FileText :
+                  platform === 'LinkedIn' ? Briefcase : ExternalLink,
             variant: 'outline'
           } : undefined}
           mobileOptimized={true}
@@ -138,15 +147,15 @@ export default function SubmissionForm() {
         <div className={`flex items-center gap-4 ${isMobile ? 'p-4' : 'p-5'} rounded-xl border-2 shadow-sm ${
           message.includes('successfully')
             ? 'bg-primary/10 border-primary/30 text-primary'
-            : 'bg-destructive/10 border-destructive/30 text-destructive'
+            : 'bg-red-50 border-red-300 text-red-800 dark:bg-destructive/10 dark:border-destructive/30 dark:text-destructive'
         }`}>
           {message.includes('successfully') ? (
             <div className={`${isMobile ? 'p-1.5' : 'p-2'} bg-primary rounded-full`}>
               <CheckCircle className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'} text-primary-foreground`} />
             </div>
           ) : (
-            <div className={`${isMobile ? 'p-1.5' : 'p-2'} bg-destructive rounded-full`}>
-              <AlertCircle className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'} text-destructive-foreground`} />
+            <div className={`${isMobile ? 'p-1.5' : 'p-2'} bg-red-600 dark:bg-destructive rounded-full`}>
+              <AlertCircle className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'} text-white dark:text-destructive-foreground`} />
             </div>
           )}
           <p className={`${isMobile ? 'text-sm' : 'text-base'} font-semibold`}>{message}</p>

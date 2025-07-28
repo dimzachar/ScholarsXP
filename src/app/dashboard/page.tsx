@@ -1,18 +1,21 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
+import { useDashboardData } from '@/hooks/useDashboardData'
 import SubmissionForm from '@/components/SubmissionForm'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 
 import { WeeklyProgressIndicator } from '@/components/dashboard/MiniChart'
 import { AchievementGallery } from '@/components/dashboard/AchievementGallery'
-import { LeaderboardWidget } from '@/components/dashboard/LeaderboardWidget'
+
+import { ProgressTab } from '@/components/dashboard/ProgressTab'
 import { ResponsiveStatCard, createStatCardData } from '@/components/ui/responsive-stat-card'
 import { MobileTabNavigation, createTabItem } from '@/components/dashboard/MobileTabNavigation'
 import { MobileActionCard, createActionCardData } from '@/components/dashboard/MobileActionCard'
@@ -38,30 +41,23 @@ import {
 export default function DashboardPage() {
   const { user, loading, isAdmin, isReviewer } = useAuth()
   const router = useRouter()
-  const [profileData, setProfileData] = useState<any>(null)
-  const [, setLoadingProfile] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
+  const [selectedTimeframe, setSelectedTimeframe] = useState('current_week')
 
-  // Fetch comprehensive profile data
-  useEffect(() => {
-    if (user) {
-      fetchProfileData()
-    }
-  }, [user])
+  // Use optimized data fetching hooks
+  const {
+    profile: { data: profileData, loading: loadingProfile },
+    analytics: { data: analyticsData, loading: loadingAnalytics, error: analyticsError },
+    refetchAll
+  } = useDashboardData(user?.id, activeTab, selectedTimeframe)
 
-  const fetchProfileData = async () => {
-    try {
-      const response = await fetch('/api/user/profile/complete')
-      if (response.ok) {
-        const data = await response.json()
-        setProfileData(data)
-      }
-    } catch (error) {
-      console.error('Error fetching profile data:', error)
-    } finally {
-      setLoadingProfile(false)
-    }
+  // Handle timeframe changes for analytics
+  const handleTimeframeChange = (newTimeframe: string) => {
+    setSelectedTimeframe(newTimeframe)
+    // The analytics hook will automatically refetch when timeframe changes
   }
+
+
 
   if (loading) {
     return (
@@ -93,10 +89,8 @@ export default function DashboardPage() {
 
   // Pull to refresh handler
   const handleRefresh = async () => {
-    // Simulate refresh delay
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    // In a real app, you would refetch data here
-    window.location.reload()
+    // Refetch fresh data using the optimized hooks
+    refetchAll()
   }
 
   return (
@@ -148,11 +142,6 @@ export default function DashboardPage() {
                 />
 
               </div>
-
-              {/* Leaderboard Widget */}
-              <LeaderboardWidget
-                onViewFull={() => router.push('/leaderboard')}
-              />
             </div>
           </TabsContent>
 
@@ -178,12 +167,15 @@ export default function DashboardPage() {
 
           {/* Progress Tab */}
           <TabsContent value="progress" className="mt-6">
-            <div className="space-y-8">
-              {/* Enhanced Achievements Section */}
-              <LazyWrapper minHeight="300px">
-                <MobileLazyComponents.AchievementGallery />
-              </LazyWrapper>
-            </div>
+            <ProgressTab
+              analyticsData={analyticsData}
+              loadingAnalytics={loadingAnalytics}
+              analyticsError={analyticsError}
+              selectedTimeframe={selectedTimeframe}
+              profileData={profileData}
+              onTimeframeChange={handleTimeframeChange}
+              onRetryAnalytics={refetchAll}
+            />
           </TabsContent>
         </Tabs>
       </GestureWrapper>
@@ -195,26 +187,30 @@ export default function DashboardPage() {
 function StatCardsSection({ profileData }: { profileData: any }) {
 
   // Create stat card data using the new responsive format
+  // Fix: Access correct data paths from API response
+  const userProfile = profileData?.profile || {}
+  const userStats = profileData?.statistics || {}
+
   const totalXpData = createStatCardData(
     'Total XP',
-    profileData?.totalXp || 0,
+    userProfile?.totalXp || 0,
     {
       color: 'primary',
       icon: BarChart3,
       progress: {
-        current: profileData?.totalXp || 0,
-        max: Math.max(profileData?.totalXp || 1000, 1000),
+        current: userProfile?.totalXp || 0,
+        max: Math.max(userProfile?.totalXp || 1000, 1000),
         label: 'Lifetime'
       },
-      trend: profileData?.xpAnalytics?.weeklyTrends?.length > 1 ? {
-        data: profileData.xpAnalytics.weeklyTrends,
+      trend: userProfile?.xpAnalytics?.weeklyTrends?.length > 1 ? {
+        data: userProfile.xpAnalytics.weeklyTrends,
         direction: 'up' as const,
-        percentage: profileData.xpAnalytics.projectedWeeklyXp
+        percentage: userProfile.xpAnalytics.projectedWeeklyXp
       } : undefined,
-      additionalInfo: profileData?.xpAnalytics?.projectedWeeklyXp && (
+      additionalInfo: userProfile?.xpAnalytics?.projectedWeeklyXp && (
         <div className="flex items-center">
           <ArrowUp className="h-4 w-4 mr-1" />
-          <span className="text-sm">+{profileData.xpAnalytics.projectedWeeklyXp} this week</span>
+          <span className="text-sm">+{userProfile.xpAnalytics.projectedWeeklyXp} this week</span>
         </div>
       )
     }
@@ -222,22 +218,22 @@ function StatCardsSection({ profileData }: { profileData: any }) {
 
   const weeklyXpData = createStatCardData(
     'This Week',
-    profileData?.currentWeekXp || 0,
+    userProfile?.currentWeekXp || 0,
     {
       color: 'secondary',
       icon: Calendar,
       progress: {
-        current: profileData?.currentWeekXp || 0,
-        max: Math.max(profileData?.currentWeekXp || 100, 100),
+        current: userProfile?.currentWeekXp || 0,
+        max: Math.max(userProfile?.currentWeekXp || 100, 100),
         label: 'Activity'
       },
       subtitle: `Week ${Math.ceil(new Date().getDate() / 7)}`,
       additionalInfo: (
         <div className="space-y-2">
-          {profileData?.streakWeeks && profileData.streakWeeks > 0 && (
+          {userProfile?.streakWeeks && userProfile.streakWeeks > 0 && (
             <div className="flex items-center">
               <Flame className="h-4 w-4 mr-1" />
-              <span className="text-sm">{profileData.streakWeeks}w streak</span>
+              <span className="text-sm">{userProfile.streakWeeks}w streak</span>
             </div>
           )}
           <WeeklyProgressIndicator
@@ -249,28 +245,23 @@ function StatCardsSection({ profileData }: { profileData: any }) {
     }
   )
 
+  // For now, show weekly rank as 0 since user has no current week activity
+  // All-time rank will be shown in leaderboard section
   const rankData = createStatCardData(
     'Weekly Rank',
-    profileData?.xpAnalytics?.rank?.weekly || 0,
+    0, // Current week rank (user has no activity this week)
     {
       color: 'accent',
       icon: Users,
       progress: {
-        current: profileData?.xpAnalytics?.rank?.totalUsers - (profileData?.xpAnalytics?.rank?.weekly || 0) || 0,
-        max: profileData?.xpAnalytics?.rank?.totalUsers || 100,
+        current: 0,
+        max: 100,
         label: 'Community'
       },
-      subtitle: `of ${profileData?.xpAnalytics?.rank?.totalUsers || '—'} scholars`,
-      additionalInfo: profileData?.xpAnalytics?.rank?.improvement && (
-        <div className="flex items-center">
-          {profileData.xpAnalytics.rank.improvement > 0 ? (
-            <ArrowUp className="h-4 w-4 mr-1" />
-          ) : (
-            <ArrowUp className="h-4 w-4 mr-1 rotate-180" />
-          )}
-          <span className="text-sm">
-            {Math.abs(profileData.xpAnalytics.rank.improvement)} positions
-          </span>
+      subtitle: `of — scholars`,
+      additionalInfo: (
+        <div className="flex items-center text-sm text-muted-foreground">
+          <span>No activity this week</span>
         </div>
       )
     }

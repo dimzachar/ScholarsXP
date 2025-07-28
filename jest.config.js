@@ -30,7 +30,7 @@ const customJestConfig = {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(isows|@supabase)/)',
+    'node_modules/(?!(isows|@supabase|@testing-library)/)',
   ],
   testMatch: [
     '<rootDir>/__tests__/**/*.test.{js,jsx,ts,tsx}',

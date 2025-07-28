@@ -36,21 +36,32 @@ export const GET = withPermission('review_content')(async (request: Authenticate
     if (error) {
       console.error('Error fetching pending submissions:', error)
       return NextResponse.json({
-        error: 'Failed to fetch pending submissions',
-        details: error.message
+        success: false,
+        error: {
+          error: 'Failed to fetch pending submissions',
+          code: 'DATABASE_ERROR',
+          details: error.message
+        }
       }, { status: 500 })
     }
 
     return NextResponse.json({
-      submissions: submissions || []
+      success: true,
+      data: {
+        submissions: submissions || []
+      }
     })
 
   } catch (error) {
     console.error('Error fetching pending reviews:', error)
-    return NextResponse.json(
-      { message: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({
+      success: false,
+      error: {
+        error: 'Internal server error',
+        code: 'INTERNAL_ERROR',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }
+    }, { status: 500 })
   }
 })
 

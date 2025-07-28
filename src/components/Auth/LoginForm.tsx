@@ -29,7 +29,7 @@ export default function LoginForm({ redirectTo = '/dashboard' }: LoginFormProps)
             input: 'auth-input',
           },
         }}
-        providers={['google']}
+        providers={['discord']}
         redirectTo={`${window.location.origin}${redirectTo}`}
         onlyThirdPartyProviders
         showLinks={false}

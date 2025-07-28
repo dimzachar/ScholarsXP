@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma'
+import { supabaseClient } from '@/lib/supabase'
 
 export interface Notification {
   id: string
@@ -16,6 +16,9 @@ export enum NotificationType {
   REVIEW_ASSIGNED = 'REVIEW_ASSIGNED',
   REVIEW_COMPLETED = 'REVIEW_COMPLETED',
   SUBMISSION_PROCESSED = 'SUBMISSION_PROCESSED',
+  SUBMISSION_PROCESSING = 'SUBMISSION_PROCESSING',
+  SUBMISSION_APPROVED = 'SUBMISSION_APPROVED',
+  SUBMISSION_REJECTED = 'SUBMISSION_REJECTED',
   WEEKLY_SUMMARY = 'WEEKLY_SUMMARY',
   STREAK_ACHIEVED = 'STREAK_ACHIEVED',
   PENALTY_APPLIED = 'PENALTY_APPLIED',
@@ -30,16 +33,23 @@ export async function createNotification(
   data?: any
 ): Promise<Notification> {
   try {
-    const notification = await prisma.notification.create({
-      data: {
+    const { data: notification, error } = await supabaseClient
+      .from('notifications')
+      .insert({
         userId,
         type,
         title,
         message,
         data,
         read: false
-      }
-    })
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error creating notification:', error)
+      throw new Error('Failed to create notification')
+    }
 
     console.log(`📧 Notification created for user ${userId}: ${title}`)
 
@@ -51,7 +61,7 @@ export async function createNotification(
       message: notification.message,
       data: notification.data,
       read: notification.read,
-      createdAt: notification.createdAt
+      createdAt: new Date(notification.createdAt)
     }
   } catch (error) {
     console.error('Error creating notification:', error)
@@ -66,23 +76,27 @@ export async function getUserNotifications(
   unreadOnly: boolean = false
 ): Promise<{ notifications: Notification[], total: number }> {
   try {
-    const where = {
-      userId,
-      ...(unreadOnly && { read: false })
+    // Build the query
+    let query = supabaseClient
+      .from('notifications')
+      .select('*', { count: 'exact' })
+      .eq('userId', userId)
+
+    if (unreadOnly) {
+      query = query.eq('read', false)
     }
 
-    const [notifications, total] = await Promise.all([
-      prisma.notification.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit
-      }),
-      prisma.notification.count({ where })
-    ])
+    const { data: notifications, error, count } = await query
+      .order('createdAt', { ascending: false })
+      .range((page - 1) * limit, page * limit - 1)
+
+    if (error) {
+      console.error('Error fetching user notifications:', error)
+      throw new Error('Failed to fetch notifications')
+    }
 
     return {
-      notifications: notifications.map(n => ({
+      notifications: (notifications || []).map(n => ({
         id: n.id,
         userId: n.userId,
         type: n.type as NotificationType,
@@ -90,9 +104,9 @@ export async function getUserNotifications(
         message: n.message,
         data: n.data,
         read: n.read,
-        createdAt: n.createdAt
+        createdAt: new Date(n.createdAt)
       })),
-      total
+      total: count || 0
     }
   } catch (error) {
     console.error('Error fetching user notifications:', error)
@@ -102,19 +116,22 @@ export async function getUserNotifications(
 
 export async function markNotificationAsRead(userId: string, notificationId: string): Promise<boolean> {
   try {
-    const result = await prisma.notification.updateMany({
-      where: {
-        id: notificationId,
-        userId,
-        read: false // Only update if not already read
-      },
-      data: {
+    const { error, count } = await supabaseClient
+      .from('notifications')
+      .update({
         read: true,
-        updatedAt: new Date()
-      }
-    })
+        updatedAt: new Date().toISOString()
+      })
+      .eq('id', notificationId)
+      .eq('userId', userId)
+      .eq('read', false) // Only update if not already read
 
-    return result.count > 0
+    if (error) {
+      console.error('Error marking notification as read:', error)
+      return false
+    }
+
+    return (count || 0) > 0
   } catch (error) {
     console.error('Error marking notification as read:', error)
     return false
@@ -123,18 +140,21 @@ export async function markNotificationAsRead(userId: string, notificationId: str
 
 export async function markAllNotificationsAsRead(userId: string): Promise<number> {
   try {
-    const result = await prisma.notification.updateMany({
-      where: {
-        userId,
-        read: false
-      },
-      data: {
+    const { error, count } = await supabaseClient
+      .from('notifications')
+      .update({
         read: true,
-        updatedAt: new Date()
-      }
-    })
+        updatedAt: new Date().toISOString()
+      })
+      .eq('userId', userId)
+      .eq('read', false)
 
-    return result.count
+    if (error) {
+      console.error('Error marking all notifications as read:', error)
+      return 0
+    }
+
+    return count || 0
   } catch (error) {
     console.error('Error marking all notifications as read:', error)
     return 0
@@ -143,17 +163,41 @@ export async function markAllNotificationsAsRead(userId: string): Promise<number
 
 export async function getUnreadCount(userId: string): Promise<number> {
   try {
-    const count = await prisma.notification.count({
-      where: {
-        userId,
-        read: false
-      }
-    })
+    const { count, error } = await supabaseClient
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('userId', userId)
+      .eq('read', false)
 
-    return count
+    if (error) {
+      console.error('Error getting unread count:', error)
+      return 0
+    }
+
+    return count || 0
   } catch (error) {
     console.error('Error getting unread count:', error)
     return 0
+  }
+}
+
+export async function deleteNotification(userId: string, notificationId: string): Promise<boolean> {
+  try {
+    const { error, count } = await supabaseClient
+      .from('notifications')
+      .delete()
+      .eq('id', notificationId)
+      .eq('userId', userId) // Ensure user can only delete their own notifications
+
+    if (error) {
+      console.error('Error deleting notification:', error)
+      return false
+    }
+
+    return (count || 0) > 0
+  } catch (error) {
+    console.error('Error deleting notification:', error)
+    return false
   }
 }
 
@@ -163,7 +207,7 @@ export async function notifyXPAwarded(userId: string, xp: number, submissionUrl:
     userId,
     NotificationType.XP_AWARDED,
     `🎉 You earned ${xp} XP!`,
-    `Your submission has been evaluated and you've been awarded ${xp} XP.`,
+    `Congratulations! You've been awarded ${xp} XP for your submission.`,
     { xp, submissionUrl }
   )
 }
@@ -261,3 +305,27 @@ export async function notifyAdminMessage(userId: string, title: string, message:
   )
 }
 
+// Cleanup function for old notifications (90 days for read notifications as per requirements)
+export async function cleanupOldNotifications(): Promise<number> {
+  try {
+    const ninetyDaysAgo = new Date()
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+
+    const { error, count } = await supabaseClient
+      .from('notifications')
+      .delete()
+      .eq('read', true)
+      .lt('createdAt', ninetyDaysAgo.toISOString())
+
+    if (error) {
+      console.error('Error cleaning up old notifications:', error)
+      return 0
+    }
+
+    console.log(`🧹 Cleaned up ${count || 0} old read notifications`)
+    return count || 0
+  } catch (error) {
+    console.error('Error cleaning up old notifications:', error)
+    return 0
+  }
+}

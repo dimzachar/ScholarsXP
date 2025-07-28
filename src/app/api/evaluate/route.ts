@@ -1,99 +1,101 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { evaluateContent, fetchContentFromUrl } from '@/lib/ai-evaluator'
+import { withErrorHandling, createSuccessResponse, validateRequiredFields } from '@/lib/api-middleware'
+import { ValidationError, NotFoundError, BusinessLogicError } from '@/lib/api-error-handler'
 
-export async function POST(request: NextRequest) {
-  try {
-    const { submissionId } = await request.json()
+export const POST = withErrorHandling(async (request: NextRequest) => {
+  const { submissionId } = await request.json()
 
-    if (!submissionId) {
-      return NextResponse.json({ message: 'Submission ID is required' }, { status: 400 })
-    }
+  validateRequiredFields({ submissionId }, ['submissionId'])
 
-    // Find the submission
-    const submission = await prisma.submission.findUnique({
-      where: { id: submissionId }
+  // Find the submission
+  const submission = await prisma.submission.findUnique({
+    where: { id: submissionId }
+  })
+
+  if (!submission) {
+    throw new NotFoundError('Submission')
+  }
+
+  if (submission.status !== 'PENDING') {
+    throw new BusinessLogicError('Submission already processed', {
+      currentStatus: submission.status,
+      expectedStatus: 'PENDING'
     })
+  }
 
-    if (!submission) {
-      return NextResponse.json({ message: 'Submission not found' }, { status: 404 })
-    }
+  // Skip AI evaluation for Twitter content - it should use peer review only
+  if (submission.platform === 'Twitter') {
+    throw new BusinessLogicError(
+      'Twitter content uses peer review only - AI evaluation is disabled for this platform',
+      { platform: submission.platform }
+    )
+  }
 
-    if (submission.status !== 'PENDING') {
-      return NextResponse.json({ message: 'Submission already processed' }, { status: 400 })
-    }
+  try {
+    // Fetch content from URL
+    const contentData = await fetchContentFromUrl(submission.url)
 
-    try {
-      // Fetch content from URL
-      const contentData = await fetchContentFromUrl(submission.url)
-
-      // Validate ScholarXP hashtag
-      if (!contentData.content.includes('#ScholarXP')) {
-        await prisma.submission.update({
-          where: { id: submissionId },
-          data: {
-            status: 'REJECTED',
-            aiXp: 0
-          }
-        })
-
-        return NextResponse.json({
-          message: 'Content rejected: Missing #ScholarXP hashtag',
-          status: 'REJECTED'
-        })
-      }
-
-      // Evaluate content with AI
-      const analysis = await evaluateContent(contentData)
-
-      // Update submission with AI evaluation
-      const updatedSubmission = await prisma.submission.update({
-        where: { id: submissionId },
-        data: {
-          taskTypes: analysis.taskTypes,
-          aiXp: analysis.baseXp,
-          originalityScore: analysis.originalityScore,
-          status: 'AI_REVIEWED'
-        }
-      })
-
-      // TODO: Queue peer review assignment
-      console.log(`Queuing peer review for submission ${submissionId}`)
-
-      return NextResponse.json({
-        message: 'Content evaluated successfully',
-        submission: updatedSubmission,
-        analysis: {
-          reasoning: analysis.reasoning,
-          taskTypes: analysis.taskTypes,
-          baseXp: analysis.baseXp,
-          originalityScore: analysis.originalityScore
-        }
-      })
-
-    } catch (evaluationError) {
-      console.error('Error during evaluation:', evaluationError)
-      
-      // Mark submission as flagged for manual review
+    // Validate ScholarXP hashtag
+    if (!contentData.content.includes('#ScholarXP')) {
       await prisma.submission.update({
         where: { id: submissionId },
         data: {
-          status: 'FLAGGED'
+          status: 'REJECTED',
+          aiXp: 0
         }
       })
 
-      return NextResponse.json({
-        message: 'Content flagged for manual review due to evaluation error',
-        status: 'FLAGGED'
+      return createSuccessResponse({
+        message: 'Content rejected: Missing #ScholarXP hashtag',
+        status: 'REJECTED'
       })
     }
 
-  } catch (error) {
-    console.error('Error in evaluation endpoint:', error)
-    return NextResponse.json(
-      { message: 'Internal server error' },
-      { status: 500 }
-    )
+    // Evaluate content with AI
+    const analysis = await evaluateContent(contentData)
+
+    // Update submission with AI evaluation
+    const updatedSubmission = await prisma.submission.update({
+      where: { id: submissionId },
+      data: {
+        taskTypes: analysis.taskTypes,
+        aiXp: analysis.baseXp,
+        originalityScore: analysis.originalityScore,
+        status: 'AI_REVIEWED'
+      }
+    })
+
+    // TODO: Queue peer review assignment
+    console.log(`Queuing peer review for submission ${submissionId}`)
+
+    return createSuccessResponse({
+      message: 'Content evaluated successfully',
+      submission: updatedSubmission,
+      analysis: {
+        reasoning: analysis.reasoning,
+        taskTypes: analysis.taskTypes,
+        baseXp: analysis.baseXp,
+        originalityScore: analysis.originalityScore
+      }
+    })
+
+  } catch (evaluationError) {
+    console.error('Error during evaluation:', evaluationError)
+
+    // Mark submission as flagged for manual review
+    await prisma.submission.update({
+      where: { id: submissionId },
+      data: {
+        status: 'FLAGGED'
+      }
+    })
+
+    return createSuccessResponse({
+      message: 'Content flagged for manual review due to evaluation error',
+      status: 'FLAGGED'
+    })
   }
-}
+})
 

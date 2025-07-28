@@ -141,6 +141,38 @@ export function LeaderboardWidget({
   const showCurrentUser = currentUser && !topUsers.find(u => u.id === currentUser.id)
   const hasData = users.length > 0
 
+  const renderElements = () => {
+    if (!hasData) {
+      return (
+        <div className="text-center py-8">
+          <Trophy className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground mb-2">No leaderboard data yet</p>
+          <p className="text-xs text-muted-foreground/70">
+            Start submitting content to see rankings!
+          </p>
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-2">
+        {topUsers.map((user, index) => (
+          <LeaderboardUserRow key={user.id} user={user} position={index + 1} />
+        ))}
+        {showCurrentUser && currentUser && (
+          <React.Fragment key={`current-user-section-${currentUser.id}`}>
+            <div key={`current-user-divider-${currentUser.id}`} className="flex items-center justify-center py-2">
+              <div className="flex-1 border-t border-dashed border-muted-foreground/30" />
+              <span className="px-3 text-xs text-muted-foreground">Your Position</span>
+              <div className="flex-1 border-t border-dashed border-muted-foreground/30" />
+            </div>
+            <LeaderboardUserRow key={`current-user-row-${currentUser.id}`} user={currentUser} position={currentUser.rank} />
+          </React.Fragment>
+        )}
+      </div>
+    )
+  }
+
   return (
     <Card className={cn("", className)}>
       <CardHeader className="pb-3">
@@ -156,35 +188,7 @@ export function LeaderboardWidget({
       </CardHeader>
 
       <CardContent className="space-y-2">
-        {hasData ? (
-          <>
-            {/* Top 5 Users */}
-            {topUsers.map((user, index) => (
-              <LeaderboardUserRow key={user.id} user={user} position={index + 1} />
-            ))}
-
-            {/* Current User (if not in top 5) */}
-            {showCurrentUser && (
-              <>
-                <div className="flex items-center justify-center py-2">
-                  <div className="flex-1 border-t border-dashed border-muted-foreground/30" />
-                  <span className="px-3 text-xs text-muted-foreground">Your Position</span>
-                  <div className="flex-1 border-t border-dashed border-muted-foreground/30" />
-                </div>
-                <LeaderboardUserRow user={currentUser} position={currentUser.rank} />
-              </>
-            )}
-          </>
-        ) : (
-          /* Empty State */
-          <div className="text-center py-8">
-            <Trophy className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground mb-2">No leaderboard data yet</p>
-            <p className="text-xs text-muted-foreground/70">
-              Start submitting content to see rankings!
-            </p>
-          </div>
-        )}
+        {renderElements()}
 
         {/* View Full Leaderboard Button */}
         <div className="pt-3 border-t">

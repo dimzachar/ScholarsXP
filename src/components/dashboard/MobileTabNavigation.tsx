@@ -54,9 +54,9 @@ export function MobileTabNavigation({ tabs, className }: MobileTabNavigationProp
             value={tab.value}
             className={cn(
               'flex items-center gap-2 transition-all duration-200',
-              // Touch target sizing for mobile
-              isMobile && `min-h-[${TOUCH_TARGET_SIZE.minimum}px]`,
-              isTablet && `min-h-[${TOUCH_TARGET_SIZE.comfortable}px]`,
+              // Touch target sizing for mobile - using static Tailwind classes
+              isMobile && 'min-h-11', // 44px minimum touch target
+              isTablet && 'min-h-12', // 48px comfortable touch target
               // Text sizing adjustments
               isMobile && 'text-sm px-3 py-2',
               isTablet && 'text-sm px-4 py-3',

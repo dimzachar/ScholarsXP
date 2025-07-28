@@ -17,7 +17,8 @@ import {
   Users,
   AlertCircle,
   CheckCircle,
-  Clock
+  Clock,
+  Trash2
 } from 'lucide-react'
 
 interface Notification {
@@ -37,6 +38,9 @@ export default function NotificationCenter() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [lastFetchTime, setLastFetchTime] = useState<number>(0)
+  const [subscriptionStatus, setSubscriptionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected')
+  const [retryCount, setRetryCount] = useState(0)
 
   // Fallback mobile detection if hook fails
   const isMobile = responsiveLayout?.isMobile ?? (typeof window !== 'undefined' && window.innerWidth < 768)
@@ -51,58 +55,118 @@ export default function NotificationCenter() {
   })
 
   useEffect(() => {
+    let channel: any = null
+
+    const setupSubscription = async () => {
+      if (!user) return
+
+      if (notifications.length === 0) {
+        await fetchNotifications()
+      }
+
+      console.log('🔗 Setting up notification subscription for user:', user.id)
+
+      channel = supabase
+        .channel('realtime-notifications')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `userId=eq.${user.id}`,
+          },
+          (payload) => {
+            console.log('📨 New notification received!', payload.new)
+            const newNotification = payload.new as Notification
+            setNotifications((prev) => {
+              // Check if notification already exists to prevent duplicates
+              const exists = prev.some(n => n.id === newNotification.id)
+              if (exists) return prev
+              return [newNotification, ...prev]
+            })
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'notifications',
+            filter: `userId=eq.${user.id}`,
+          },
+          (payload) => {
+            console.log('📝 Notification updated!', payload.new)
+            const updatedNotification = payload.new as Notification
+            setNotifications((prev) => {
+              const updated = prev.map((notif) =>
+                notif.id === updatedNotification.id ? updatedNotification : notif
+              )
+              // Only update state if something actually changed
+              const hasChanges = updated.some((notif, index) =>
+                notif.id === updatedNotification.id &&
+                (notif.read !== prev[index]?.read || notif.message !== prev[index]?.message)
+              )
+              return hasChanges ? updated : prev
+            })
+          }
+        )
+        .subscribe((status) => {
+          console.log('📡 Notification subscription status:', status)
+          setSubscriptionStatus(
+            status === 'SUBSCRIBED' ? 'connected' :
+            status === 'CHANNEL_ERROR' ? 'disconnected' : 'connecting'
+          )
+
+          // Reset retry count on successful connection
+          if (status === 'SUBSCRIBED') {
+            setRetryCount(0)
+          }
+        })
+    }
+
     if (user) {
-      fetchNotifications()
-      setupRealtimeSubscription()
+      setupSubscription()
+    }
+
+    return () => {
+      if (channel) {
+        console.log('🧹 Cleaning up notification subscription for user:', user?.id)
+        supabase.removeChannel(channel)
+        channel = null
+      }
     }
   }, [user])
 
-  const setupRealtimeSubscription = () => {
-    if (!user) return
+  // Retry logic for failed connections
+  useEffect(() => {
+    const maxRetries = 3
 
-    const channel = supabase
-      .channel('realtime-notifications')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `userId=eq.${user.id}`,
-        },
-        (payload) => {
-          console.log('New notification received!', payload.new)
-          const newNotification = payload.new as Notification
-          setNotifications((prev) => [newNotification, ...prev])
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'notifications',
-          filter: `userId=eq.${user.id}`,
-        },
-        (payload) => {
-          console.log('Notification updated!', payload.new)
-          const updatedNotification = payload.new as Notification
-          setNotifications((prev) =>
-            prev.map((notif) =>
-              notif.id === updatedNotification.id ? updatedNotification : notif
-            )
-          )
-        }
-      )
-      .subscribe()
+    if (subscriptionStatus === 'disconnected' && retryCount < maxRetries && user) {
+      const retryDelay = 5000 * Math.pow(2, retryCount) // Exponential backoff: 5s, 10s, 20s
 
-    return () => {
-      supabase.removeChannel(channel)
+      console.log(`🔄 Scheduling retry ${retryCount + 1}/${maxRetries} in ${retryDelay}ms`)
+
+      const retryTimer = setTimeout(() => {
+        console.log(`🔄 Retrying notification subscription (attempt ${retryCount + 1}/${maxRetries})`)
+        setRetryCount(prev => prev + 1)
+        // Force re-subscription by updating a state that triggers the main useEffect
+        setLastFetchTime(Date.now())
+      }, retryDelay)
+
+      return () => clearTimeout(retryTimer)
     }
-  }
+  }, [subscriptionStatus, retryCount, user])
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = async (force: boolean = false) => {
     if (!user) return
+
+    // Debounce: Don't fetch if we fetched recently (unless forced)
+    const now = Date.now()
+    const timeSinceLastFetch = now - lastFetchTime
+    if (!force && timeSinceLastFetch < 5000) { // 5 second debounce
+      return
+    }
 
     setLoading(true)
     try {
@@ -110,6 +174,7 @@ export default function NotificationCenter() {
       if (response.ok) {
         const data = await response.json()
         setNotifications(data.notifications || [])
+        setLastFetchTime(now)
       } else if (response.status === 401) {
         console.log('User not authenticated')
       }
@@ -138,6 +203,25 @@ export default function NotificationCenter() {
       }
     } catch (error) {
       console.error('Error marking notification as read:', error)
+    }
+  }
+
+  const deleteNotification = async (notificationId: string) => {
+    try {
+      const response = await fetch(`/api/notifications/${notificationId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (response.ok) {
+        setNotifications(prev =>
+          prev.filter(notif => notif.id !== notificationId)
+        )
+      }
+    } catch (error) {
+      console.error('Error deleting notification:', error)
     }
   }
 
@@ -186,8 +270,8 @@ export default function NotificationCenter() {
         size="sm"
         onClick={() => setIsOpen(!isOpen)}
         className={`relative ${isMobile ? 'p-2 h-10 w-10' : 'p-2'} touch-manipulation`}
-        aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ''} ${isMobile ? '(Mobile)' : ''}`}
-        title={isMobile ? 'Mobile Notification Center' : 'Notification Center'}
+        aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ''} ${isMobile ? '(Mobile)' : ''} - ${subscriptionStatus}`}
+        title={`${isMobile ? 'Mobile ' : ''}Notification Center - ${subscriptionStatus === 'connected' ? 'Real-time updates active' : subscriptionStatus === 'connecting' ? 'Connecting...' : 'Offline'}`}
       >
         {unreadCount > 0 ? (
           <BellRing className={`${isMobile ? 'h-5 w-5' : 'h-5 w-5'}`} />
@@ -236,7 +320,13 @@ export default function NotificationCenter() {
                   <CardTitle className={`flex items-center gap-2 ${isMobile ? 'text-base' : 'text-lg'}`}>
                     <Bell className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'}`} />
                     Notifications
-                    {isMobile}
+                    <div className={`flex items-center gap-1 ${isMobile ? 'ml-1' : 'ml-2'}`}>
+                      <div className={`w-2 h-2 rounded-full ${
+                        subscriptionStatus === 'connected' ? 'bg-green-500' :
+                        subscriptionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+                        'bg-red-500'
+                      }`} title={`Real-time status: ${subscriptionStatus}`} />
+                    </div>
                   </CardTitle>
                   <Button
                     variant="ghost"
@@ -326,19 +416,34 @@ export default function NotificationCenter() {
                               </div>
                             </div>
 
-                            {!notification.read && (
+                            <div className="flex gap-1">
+                              {!notification.read && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    markAsRead(notification.id)
+                                  }}
+                                  className={`h-auto flex-shrink-0 ${isMobile ? 'p-1 w-6 h-6' : 'p-1'}`}
+                                  title="Mark as read"
+                                >
+                                  <Check className={`${isMobile ? 'h-3 w-3' : 'h-3 w-3'}`} />
+                                </Button>
+                              )}
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  markAsRead(notification.id)
+                                  deleteNotification(notification.id)
                                 }}
-                                className={`h-auto flex-shrink-0 ${isMobile ? 'p-1 w-6 h-6' : 'p-1'}`}
+                                className={`h-auto flex-shrink-0 ${isMobile ? 'p-1 w-6 h-6' : 'p-1'} text-destructive hover:text-destructive`}
+                                title="Delete notification"
                               >
-                                <Check className={`${isMobile ? 'h-3 w-3' : 'h-3 w-3'}`} />
+                                <Trash2 className={`${isMobile ? 'h-3 w-3' : 'h-3 w-3'}`} />
                               </Button>
-                            )}
+                            </div>
                           </div>
                         </div>
                         
@@ -355,11 +460,12 @@ export default function NotificationCenter() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={fetchNotifications}
+                        onClick={() => fetchNotifications(true)}
+                        disabled={loading}
                         className={`w-full ${isMobile ? 'text-xs h-8' : 'text-xs'}`}
                       >
                         <Clock className={`mr-2 ${isMobile ? 'h-3 w-3' : 'h-3 w-3'}`} />
-                        Refresh
+                        {loading ? 'Refreshing...' : 'Refresh'}
                       </Button>
                     </div>
                   </>
