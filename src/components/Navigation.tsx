@@ -10,12 +10,13 @@ import NotificationCenter from '@/components/NotificationCenter'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { MobileBottomNav, createNavItem } from '@/components/navigation/MobileBottomNav'
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout'
-import { Home, Users, Trophy, Settings, Zap, LogOut } from 'lucide-react'
+import { Home, Users, Trophy, Settings, Zap, LogOut, User } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
@@ -166,6 +167,13 @@ export default function Navigation() {
                     </Avatar>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem asChild>
+                      <Link href="/profile">
+                        <User className="mr-2 h-4 w-4" />
+                        My Profile
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleSignOut}>
                       <LogOut className="mr-2 h-4 w-4" />
                       Sign out
