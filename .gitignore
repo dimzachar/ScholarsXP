@@ -141,3 +141,4 @@ tests/memory-leak-test.md
 
 # Supabase Temporary Files (only files that actually exist)
 supabase/.temp/
+.vercel
