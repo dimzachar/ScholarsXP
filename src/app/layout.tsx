@@ -9,6 +9,7 @@ import ConditionalLayout from '@/components/ConditionalLayout'
 import { ThemeProvider } from '@/components/theme-provider'
 // import { PerformanceMonitorProvider } from '@/components/PerformanceMonitorProvider'
 import { Toaster } from 'sonner'
+import { Analytics } from '@vercel/analytics/next';
 
 const oxanium = Oxanium({
   subsets: ['latin'],
@@ -34,21 +35,22 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${oxanium.variable} font-sans`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <AuthErrorBoundary>
-            <AuthProvider>
-              <ConditionalLayout>
-                {children}
-              </ConditionalLayout>
-              <Toaster />
-            </AuthProvider>
-          </AuthErrorBoundary>
-        </ThemeProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <AuthErrorBoundary>
+              <AuthProvider>
+                <ConditionalLayout>
+                  {children}
+                </ConditionalLayout>
+                <Toaster />
+              </AuthProvider>
+            </AuthErrorBoundary>
+          </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   )
