@@ -1,7 +1,6 @@
 export interface ChangelogEntry {
   version: string
   date: string
-  isUnreleased?: boolean
   changes: {
     added?: string[]
     changed?: string[]
@@ -14,9 +13,56 @@ export interface ChangelogEntry {
 // Static changelog data for client-side rendering
 export const staticChangelogData: ChangelogEntry[] = [
   {
-    version: "Unreleased",
+    version: "1.4.0",
+    date: "2025-07-29",
+    changes: {
+      added: [
+        "Comprehensive user account merge system with atomic transaction processing",
+        "Advanced legacy account matching using Discord handles and email addresses",
+        "Real-time merge progress monitoring with detailed status tracking",
+        "Admin merge management interface with history and statistics",
+        "Automated data validation and integrity checking for merge operations",
+        "Background job processing for large-scale merge operations",
+        "Merge conflict resolution with manual override capabilities"
+      ],
+      changed: [
+        "Enhanced authentication context to support merge status tracking",
+        "Improved admin dashboard with merge management capabilities",
+        "Updated user profile system to handle merged account data"
+      ],
+      technical: [
+        "Added UserMergeHistory table for tracking merge operations",
+        "Implemented atomic database functions for safe merge processing",
+        "Created comprehensive merge validation system with rollback capabilities",
+        "Added Discord field support for legacy account identification",
+        "Implemented transaction isolation fixes for concurrent operations"
+      ]
+    }
+  },
+  {
+    version: "1.3.1",
+    date: "2025-07-29",
+    changes: {
+      added: [
+        "User profile page with comprehensive account information display",
+        "Profile navigation link in main menu for easy access"
+      ],
+      fixed: [
+        "Resolved PerformanceDashboard import case sensitivity issues",
+        "Fixed Prisma client generation in Vercel deployment process",
+        "Corrected build configuration for production deployment",
+        "Updated application metadata description for clarity"
+      ],
+      technical: [
+        "Added Vercel deployment configuration with proper build settings",
+        "Improved build process reliability with npx commands",
+        "Enhanced .gitignore patterns for better file management"
+      ]
+    }
+  },
+  {
+    version: "1.3.0",
     date: "2025-07-28",
-    isUnreleased: true,
     changes: {
       added: [
         "Professional changelog system with dedicated /changelog route",

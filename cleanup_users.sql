@@ -27,6 +27,7 @@ SELECT COUNT(*) as remaining_users FROM "User";
 DELETE FROM "Submission" WHERE "userId" NOT IN (SELECT id FROM "User");
 DELETE FROM "XpTransaction" WHERE "userId" NOT IN (SELECT id FROM "User");
 DELETE FROM "PeerReview" WHERE "reviewerId" NOT IN (SELECT id FROM "User");
+DELETE FROM "LegacySubmission";
 
 -- Reset any sequences if needed (PostgreSQL auto-increment counters)
 -- This ensures clean IDs for new users
@@ -39,7 +40,9 @@ SELECT 'Submissions:', COUNT(*) FROM "Submission"
 UNION ALL
 SELECT 'XP Transactions:', COUNT(*) FROM "XpTransaction"
 UNION ALL
-SELECT 'Peer Reviews:', COUNT(*) FROM "PeerReview";
+SELECT 'Peer Reviews:', COUNT(*) FROM "PeerReview"
+UNION ALL
+SELECT 'Legacy Submissions:', COUNT(*) FROM "LegacySubmission";
 
 -- Success message
 SELECT 'Database cleaned successfully! Ready for Discord-only authentication.' as status;

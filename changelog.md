@@ -5,7 +5,47 @@ All notable changes to the Scholars XP platform will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.4.0] - 2025-07-29
+
+### Added
+- Comprehensive user account merge system with atomic transaction processing
+- Advanced legacy account matching using Discord handles and email addresses
+- Real-time merge progress monitoring with detailed status tracking
+- Admin merge management interface with history and statistics
+- Automated data validation and integrity checking for merge operations
+- Background job processing for large-scale merge operations
+- Merge conflict resolution with manual override capabilities
+
+### Changed
+- Enhanced authentication context to support merge status tracking
+- Improved admin dashboard with merge management capabilities
+- Updated user profile system to handle merged account data
+
+### Technical
+- Added UserMergeHistory table for tracking merge operations
+- Implemented atomic database functions for safe merge processing
+- Created comprehensive merge validation system with rollback capabilities
+- Added Discord field support for legacy account identification
+- Implemented transaction isolation fixes for concurrent operations
+
+## [1.3.1] - 2025-07-29
+
+### Added
+- User profile page with comprehensive account information display
+- Profile navigation link in main menu for easy access
+
+### Fixed
+- Resolved PerformanceDashboard import case sensitivity issues
+- Fixed Prisma client generation in Vercel deployment process
+- Corrected build configuration for production deployment
+- Updated application metadata description for clarity
+
+### Technical
+- Added Vercel deployment configuration with proper build settings
+- Improved build process reliability with npx commands
+- Enhanced .gitignore patterns for better file management
+
+## [1.3.0] - 2025-07-28
 
 ### Added
 - Professional changelog system with dedicated `/changelog` route
@@ -16,13 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automation status monitoring with job execution history and error tracking
 - System control endpoints for starting/stopping automation and clearing cache
 
-
 ### Changed
 - Migrated XP trend charts from recharts to shadcn/ui chart components for better interactivity
 - Updated landing page content to focus on peer collaboration rather than AI-driven evaluation
 - Enhanced admin interface with better organization and real-time status updates
 - Improved chart responsiveness and user experience across all devices
-
 
 ### Technical
 - Added automation_jobs table for tracking cron job execution
