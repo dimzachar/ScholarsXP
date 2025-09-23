@@ -56,6 +56,7 @@ export async function middleware(request: NextRequest) {
     // Allowlist essential auth/session endpoints to prevent auth loops
     const rateLimitBypassPaths = [
       '/api/auth/session', // Supabase session cookie persistence
+      '/api/notifications', // Read-heavy; handled by route-level wrapper
     ]
     if (rateLimitBypassPaths.some((p) => pathname.startsWith(p))) {
       return response
