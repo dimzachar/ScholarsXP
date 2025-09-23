@@ -215,7 +215,7 @@ export const RateLimiters = {
   // Admin operations
   admin: createRateLimit({
     windowMs: 60 * 1000, // 1 minute
-    maxRequests: 30,
+    maxRequests: 120,
     keyGenerator: getDefaultKey
   }),
   

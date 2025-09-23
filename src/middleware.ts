@@ -57,6 +57,7 @@ export async function middleware(request: NextRequest) {
     const rateLimitBypassPaths = [
       '/api/auth/session', // Supabase session cookie persistence
       '/api/notifications', // Read-heavy; handled by route-level wrapper
+      '/api/admin', // Admin APIs use route-level rate limiting
     ]
     if (rateLimitBypassPaths.some((p) => pathname.startsWith(p))) {
       return response

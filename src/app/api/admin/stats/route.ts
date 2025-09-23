@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
 import { userService, submissionService, peerReviewService } from '@/lib/database'
 import { prisma } from '@/lib/prisma'
+import { withPermission } from '@/lib/auth-middleware'
+import { withAdminOptimization } from '@/middleware/api-optimization'
 
-export async function GET() {
+const handler = async () => {
   try {
     // Get total users count
     const totalUsers = await userService.count()
@@ -56,4 +58,6 @@ export async function GET() {
     )
   }
 }
+
+export const GET = withAdminOptimization(withPermission('admin_access')(handler))
 

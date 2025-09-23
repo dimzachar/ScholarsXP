@@ -188,8 +188,9 @@ const originalGetHandler = withPermission('admin_access')(async (request: Authen
       where.flagCount = { gt: 0 }
     }
 
-    if (filters.userId) {
-      where.userId = filters.userId
+    const userId = searchParams.get('userId')
+    if (userId) {
+      where.userId = userId
     }
 
     // Build orderBy clause
