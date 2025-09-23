@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -125,7 +125,7 @@ export default function DetailedLeaderboardPage() {
       lastFetchedPage.current = currentPage // Track that we're fetching this page
       fetchDetailedLeaderboard(false) // Initial load
     }
-  }, [user?.id, userProfile?.role, loading]) // Don't include currentPage here
+  }, [user?.id, userProfile?.role, loading, router, currentPage, fetchDetailedLeaderboard, user, userProfile])
 
   // Pagination useEffect - triggers when currentPage changes after initial load
   useEffect(() => {
@@ -134,9 +134,9 @@ export default function DetailedLeaderboardPage() {
       lastFetchedPage.current = currentPage
       fetchDetailedLeaderboard(true) // Pagination
     }
-  }, [currentPage, loading, userProfile, user]) // Include dependencies for proper reactivity
+  }, [currentPage, loading, userProfile, user, fetchDetailedLeaderboard])
 
-  const fetchDetailedLeaderboard = async (isPagination = false) => {
+  const fetchDetailedLeaderboard = useCallback(async (isPagination = false) => {
     try {
       // Only show full loading for initial load or filter changes, not pagination
       if (!isPagination) {
@@ -169,7 +169,7 @@ export default function DetailedLeaderboardPage() {
         setLoadingData(false)
       }
     }
-  }
+  }, [filters, currentPage, pageSize])
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }))

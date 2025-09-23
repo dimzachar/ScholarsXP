@@ -55,6 +55,7 @@ async function fetchLeaderboardFromDatabase(currentWeek: number, limit: number, 
   let weeklyStatsCount = 0
   let allTimeUsers: any[] = []
   let allTimeUsersCount = 0
+  let allTimeTotalXp = 0
   let weeklySubmissionCounts: any = { data: [] }
   let weeklyLegacySubmissionCounts: any = { data: [] }
 
@@ -82,11 +83,13 @@ async function fetchLeaderboardFromDatabase(currentWeek: number, limit: number, 
     // Get all-time leaderboard (top users by total XP) with pagination
     const allTimePromises = await Promise.all([
       userService.findTopUsers(limit, type === 'alltime' ? offset : 0),
-      userService.countAll()
+      userService.countAll(),
+      userService.sumTotalXp()
     ])
 
     allTimeUsers = allTimePromises[0]
     allTimeUsersCount = allTimePromises[1]
+    allTimeTotalXp = allTimePromises[2]
   }
 
   const submissionCountsByUser = weeklySubmissionCounts.data?.reduce((acc, sub) => {
@@ -111,10 +114,12 @@ async function fetchLeaderboardFromDatabase(currentWeek: number, limit: number, 
     reviews: stat.reviewsDone
   }))
 
-  // Calculate weekly stats
-  const activeParticipants = weeklyStats.length
-  const totalXpAwarded = weeklyStats.reduce((sum, stat) => sum + stat.xpTotal, 0)
-  const averageXp = activeParticipants > 0 ? totalXpAwarded / activeParticipants : 0
+  // Calculate weekly stats across the full week (not just current page)
+  const [weeklyActiveParticipants, weeklyTotalXpAwarded] = await Promise.all([
+    weeklyStatsService.countByWeek(currentWeek),
+    weeklyStatsService.sumXpByWeek(currentWeek)
+  ])
+  const weeklyAverageXp = weeklyActiveParticipants > 0 ? weeklyTotalXpAwarded / weeklyActiveParticipants : 0
 
   // Get total submission counts for all users (both regular and legacy)
   const [allSubmissions, allLegacySubmissions] = await Promise.all([
@@ -162,9 +167,9 @@ async function fetchLeaderboardFromDatabase(currentWeek: number, limit: number, 
 
   return {
     weeklyStats: {
-      activeParticipants,
-      totalXpAwarded,
-      averageXp,
+      activeParticipants: weeklyActiveParticipants,
+      totalXpAwarded: weeklyTotalXpAwarded,
+      averageXp: weeklyAverageXp,
       topPerformers,
       pagination: {
         page,
@@ -174,6 +179,11 @@ async function fetchLeaderboardFromDatabase(currentWeek: number, limit: number, 
         hasNextPage: page < weeklyTotalPages,
         hasPrevPage: page > 1
       }
+    },
+    allTimeStats: {
+      activeParticipants: allTimeUsersCount,
+      totalXpAwarded: allTimeTotalXp,
+      averageXp: allTimeUsersCount > 0 ? allTimeTotalXp / allTimeUsersCount : 0
     },
     allTimeLeaders,
     allTimePagination: {

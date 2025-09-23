@@ -5,8 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import MonthlyLeaderboard from '@/components/leaderboard/MonthlyLeaderboardNew'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Progress } from '@/components/ui/progress'
+// import { Progress } from '@/components/ui/progress'
 import AuthGuard from '@/components/Auth/AuthGuard'
 import { useAuth } from '@/contexts/AuthContext'
 import { Pagination, PaginationInfo } from '@/components/ui/pagination'
@@ -44,31 +45,56 @@ interface WeeklyStats {
   pagination?: PaginationInfo
 }
 
+interface AllTimeStats {
+  activeParticipants: number
+  totalXpAwarded: number
+  averageXp: number
+}
+
 export default function LeaderboardPage() {
   const { user } = useAuth()
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats | null>(null)
   const [allTimeLeaders, setAllTimeLeaders] = useState<LeaderboardEntry[]>([])
   const [allTimePagination, setAllTimePagination] = useState<PaginationInfo | null>(null)
-  const [currentUserPosition, setCurrentUserPosition] = useState<any>(null)
+  const [allTimeStats, setAllTimeStats] = useState<AllTimeStats | null>(null)
+  const [currentUserPosition, setCurrentUserPosition] = useState<unknown>(null)
   const [loading, setLoading] = useState(true)
   const [weeklyPage, setWeeklyPage] = useState(1)
   const [allTimePage, setAllTimePage] = useState(1)
   const [pageSize] = useState(20)
   const [activeTab, setActiveTab] = useState('weekly')
 
-  // Separate useEffect for initial load
-  useEffect(() => {
-    fetchLeaderboardData()
-  }, [])
+  const fetchLeaderboardData = React.useCallback(async () => {
+    try {
+      setLoading(true)
+      const weeklyParams = new URLSearchParams({ page: String(weeklyPage), limit: String(pageSize) })
+      const allTimeParams = new URLSearchParams({ page: String(allTimePage), limit: String(pageSize) })
 
-  // Separate useEffect for pagination changes
-  useEffect(() => {
-    if (!loading) {
-      fetchLeaderboardData()
+      const [weeklyData, allTimeData, userPos] = await Promise.all([
+        apiGet(`/api/leaderboard/weekly?${weeklyParams}`),
+        apiGet(`/api/leaderboard/all-time?${allTimeParams}`),
+        fetchCurrentUserPosition(),
+      ])
+
+      setWeeklyStats(weeklyData?.data || weeklyData)
+      setAllTimeLeaders(allTimeData?.data?.items || allTimeData?.items || [])
+      setAllTimePagination(allTimeData?.data?.pagination || allTimeData?.pagination || null)
+      setAllTimeStats(allTimeData?.data?.stats || allTimeData?.stats || null)
+      setCurrentUserPosition(userPos)
+    } catch (e) {
+      console.error('Error fetching leaderboard data', e)
+    } finally {
+      setLoading(false)
     }
-  }, [weeklyPage, allTimePage])
+  }, [weeklyPage, allTimePage, pageSize, fetchCurrentUserPosition])
 
-  const fetchCurrentUserPosition = async () => {
+  useEffect(() => { fetchLeaderboardData() }, [fetchLeaderboardData])
+
+  useEffect(() => {
+    if (!loading) fetchLeaderboardData()
+  }, [weeklyPage, allTimePage, loading, fetchLeaderboardData])
+
+  const fetchCurrentUserPosition = React.useCallback(async () => {
     if (!user) {
       console.log('No user available for position fetch')
       return null
@@ -102,49 +128,9 @@ export default function LeaderboardPage() {
         }
       }
     }
-  }
+  }, [user])
 
-  const fetchLeaderboardData = async () => {
-    try {
-      setLoading(true)
-
-      // Fetch weekly data
-      const weeklyParams = new URLSearchParams({
-        page: weeklyPage.toString(),
-        limit: pageSize.toString(),
-        type: 'weekly'
-      })
-
-      // Fetch all-time data
-      const allTimeParams = new URLSearchParams({
-        page: allTimePage.toString(),
-        limit: pageSize.toString(),
-        type: 'alltime'
-      })
-
-      const [weeklyResponse, allTimeResponse, userPosition] = await Promise.all([
-        fetch(`/api/leaderboard?${weeklyParams.toString()}`),
-        fetch(`/api/leaderboard?${allTimeParams.toString()}`),
-        fetchCurrentUserPosition()
-      ])
-
-      if (weeklyResponse.ok && allTimeResponse.ok) {
-        const [weeklyData, allTimeData] = await Promise.all([
-          weeklyResponse.json(),
-          allTimeResponse.json()
-        ])
-
-        setWeeklyStats(weeklyData.data?.weeklyStats || null)
-        setAllTimeLeaders(allTimeData.data?.allTimeLeaders || [])
-        setAllTimePagination(allTimeData.data?.allTimePagination || null)
-        setCurrentUserPosition(userPosition)
-      }
-    } catch (error) {
-      console.error('Error fetching leaderboard:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // legacy fetchLeaderboardData removed; using useCallback version above
 
   const handleWeeklyPageChange = (page: number) => {
     setWeeklyPage(page)
@@ -197,7 +183,7 @@ export default function LeaderboardPage() {
           <div className="h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent flex-1" />
         </div>
 
-        <div className="flex items-center space-x-4 p-4 rounded-lg bg-gradient-to-r from-primary/10 to-primary/5 border-2 border-primary/20 shadow-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-4 rounded-lg bg-gradient-to-r from-primary/10 to-primary/5 border-2 border-primary/20 shadow-lg">
           <div className="flex items-center justify-center w-10 h-10">
             {getRankIcon(userData.rank)}
           </div>
@@ -209,14 +195,14 @@ export default function LeaderboardPage() {
             </AvatarFallback>
           </Avatar>
 
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <p className="font-bold text-primary">You ({userInfo.username})</p>
-              <Badge variant="default" className="text-xs bg-primary">
+              <p className="font-bold text-primary truncate">You ({userInfo.username})</p>
+              <Badge variant="default" className="text-[10px] sm:text-xs bg-primary whitespace-nowrap">
                 Rank #{userData.rank}
               </Badge>
             </div>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
               <span>
                 {type === 'weekly'
                   ? `${userData.totalParticipants || 0} participants this week`
@@ -226,8 +212,8 @@ export default function LeaderboardPage() {
             </div>
           </div>
 
-          <div className="text-right">
-            <p className="text-lg font-bold text-primary">{userData.xp.toLocaleString()} XP</p>
+          <div className="w-full sm:w-auto sm:text-right">
+            <p className="text-base sm:text-lg font-bold text-primary">{userData.xp.toLocaleString()} XP</p>
             <p className="text-xs text-muted-foreground">
               {type === 'weekly' ? 'this week' : 'all time'}
             </p>
@@ -245,7 +231,7 @@ export default function LeaderboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background overflow-x-hidden">
         <div className="container mx-auto px-4 py-8">
           <div className="text-center">
             <div className="inline-flex items-center space-x-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6">
@@ -262,7 +248,7 @@ export default function LeaderboardPage() {
 
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background overflow-x-hidden">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="text-center mb-8">
@@ -295,67 +281,71 @@ export default function LeaderboardPage() {
           )}
         </div>
 
-        {/* Weekly Stats */}
-        {weeklyStats && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <Card className="border-0 shadow-lg">
-              <CardContent className="p-6">
-                <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-primary/20 rounded-lg">
-                    <Users className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-foreground">{weeklyStats.activeParticipants}</p>
-                    <p className="text-muted-foreground">Active Participants</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-lg">
-              <CardContent className="p-6">
-                <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-secondary/20 rounded-lg">
-                    <Zap className="h-6 w-6 text-secondary-foreground" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-foreground">{weeklyStats.totalXpAwarded.toLocaleString()}</p>
-                    <p className="text-muted-foreground">Total XP Awarded</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-lg">
-              <CardContent className="p-6">
-                <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-accent/20 rounded-lg">
-                    <TrendingUp className="h-6 w-6 text-accent-foreground" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-foreground">{Math.round(weeklyStats.averageXp)}</p>
-                    <p className="text-muted-foreground">Average XP</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+        {/* Stats now render inside each tab for contextual accuracy */}
 
         {/* Leaderboard Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 max-w-md mx-auto">
-            <TabsTrigger value="weekly" className="flex items-center gap-2">
+          <TabsList className="w-full max-w-md sm:max-w-lg mx-auto grid grid-cols-3 gap-2 px-2">
+            <TabsTrigger value="weekly" className="flex items-center gap-2 text-xs sm:text-sm py-1.5 sm:py-2">
               <Calendar className="h-4 w-4" />
               Current Week
             </TabsTrigger>
-            <TabsTrigger value="alltime" className="flex items-center gap-2">
+            <TabsTrigger value="alltime" className="flex items-center gap-2 text-xs sm:text-sm py-1.5 sm:py-2">
               <Trophy className="h-4 w-4" />
               All Time
+            </TabsTrigger>
+            <TabsTrigger value="monthly" className="flex items-center gap-2 text-xs sm:text-sm py-1.5 sm:py-2">
+              <BarChart3 className="h-4 w-4" />
+              Monthly
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="weekly" className="space-y-6">
+            {weeklyStats && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Card className="border-0 shadow-lg">
+                  <CardContent className="p-6">
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-primary/20 rounded-lg">
+                        <Users className="h-6 w-6 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-foreground">{weeklyStats.activeParticipants}</p>
+                        <p className="text-muted-foreground">Active Participants</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-lg">
+                  <CardContent className="p-6">
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-secondary/20 rounded-lg">
+                        <Zap className="h-6 w-6 text-secondary-foreground" />
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-foreground">{weeklyStats.totalXpAwarded.toLocaleString()}</p>
+                        <p className="text-muted-foreground">Total XP Awarded</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-lg">
+                  <CardContent className="p-6">
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-accent/20 rounded-lg">
+                        <TrendingUp className="h-6 w-6 text-accent-foreground" />
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-foreground">{Math.round(weeklyStats.averageXp)}</p>
+                        <p className="text-muted-foreground">Average XP</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
             {/* Top 3 Podium */}
             {weeklyStats?.topPerformers && weeklyStats.topPerformers.length >= 3 && (
               <Card className="border-0 shadow-xl bg-gradient-to-r from-muted/50 to-muted">
@@ -366,7 +356,7 @@ export default function LeaderboardPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex justify-center items-end space-x-8">
+                  <div className="flex flex-col sm:flex-row justify-center items-center sm:items-end gap-6 sm:gap-8">
                     {/* 2nd Place */}
                     <div className="text-center">
                       <div className="relative">
@@ -377,7 +367,7 @@ export default function LeaderboardPage() {
                         </Avatar>
                         <Badge className="absolute -top-2 -right-2 bg-secondary">2nd</Badge>
                       </div>
-                      <p className="font-semibold">{weeklyStats.topPerformers[1]?.username}</p>
+                      <p className="font-semibold truncate max-w-[8rem] sm:max-w-none mx-auto">{weeklyStats.topPerformers[1]?.username}</p>
                       <p className="text-sm text-muted-foreground">{weeklyStats.topPerformers[1]?.weeklyXp} XP</p>
                     </div>
 
@@ -392,7 +382,7 @@ export default function LeaderboardPage() {
                         <Badge className="absolute -top-2 -right-2 bg-primary">1st</Badge>
                         <Crown className="absolute -top-4 left-1/2 transform -translate-x-1/2 h-6 w-6 text-primary" />
                       </div>
-                      <p className="font-bold text-lg">{weeklyStats.topPerformers[0]?.username}</p>
+                      <p className="font-bold text-lg truncate max-w-[10rem] sm:max-w-none mx-auto">{weeklyStats.topPerformers[0]?.username}</p>
                       <p className="text-primary font-semibold">{weeklyStats.topPerformers[0]?.weeklyXp} XP</p>
                     </div>
 
@@ -406,7 +396,7 @@ export default function LeaderboardPage() {
                         </Avatar>
                         <Badge className="absolute -top-2 -right-2 bg-accent">3rd</Badge>
                       </div>
-                      <p className="font-semibold">{weeklyStats.topPerformers[2]?.username}</p>
+                      <p className="font-semibold truncate max-w-[8rem] sm:max-w-none mx-auto">{weeklyStats.topPerformers[2]?.username}</p>
                       <p className="text-sm text-muted-foreground">{weeklyStats.topPerformers[2]?.weeklyXp} XP</p>
                     </div>
                   </div>
@@ -429,8 +419,8 @@ export default function LeaderboardPage() {
                 {weeklyStats?.topPerformers && weeklyStats.topPerformers.length > 0 ? (
                   <div className="space-y-4">
                     <CurrentUserHighlight type="weekly" />
-                    {weeklyStats.topPerformers.map((entry, index) => (
-                      <div key={entry.username} className="flex items-center space-x-4 p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+                    {weeklyStats.topPerformers.map((entry) => (
+                      <div key={entry.username} className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
                         <div className="flex items-center justify-center w-10 h-10">
                           {getRankIcon(entry.rank)}
                         </div>
@@ -441,23 +431,23 @@ export default function LeaderboardPage() {
                           </AvatarFallback>
                         </Avatar>
                         
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <p className="font-semibold">{entry.username}</p>
+                            <p className="font-semibold truncate">{entry.username}</p>
                             {entry.streak > 0 && (
-                              <Badge variant="outline" className={`text-xs ${getStreakColor(entry.streak)}`}>
+                              <Badge variant="outline" className={`text-[10px] sm:text-xs ${getStreakColor(entry.streak)} whitespace-nowrap`}>
                                 🔥 {entry.streak} week{entry.streak > 1 ? 's' : ''}
                               </Badge>
                             )}
                           </div>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
                             <span>{entry.submissions} submissions</span>
                             <span>{entry.reviews} reviews</span>
                           </div>
                         </div>
 
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-primary">{entry.weeklyXp} XP</p>
+                        <div className="w-full sm:w-auto sm:text-right">
+                          <p className="text-base sm:text-lg font-bold text-primary">{entry.weeklyXp} XP</p>
                           <p className="text-xs text-muted-foreground">this week</p>
                         </div>
                       </div>
@@ -485,6 +475,51 @@ export default function LeaderboardPage() {
           </TabsContent>
 
           <TabsContent value="alltime" className="space-y-6">
+            {allTimeStats && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Card className="border-0 shadow-lg">
+                  <CardContent className="p-6">
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-primary/20 rounded-lg">
+                        <Users className="h-6 w-6 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-foreground">{allTimeStats.activeParticipants}</p>
+                        <p className="text-muted-foreground">Active Users</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-lg">
+                  <CardContent className="p-6">
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-secondary/20 rounded-lg">
+                        <Zap className="h-6 w-6 text-secondary-foreground" />
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-foreground">{allTimeStats.totalXpAwarded.toLocaleString()}</p>
+                        <p className="text-muted-foreground">Total XP Awarded</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-lg">
+                  <CardContent className="p-6">
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-accent/20 rounded-lg">
+                        <TrendingUp className="h-6 w-6 text-accent-foreground" />
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-foreground">{Math.round(allTimeStats.averageXp)}</p>
+                        <p className="text-muted-foreground">Average XP</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
             <Card className="border-0 shadow-xl">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -499,8 +534,8 @@ export default function LeaderboardPage() {
                 {allTimeLeaders.length > 0 ? (
                   <div className="space-y-4">
                     <CurrentUserHighlight type="alltime" />
-                    {allTimeLeaders.map((entry, index) => (
-                      <div key={entry.username} className="flex items-center space-x-4 p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+                    {allTimeLeaders.map((entry) => (
+                      <div key={entry.username} className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
                         <div className="flex items-center justify-center w-10 h-10">
                           {getRankIcon(entry.rank)}
                         </div>
@@ -511,21 +546,21 @@ export default function LeaderboardPage() {
                           </AvatarFallback>
                         </Avatar>
                         
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <p className="font-semibold">{entry.username}</p>
-                            <Badge variant={getRankBadgeVariant(entry.rank)} className="text-xs">
+                            <p className="font-semibold truncate">{entry.username}</p>
+                            <Badge variant={getRankBadgeVariant(entry.rank)} className="text-[10px] sm:text-xs whitespace-nowrap">
                               Rank #{entry.rank}
                             </Badge>
                           </div>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
                             <span>{entry.submissions} total submissions</span>
                             <span>{entry.reviews} total reviews</span>
                           </div>
                         </div>
 
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-primary">{entry.totalXp.toLocaleString()} XP</p>
+                        <div className="w-full sm:w-auto sm:text-right">
+                          <p className="text-base sm:text-lg font-bold text-primary">{entry.totalXp.toLocaleString()} XP</p>
                           <p className="text-xs text-muted-foreground">all time</p>
                         </div>
                       </div>
@@ -550,6 +585,9 @@ export default function LeaderboardPage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+          <TabsContent value="monthly" className="space-y-6">
+            <MonthlyLeaderboard />
           </TabsContent>
         </Tabs>
       </div>
