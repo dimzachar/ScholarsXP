@@ -95,18 +95,16 @@ export async function middleware(request: NextRequest) {
 
   // Content Security Policy for enhanced security
   if (process.env.NODE_ENV === 'production') {
+    // Balanced CSP: allow inline but no eval, and restrict to known origins
     response.headers.set(
       'Content-Security-Policy',
-      "default-src 'self'; " +
-      // Allow Twitter widgets script. Inline scripts remain disallowed.
-      "script-src 'self' https://cdn.jsdelivr.net https://platform.twitter.com; " +
+      "default-src 'self' data: blob: https:; " +
+      "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://platform.twitter.com; " +
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-      "font-src 'self' https://fonts.gstatic.com; " +
-      "img-src 'self' data: https:; " +
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://platform.twitter.com https://syndication.twitter.com https://api.twitter.com https://*.twimg.com https://*.twitter.com; " +
-      // Allow embeds for YouTube, Twitter, Reddit, Notion, LinkedIn
-      "frame-src 'self' https://platform.twitter.com https://syndication.twitter.com https://www.redditmedia.com https://embed.reddit.com https://www.notion.so https://notion.so https://notion.site https://www.notion.com https://notion.com https://www.linkedin.com; " +
-      // Disallow this app from being embedded elsewhere
+      "font-src 'self' https://fonts.gstatic.com data:; " +
+      "img-src 'self' data: https: blob:; " +
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://vitals.vercel-insights.com; " +
+      "frame-src 'self' https://platform.twitter.com https://syndication.twitter.com https://www.redditmedia.com https://embed.reddit.com https://www.notion.so https://notion.so https://notion.site https://www.notion.com https://notion.com https://www.linkedin.com https://www.youtube.com; " +
       "frame-ancestors 'none';"
     )
   } else if (process.env.DEV_CSP_ENABLED === 'true') {

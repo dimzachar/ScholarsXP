@@ -1,3 +1,4 @@
+import 'server-only'
 import OpenAI from 'openai'
 import { ContentAnalysis, ContentData } from '@/types/task-types'
 import { extractTwitterThread } from '@/lib/content-fetchers/twitter-thread'
