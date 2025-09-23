@@ -53,25 +53,42 @@ export async function middleware(request: NextRequest) {
   // Apply rate limiting to API routes
   const shouldRateLimit = process.env.NODE_ENV === 'production' || process.env.RATE_LIMIT_ENABLED === 'true'
   if (pathname.startsWith('/api/') && shouldRateLimit) {
-    const clientIP = request.ip || request.headers.get('x-forwarded-for') || 'unknown'
+    // Allowlist essential auth/session endpoints to prevent auth loops
+    const rateLimitBypassPaths = [
+      '/api/auth/session', // Supabase session cookie persistence
+    ]
+    if (rateLimitBypassPaths.some((p) => pathname.startsWith(p))) {
+      return response
+    }
 
-    // Different rate limits for different endpoints
-    let maxRequests = 60 // Default: 60 requests per minute
-    let windowMs = 60000 // 1 minute
-    let endpointType = 'general'
+    // Derive a stable client identifier (first IP in x-forwarded-for)
+    const fwd = request.headers.get('x-forwarded-for') || ''
+    const ipFromHeader = fwd.split(',')[0]?.trim()
+    const clientIP = request.ip || ipFromHeader || 'unknown'
 
-    if (pathname.startsWith('/api/submissions')) {
-      maxRequests = 10 // Stricter limit for submissions
-      windowMs = 60000
-      endpointType = 'submissions'
-    } else if (pathname.startsWith('/api/peer-reviews')) {
-      maxRequests = 20 // Moderate limit for reviews
-      windowMs = 60000
-      endpointType = 'reviews'
-    } else if (pathname.startsWith('/api/admin')) {
-      maxRequests = 100 // Higher limit for admin operations
-      windowMs = 60000
-      endpointType = 'admin'
+    // Route-specific limits (per-path to avoid cross-endpoint coupling)
+    // Defaults
+    let maxRequests = 60 // 60 RPM per path
+    const windowMs = 60_000
+    // Use the first two path segments as endpoint key, e.g. /api/notifications
+    const segments = pathname.split('/').filter(Boolean)
+    const endpointKey = segments.length >= 2 ? `/api/${segments[1]}` : '/api'
+    let endpointType = endpointKey
+
+    // Tuned limits by endpoint
+    if (endpointKey === '/api/submissions') {
+      maxRequests = 10 // write-heavy
+    } else if (endpointKey === '/api/peer-reviews') {
+      maxRequests = 20
+    } else if (endpointKey === '/api/admin') {
+      maxRequests = 100
+    } else if (endpointKey === '/api/notifications') {
+      // Higher allowance for polling/read operations
+      maxRequests = 300
+    } else if (endpointKey === '/api/merge') {
+      // Isolate merge traffic with its own bucket
+      endpointType = '/api/merge:initiate'
+      maxRequests = 6
     }
 
     const rateLimitPassed = await checkRateLimit(clientIP, maxRequests, windowMs, endpointType)
