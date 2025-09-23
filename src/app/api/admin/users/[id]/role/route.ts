@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
+import { logAdminAction } from '@/lib/audit-log'
 
 export const PATCH = withPermission('admin_access')(async (
   request: AuthenticatedRequest,
@@ -54,6 +55,15 @@ export const PATCH = withPermission('admin_access')(async (
     })
 
     console.log(`Admin ${request.user.id} updated role for user ${userId} from ${existingUser.role} to ${role}`)
+
+    // Audit log (best-effort)
+    await logAdminAction({
+      adminId: request.user.id,
+      action: 'USER_ROLE_CHANGE',
+      targetType: 'user',
+      targetId: userId,
+      details: { oldRole: existingUser.role, newRole: role },
+    })
 
     return NextResponse.json({
       message: 'User role updated successfully',

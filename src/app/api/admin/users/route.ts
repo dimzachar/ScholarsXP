@@ -169,7 +169,7 @@ async function fetchUserMetricsData(
   weekStart.setDate(weekStart.getDate() - weekStart.getDay())
   weekStart.setHours(0, 0, 0, 0)
 
-  // Get users with related data - Optimized to include XP transactions in single query
+  // Get users with essential fields and counts only (avoid heavy nested selects)
   const [users, totalCount] = await Promise.all([
     prisma.user.findMany({
       where,
@@ -186,35 +186,13 @@ async function fetchUserMetricsData(
         streakWeeks: true,
         createdAt: true,
         lastActiveAt: true,
+        discordHandle: true,
         _count: {
           select: {
             submissions: true,
             peerReviews: true,
             userAchievements: true
           }
-        },
-        submissions: {
-          select: {
-            id: true,
-            status: true,
-            finalXp: true,
-            createdAt: true
-          },
-          orderBy: {
-            createdAt: 'desc'
-          },
-          take: 5 // Recent submissions
-        },
-        peerReviews: {
-          select: {
-            id: true,
-            xpScore: true,
-            createdAt: true
-          },
-          orderBy: {
-            createdAt: 'desc'
-          },
-          take: 5 // Recent reviews
         },
         xpTransactions: {
           where: {
@@ -223,8 +201,7 @@ async function fetchUserMetricsData(
             }
           },
           select: {
-            amount: true,
-            createdAt: true
+            amount: true
           }
         }
       }
@@ -232,40 +209,63 @@ async function fetchUserMetricsData(
     prisma.user.count({ where })
   ])
 
-  // Get legacy submission counts for all users in parallel
   const userIds = users.map(u => u.id)
-  const legacyCounts = await Promise.all(
-    users.map(async (user) => {
-      const discordHandle = user.discordHandle || user.username
-      if (!discordHandle) return 0
+  const usernames = users
+    .map(u => u.discordHandle || u.username)
+    .filter((h): h is string => Boolean(h))
 
-      const result = await prisma.$queryRaw`
-        SELECT COUNT(*) as count
-        FROM "LegacySubmission"
-        WHERE "discordHandle" = ${discordHandle}
-      ` as any[]
-
-      return parseInt(result[0]?.count || '0')
+  // Aggregate heavy metrics via groupBy to avoid N+1 queries
+  const [completedSubmissionsByUser, avgReviewScoreByUser, legacyCountsGrouped] = await Promise.all([
+    prisma.submission.groupBy({
+      by: ['userId'],
+      where: {
+        userId: { in: userIds },
+        status: 'FINALIZED'
+      },
+      _count: { _all: true }
+    }),
+    prisma.peerReview.groupBy({
+      by: ['reviewerId'],
+      where: { reviewerId: { in: userIds } },
+      _avg: { xpScore: true }
+    }),
+    prisma.legacySubmission.groupBy({
+      by: ['discordHandle'],
+      where: {
+        discordHandle: {
+          in: usernames
+        }
+      },
+      _count: { _all: true }
     })
+  ])
+
+  const completedCountMap = new Map<string, number>(
+    completedSubmissionsByUser.map(r => [r.userId, r._count._all])
+  )
+  const avgReviewMap = new Map<string, number>(
+    avgReviewScoreByUser.map(r => [r.reviewerId, Math.round(((r._avg.xpScore || 0) * 10)) / 10])
+  )
+  const legacyCountByHandle = new Map<string, number>(
+    legacyCountsGrouped.map(r => [r.discordHandle as string, r._count._all])
   )
 
   // Calculate additional metrics for each user - Optimized in-memory processing
-  const usersWithMetrics = users.map((user, index) => {
-    // Calculate weekly XP from included transactions (no additional query needed)
+  const usersWithMetrics = users.map((user) => {
+    // Calculate weekly XP from included transactions
     const weeklyXp = user.xpTransactions.reduce((sum, tx) => sum + tx.amount, 0)
 
-    // Calculate submission success rate including legacy submissions
-    const completedSubmissions = user.submissions.filter(s => s.status === 'COMPLETED').length
-    const legacySubmissionCount = legacyCounts[index]
+    // Completed submissions and legacy counts
+    const completedSubmissions = completedCountMap.get(user.id) || 0
+    const legacyHandle = user.discordHandle || user.username || ''
+    const legacySubmissionCount = legacyHandle ? (legacyCountByHandle.get(legacyHandle) || 0) : 0
     const totalSubmissions = user._count.submissions + legacySubmissionCount
     const submissionSuccessRate = totalSubmissions > 0
       ? ((completedSubmissions + legacySubmissionCount) / totalSubmissions) * 100
       : 0
 
-    // Calculate average review score given
-    const avgReviewScore = user.peerReviews.length > 0
-      ? user.peerReviews.reduce((sum, review) => sum + (review.xpScore || 0), 0) / user.peerReviews.length
-      : 0
+    // Average review score given (by this user as reviewer)
+    const avgReviewScore = avgReviewMap.get(user.id) || 0
 
     // Determine activity status
     const daysSinceLastActive = user.lastActiveAt
@@ -475,10 +475,11 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
           await prisma.adminAction.create({
             data: {
               adminId: request.user.id,
-              action: isDeactivating ? 'USER_DEACTIVATED' : 'USER_REACTIVATED',
+              action: 'SYSTEM_CONFIG',
               targetType: 'user',
               targetId: userId,
               details: {
+                subAction: isDeactivating ? 'USER_DEACTIVATED' : 'USER_REACTIVATED',
                 action: data.action,
                 reason: data.reason,
                 timestamp: new Date().toISOString()

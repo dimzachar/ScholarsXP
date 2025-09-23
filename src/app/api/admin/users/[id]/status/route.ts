@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
+import { logAdminAction } from '@/lib/audit-log'
 
 export const PATCH = withPermission('admin_access')(async (
   request: AuthenticatedRequest,
@@ -60,6 +61,15 @@ export const PATCH = withPermission('admin_access')(async (
     })
 
     console.log(`Admin ${request.user.id} ${action}d user ${userId} (${existingUser.username})`)
+
+    // Audit log (best-effort)
+    await logAdminAction({
+      adminId: request.user.id,
+      action: 'SYSTEM_CONFIG',
+      targetType: 'user',
+      targetId: userId,
+      details: { action, lastActiveAt: updatedUser.lastActiveAt },
+    })
 
     return NextResponse.json({
       message: `User ${action}d successfully`,

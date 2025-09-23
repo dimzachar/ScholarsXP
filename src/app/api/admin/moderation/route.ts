@@ -323,10 +323,11 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
               prisma.adminAction.create({
                 data: {
                   adminId: request.user.id,
-                  action: 'FLAG_RESOLVE',
+                  action: 'CONTENT_FLAG',
                   targetType: 'content_flag',
                   targetId: flagId,
                   details: {
+                    subAction: 'RESOLVE',
                     resolution: data.resolution,
                     adminNotes: data.adminNotes,
                     submissionId: flag.submissionId
@@ -367,10 +368,11 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
             prisma.adminAction.create({
               data: {
                 adminId: request.user.id,
-                action: 'FLAG_DISMISS',
+                action: 'CONTENT_FLAG',
                 targetType: 'content_flag',
                 targetId: flagId,
                 details: {
+                  subAction: 'DISMISS',
                   adminNotes: data.adminNotes
                 }
               }

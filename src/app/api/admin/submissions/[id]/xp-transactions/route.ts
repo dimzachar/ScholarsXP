@@ -8,7 +8,7 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
     const submissionId = url.pathname.split('/').slice(-2)[0] // Extract ID from path
 
     // Verify submission exists (check both regular and legacy submissions)
-    let submission = await prisma.submission.findUnique({
+    const submission = await prisma.submission.findUnique({
       where: { id: submissionId },
       select: { id: true, userId: true }
     })

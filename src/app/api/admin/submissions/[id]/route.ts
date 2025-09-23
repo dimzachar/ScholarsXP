@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
-import { prisma } from '@/lib/prisma'
+import { prisma, patchPeerReviewV2Columns } from '@/lib/prisma'
 import { propagateXpChanges, validateXpModification } from '@/lib/services/xp-propagation'
 
 export const GET = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
     const url = new URL(request.url)
     const submissionId = url.pathname.split('/').slice(-1)[0] // Extract ID from path
+
+    // Ensure DB has v2 PeerReview audit columns in dev/local
+    await patchPeerReviewV2Columns()
 
     // Try to get from regular submissions first
     let submission = await prisma.submission.findUnique({
@@ -296,10 +299,11 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
         await prisma.adminAction.create({
           data: {
             adminId: request.user.id,
-            action: 'STATUS_CHANGE',
+            action: 'SYSTEM_CONFIG',
             targetType: 'submission',
             targetId: submissionId,
             details: {
+              subAction: 'STATUS_CHANGE',
               newStatus: data.status,
               reason: data.reason
             }
@@ -309,7 +313,7 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
 
       case 'updateXp':
         // First try to find in regular submissions
-        let submission = await prisma.submission.findUnique({
+        const submission = await prisma.submission.findUnique({
           where: { id: submissionId },
           include: { user: true }
         })
@@ -486,9 +490,12 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
         )
 
         if (!propagationResult.success) {
+          const detail = propagationResult.errors && propagationResult.errors.length > 0
+            ? `: ${String(propagationResult.errors[0])}`
+            : ''
           return NextResponse.json(
             {
-              message: 'Failed to update XP',
+              message: `Failed to update XP${detail}`,
               errors: propagationResult.errors
             },
             { status: 500 }
@@ -496,15 +503,30 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
         }
 
         // Update the specific XP field on the submission
+        // Update XP field and mark as FINALIZED if final XP updated
         await prisma.submission.update({
           where: { id: submissionId },
-          data: { [fieldToUpdate]: newXp }
+          data: {
+            [fieldToUpdate]: newXp,
+            ...(fieldToUpdate === 'finalXp' ? { status: 'FINALIZED' } : {})
+          }
         })
 
         result = {
           message: propagationResult.message,
           xpDifference: newXp - oldXp,
           updatedEntities: propagationResult.updatedEntities
+        }
+        // Invalidate cached admin submissions lists so UI refreshes
+        try {
+          const { QueryCache } = await import('@/lib/cache/query-cache')
+          await Promise.all([
+            QueryCache.invalidatePattern('admin_submissions:*'),
+            QueryCache.invalidatePattern('admin_submission_count:*'),
+            QueryCache.invalidatePattern('admin_submission_stats:*')
+          ])
+        } catch (e) {
+          console.warn('Cache invalidation failed (admin_submissions):', e)
         }
         break
 

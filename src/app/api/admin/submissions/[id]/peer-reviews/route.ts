@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
-import { prisma } from '@/lib/prisma'
+import { prisma, patchPeerReviewV2Columns } from '@/lib/prisma'
 
 export const GET = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
     const url = new URL(request.url)
     const submissionId = url.pathname.split('/').slice(-2)[0] // Extract ID from path
+
+    // Ensure DB has v2 columns (dev/local convenience)
+    await patchPeerReviewV2Columns()
 
     // Verify submission exists
     const submission = await prisma.submission.findUnique({
@@ -53,6 +56,7 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
   try {
     const url = new URL(request.url)
     const submissionId = url.pathname.split('/').slice(-2)[0] // Extract ID from path
+    await patchPeerReviewV2Columns()
     const { reviewId, xpScore, comments, qualityRating, reason } = await request.json()
 
     if (!reviewId) {
@@ -62,10 +66,10 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
       )
     }
 
-    // Validate input
-    if (typeof xpScore !== 'number' || xpScore < 0 || xpScore > 100) {
+    // Validate input (v2 allows higher discrete values; relax upper bound)
+    if (typeof xpScore !== 'number' || xpScore < 0 || xpScore > 300) {
       return NextResponse.json(
-        { message: 'XP score must be between 0 and 100' },
+        { message: 'XP score must be between 0 and 300' },
         { status: 400 }
       )
     }

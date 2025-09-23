@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { reviewerPoolService } from '@/lib/reviewer-pool'
+import { prisma } from '@/lib/prisma'
 
 export const POST = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
@@ -133,6 +134,25 @@ export const POST = withPermission('admin_access')(async (request: Authenticated
     }
 
     // TODO: Send notifications to newly assigned reviewers
+
+    // Best-effort admin action log for manual assignments
+    try {
+      await prisma.adminAction.create({
+        data: {
+          adminId: request.user.id,
+          action: 'REVIEW_REASSIGN',
+          targetType: 'submission',
+          targetId: submissionId,
+          details: {
+            subAction: 'REVIEW_ASSIGN',
+            reviewersAssigned: newReviewerIds,
+            totalReviewers,
+          }
+        }
+      })
+    } catch (e) {
+      console.warn('Manual assignment audit log failed:', e)
+    }
 
     return NextResponse.json({
       message: `Successfully assigned ${newReviewerIds.length} new reviewers`,

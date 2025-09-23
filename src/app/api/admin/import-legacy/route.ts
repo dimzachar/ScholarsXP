@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
-import { storeLegacyContentFingerprint } from '@/lib/duplicate-content-detector'
+import { storeLegacyContentFingerprint, generateContentFingerprint } from '@/lib/duplicate-content-detector'
 import { getWeekNumber } from '@/lib/utils'
+import { Prisma } from '@prisma/client'
 
 interface LegacyImportRequest {
   csvData: string
@@ -41,6 +43,50 @@ function detectPlatformFromUrl(url: string): string {
   }
 }
 
+// Basic sleep util for retry backoff
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// Detect transient DB/network errors that are safe to retry
+function isTransientError(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err || '')).toLowerCase()
+  return (
+    msg.includes('server has closed the connection') ||
+    msg.includes("can't reach database server") ||
+    msg.includes('connection terminated unexpectedly') ||
+    msg.includes('read econnreset') ||
+    msg.includes('etimedout') ||
+    msg.includes('econnrefused') ||
+    msg.includes('p1001') || // Prisma: can\'t reach database server
+    msg.includes('p1008')    // Prisma: operation timed out
+  )
+}
+
+// Small retry helper to harden import against transient pool disconnects
+async function withRetry<T>(fn: () => Promise<T>, label: string, maxRetries = 3): Promise<T> {
+  let attempt = 0
+  let lastErr: unknown
+
+  while (attempt <= maxRetries) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      if (attempt < maxRetries && isTransientError(err)) {
+        const backoff = 250 * Math.pow(2, attempt) // 250ms, 500ms, 1000ms, 2000ms
+        console.warn(`Transient error on ${label} (attempt ${attempt + 1}/${maxRetries + 1}). Retrying in ${backoff}ms...`, err)
+        await delay(backoff)
+        attempt++
+        continue
+      }
+      throw err
+    }
+  }
+  // Should not reach, but TypeScript friendly return
+  throw lastErr instanceof Error ? lastErr : new Error('Unknown error')
+}
+
 function parseCSV(csvData: string): LegacySubmissionData[] {
   console.log('📊 Parsing CSV data:', csvData.substring(0, 200) + '...')
 
@@ -64,7 +110,7 @@ function parseCSV(csvData: string): LegacySubmissionData[] {
 
       if (parts.length >= 4) {
         // Clean Discord handle
-        let discordHandle = parts[1]?.replace(/^@/, '').trim() // Remove @ prefix
+        const discordHandle = parts[1]?.replace(/^@/, '').trim() // Remove @ prefix
         if (!discordHandle || discordHandle === '') {
           console.log('⚠️ Skipping entry with empty Discord handle')
           continue
@@ -189,9 +235,75 @@ async function importLegacyHandler(request: NextRequest) {
 
     let imported = 0
     let duplicates = 0
+    const duplicateDetails: { url: string; type: 'LEGACY' | 'CURRENT'; existingId?: string }[] = []
     const errors: string[] = []
 
-    // Process each submission
+    // Warm connection and then process each submission
+    try {
+      await prisma.$connect()
+    } catch (e) {
+      // Continue; each call below has its own retry anyway
+      console.warn('Prisma connect warning before import:', e)
+    }
+
+    // Prefetch duplicates and users to avoid N+1 queries
+    const uniqueUrls = Array.from(new Set(submissions.map(s => s.submissionLink)))
+    const uniqueHandles = Array.from(new Set(submissions.map(s => s.discordHandle)))
+
+    const [legacyUrls, currentUrls, existingUsersArr] = await Promise.all([
+      withRetry(
+        () => prisma.legacySubmission.findMany({ where: { url: { in: uniqueUrls } }, select: { url: true } }),
+        'legacySubmission.findMany(url prefetch)'
+      ),
+      withRetry(
+        () => prisma.submission.findMany({ where: { url: { in: uniqueUrls } }, select: { url: true } }),
+        'submission.findMany(url prefetch)'
+      ),
+      withRetry(
+        () => prisma.user.findMany({ where: { discordHandle: { in: uniqueHandles } }, select: { id: true, discordHandle: true } }),
+        'user.findMany(handle prefetch)'
+      )
+    ])
+
+    const legacyUrlSet = new Set(legacyUrls.map(u => u.url))
+    const currentUrlSet = new Set(currentUrls.map(u => u.url))
+    const userByHandle = new Map<string, { id: string; discordHandle: string | null }>()
+    for (const u of existingUsersArr) {
+      if (u.discordHandle) userByHandle.set(u.discordHandle, { id: u.id, discordHandle: u.discordHandle })
+    }
+
+    // Create missing users in bulk
+    const toCreateHandles = uniqueHandles.filter(h => !!h && !userByHandle.has(h))
+    if (toCreateHandles.length > 0) {
+      await withRetry(
+        () => prisma.user.createMany({
+          data: toCreateHandles.map(h => ({
+            email: `${h}@legacy.import`,
+            username: h,
+            discordHandle: h,
+            role: 'USER'
+          })),
+          skipDuplicates: true
+        }),
+        'user.createMany'
+      )
+      const newlyCreated = await withRetry(
+        () => prisma.user.findMany({ where: { discordHandle: { in: toCreateHandles } }, select: { id: true, discordHandle: true } }),
+        'user.findMany(refetch after createMany)'
+      )
+      for (const u of newlyCreated) {
+        if (u.discordHandle) userByHandle.set(u.discordHandle, { id: u.id, discordHandle: u.discordHandle })
+      }
+    }
+
+    // Fast-path bulk processing: prefilter duplicates, then create in bulk
+    const newItems: Array<{
+      submission: LegacySubmissionData
+      userId: string
+      submittedAt: Date
+      legacyXp: number
+    }> = []
+
     for (const submission of submissions) {
       try {
         // Parse timestamp
@@ -205,109 +317,47 @@ async function importLegacyHandler(request: NextRequest) {
           submittedAt = new Date() // Fallback to current date
         }
 
-        // Create or find user account for this Discord handle
-        let user = await prisma.user.findFirst({
-          where: { discordHandle: submission.discordHandle }
-        })
+        // Resolve user for this Discord handle
+        let user = userByHandle.get(submission.discordHandle)
 
         if (!user) {
           // Create new user account for legacy import
-          user = await prisma.user.create({
-            data: {
-              email: `${submission.discordHandle}@legacy.import`, // Temporary email
-              username: submission.discordHandle,
-              discordHandle: submission.discordHandle,
-              role: submission.role === 'Initiate' ? 'USER' : 'USER', // Map roles as needed
-              totalXp: 0, // Will be calculated later
-              currentWeekXp: 0,
-              streakWeeks: 0,
-              missedReviews: 0
-            }
-          })
+          const created = await withRetry(
+            () => prisma.user.create({
+              data: {
+                email: `${submission.discordHandle}@legacy.import`, // Temporary email
+                username: submission.discordHandle,
+                discordHandle: submission.discordHandle,
+                role: submission.role === 'Initiate' ? 'USER' : 'USER', // Map roles as needed
+                totalXp: 0, // Will be calculated later
+                currentWeekXp: 0,
+                streakWeeks: 0,
+                missedReviews: 0
+              }
+            }),
+            'user.create'
+          )
+          user = { id: created.id, discordHandle: created.discordHandle ?? submission.discordHandle }
+          if (user.discordHandle) userByHandle.set(user.discordHandle, user)
           console.log(`Created legacy user account for ${submission.discordHandle}`)
         }
 
-        // Check if URL already exists
-        const existingLegacy = await prisma.legacySubmission.findUnique({
-          where: { url: submission.submissionLink }
-        })
-
-        if (existingLegacy) {
+        // Fast duplicate checks from prefetched sets
+        if (legacyUrlSet.has(submission.submissionLink)) {
           duplicates++
+          duplicateDetails.push({ url: submission.submissionLink, type: 'LEGACY' })
           continue
         }
 
-        // Check if URL exists in current submissions
-        const existingCurrent = await prisma.submission.findFirst({
-          where: { url: submission.submissionLink }
-        })
-
-        if (existingCurrent) {
+        if (currentUrlSet.has(submission.submissionLink)) {
           duplicates++
+          duplicateDetails.push({ url: submission.submissionLink, type: 'CURRENT' })
           continue
         }
 
-        // Get XP from CSV data - if not provided, default to 0 (admin can assign later)
+        // Collect for bulk insert
         const legacyXp = submission.xp && submission.xp > 0 ? submission.xp : 0
-
-        // Calculate correct week number from submission date
-        const submissionWeekNumber = getWeekNumber(submittedAt)
-
-        // Create legacy submission record with XP values
-        // For legacy submissions: peerXP = finalXP (no AI evaluation), aiXP = 0
-        const legacySubmission = await prisma.legacySubmission.create({
-          data: {
-            url: submission.submissionLink,
-            discordHandle: submission.discordHandle,
-            submittedAt: submittedAt,
-            role: submission.role,
-            notes: submission.notes,
-            processed: false,
-            aiXp: 0, // Legacy submissions have no AI evaluation
-            peerXp: legacyXp > 0 ? legacyXp : null, // Store XP as peerXp for legacy submissions
-            finalXp: legacyXp > 0 ? legacyXp : null // Store finalXp only if XP > 0
-          }
-        })
-
-        // Award XP for legacy submission (if XP provided)
-        if (legacyXp > 0) {
-          await prisma.user.update({
-            where: { id: user.id },
-            data: {
-              totalXp: { increment: legacyXp }
-            }
-          })
-
-          // Create XP transaction record for legacy submissions
-          await prisma.xpTransaction.create({
-            data: {
-              userId: user.id,
-              amount: legacyXp,
-              type: 'SUBMISSION_REWARD', // Use SUBMISSION_REWARD for legacy content
-              description: `Legacy import: ${submission.submissionLink} (${submission.role})`,
-              weekNumber: submissionWeekNumber // Use correct week number from submission date
-            }
-          })
-        }
-
-        // Create basic fingerprint for duplicate detection (skip AI content fetching for legacy imports)
-        try {
-          // For legacy imports, we'll create a simple fingerprint based on the URL
-          // This allows duplicate detection without expensive AI content fetching
-          const platform = detectPlatformFromUrl(submission.submissionLink)
-          await storeLegacyContentFingerprint(
-            legacySubmission.id,
-            submission.submissionLink,
-            submission.submissionLink, // Use URL as content for basic fingerprinting
-            platform
-          )
-          console.log(`📝 Created basic fingerprint for legacy submission: ${submission.submissionLink}`)
-        } catch (fingerprintError) {
-          // Log fingerprint creation error but don't fail the import
-          console.warn(`Could not create fingerprint for ${submission.submissionLink}:`, fingerprintError)
-        }
-
-        imported++
+        newItems.push({ submission, userId: user.id, submittedAt, legacyXp })
 
       } catch (error) {
         const errorMsg = `Row ${imported + duplicates + errors.length + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -316,10 +366,118 @@ async function importLegacyHandler(request: NextRequest) {
       }
     }
 
+    if (newItems.length > 0) {
+      // 1) Bulk insert legacy submissions
+      const legacyData = newItems.map(({ submission, submittedAt, legacyXp }) => ({
+        url: submission.submissionLink,
+        discordHandle: submission.discordHandle,
+        submittedAt,
+        role: submission.role,
+        notes: submission.notes,
+        processed: false,
+        aiXp: 0,
+        peerXp: legacyXp > 0 ? legacyXp : null,
+        finalXp: legacyXp > 0 ? legacyXp : null
+      }))
+
+      await withRetry(
+        () => prisma.legacySubmission.createMany({ data: legacyData, skipDuplicates: true }),
+        'legacySubmission.createMany'
+      )
+
+      // 2) Fetch inserted legacy submissions to get IDs (by URL)
+      const newUrls = newItems.map(i => i.submission.submissionLink)
+      const insertedLegacy = await withRetry(
+        () => prisma.legacySubmission.findMany({ where: { url: { in: newUrls } }, select: { id: true, url: true } }),
+        'legacySubmission.findMany(fetch inserted)'
+      )
+      const legacyIdByUrl = new Map(insertedLegacy.map(r => [r.url, r.id]))
+
+      // 3) Bulk fingerprints (basic URL-based)
+      const fingerprintRows = newItems.map(({ submission }) => {
+        const platform = detectPlatformFromUrl(submission.submissionLink)
+        const fp = generateContentFingerprint(submission.submissionLink)
+        const legacyId = legacyIdByUrl.get(submission.submissionLink) as string
+        return {
+          legacySubmissionId: legacyId,
+          hash: fp.hash,
+          normalizedContent: fp.normalizedContent,
+          keyPhrases: fp.keyPhrases,
+          contentLength: fp.contentLength,
+          wordCount: fp.wordCount,
+          url: submission.submissionLink,
+          platform
+        }
+      })
+      // Some drivers limit batch size; split if large
+      const fpChunk = 500
+      for (let i = 0; i < fingerprintRows.length; i += fpChunk) {
+        const slice = fingerprintRows.slice(i, i + fpChunk)
+        await withRetry(
+          () => prisma.contentFingerprint.createMany({ data: slice, skipDuplicates: true }),
+          'contentFingerprint.createMany'
+        )
+      }
+
+      // 4) Bulk XP transactions and aggregated user XP updates
+      const xpTxRows: { userId: string; amount: number; type: 'SUBMISSION_REWARD'; description: string; weekNumber: number; createdAt: Date; sourceType: 'LEGACY_SUBMISSION' }[] = []
+      const xpByUser = new Map<string, number>()
+      for (const item of newItems) {
+        if (item.legacyXp > 0) {
+          const wn = getWeekNumber(item.submittedAt)
+          xpTxRows.push({
+            userId: item.userId,
+            amount: item.legacyXp,
+            type: 'SUBMISSION_REWARD',
+            description: `Legacy import: ${item.submission.submissionLink} (${item.submission.role})`,
+            weekNumber: wn,
+            createdAt: item.submittedAt,
+            sourceType: 'LEGACY_SUBMISSION'
+          })
+          xpByUser.set(item.userId, (xpByUser.get(item.userId) || 0) + item.legacyXp)
+        }
+      }
+
+      if (xpTxRows.length > 0) {
+        // Create transactions in batches
+        const txChunk = 500
+        for (let i = 0; i < xpTxRows.length; i += txChunk) {
+          const slice = xpTxRows.slice(i, i + txChunk)
+          await withRetry(
+            () => prisma.xpTransaction.createMany({ data: slice }),
+            'xpTransaction.createMany'
+          )
+        }
+
+        // Single SQL to increment per-user totals using VALUES (parameterized)
+        const pairs = Array.from(xpByUser.entries())
+        if (pairs.length > 0) {
+          const values = Prisma.join(
+            pairs.map(([id, amtRaw]) => {
+              const amt = Math.max(0, Math.trunc(amtRaw))
+              return Prisma.sql`(${id}::uuid, ${amt})`
+            })
+          )
+          await withRetry(
+            () => prisma.$executeRaw`UPDATE "User" AS u
+              SET "totalXp" = u."totalXp" + v.sum_xp
+              FROM (VALUES ${values}) AS v(id, sum_xp)
+              WHERE u.id = v.id;`,
+            'user.bulkIncrement'
+          )
+        }
+      }
+
+      imported += newItems.length
+      // Add to legacyUrlSet to prevent duplicates within this run
+      for (const u of newUrls) legacyUrlSet.add(u)
+    }
+
     return NextResponse.json({
       message: `Legacy import completed: ${imported} imported, ${duplicates} duplicates skipped, ${errors.length} errors`,
       imported,
       duplicates,
+      duplicateDetails,
       errors: errors.slice(0, 20) // Limit error list
     })
 
@@ -332,7 +490,8 @@ async function importLegacyHandler(request: NextRequest) {
 }
 
 // Legacy import handler (auth temporarily bypassed for testing)
-export async function POST(request: NextRequest) {
+/* disabled: legacy unauth import handler (kept for reference, not exported) */
+async function POST_unsecured_DISABLED(request: NextRequest) {
   console.log('🔍 Legacy import API called - AI evaluation disabled for legacy imports')
 
   try {
@@ -346,3 +505,7 @@ export async function POST(request: NextRequest) {
 }
 
 // TODO: Re-enable auth when ready: export const POST = withPermission(['ADMIN'])(importLegacyHandler)
+// Secured admin-only POST endpoint (replacing temporary bypass)
+export const POST = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
+  return importLegacyHandler(request)
+})

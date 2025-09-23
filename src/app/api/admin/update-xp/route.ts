@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { withPermission } from '@/lib/auth-middleware'
+import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
+import { logAdminAction } from '@/lib/audit-log'
 
 interface UpdateXpRequest {
   userId: string
@@ -8,7 +9,7 @@ interface UpdateXpRequest {
   reason?: string
 }
 
-async function updateXpHandler(request: NextRequest) {
+async function updateXpHandler(request: AuthenticatedRequest) {
   try {
     const { userId, xpAmount, reason = 'Admin manual adjustment' }: UpdateXpRequest = await request.json()
 
@@ -53,17 +54,27 @@ async function updateXpHandler(request: NextRequest) {
           userId: userId,
           amount: xpDifference,
           type: 'ADMIN_ADJUSTMENT',
-          description: `${reason} (${oldXp} → ${xpAmount})`,
-          weekNumber: Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000))
+          description: `${reason} (${oldXp} -> ${xpAmount})`,
+          weekNumber: Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000)),
+          adminId: request.user.id,
         }
       })
     }
 
-    console.log(`Admin updated XP for user ${updatedUser.username}: ${oldXp} → ${xpAmount} (${xpDifference >= 0 ? '+' : ''}${xpDifference})`)
+    // Best-effort admin action audit
+    await logAdminAction({
+      adminId: request.user.id,
+      action: 'XP_OVERRIDE',
+      targetType: 'user',
+      targetId: userId,
+      details: { oldXp, newXp: xpAmount, difference: xpDifference, reason },
+    })
+
+    console.log(`Admin updated XP for user ${updatedUser.username}: ${oldXp} -> ${xpAmount} (${xpDifference >= 0 ? '+' : ''}${xpDifference})`)
 
     // Invalidate user's cached data by triggering a cache refresh
     // This will force the dashboard to fetch fresh data
-    console.log(`🗑️ Invalidating cache for user ${updatedUser.id} after XP update`)
+    console.log(`??? Invalidating cache for user ${updatedUser.id} after XP update`)
 
     return NextResponse.json({
       message: `Successfully updated XP for ${updatedUser.username}`,
@@ -90,3 +101,4 @@ async function updateXpHandler(request: NextRequest) {
 }
 
 export const POST = withPermission('admin_access')(updateXpHandler)
+

@@ -4,6 +4,7 @@ import { withAdminOptimization } from '@/middleware/api-optimization'
 import { getOptimizedAdminSubmissions, bulkUpdateSubmissions } from '@/lib/queries/admin-submissions-optimized'
 import { parsePaginationParams } from '@/lib/pagination'
 import { prisma } from '@/lib/prisma'
+import { getWeekNumber } from '@/lib/utils'
 
 // Optimized admin submissions handler with compression
 const optimizedSubmissionsHandler = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
@@ -37,7 +38,11 @@ const optimizedSubmissionsHandler = withPermission('admin_access')(async (reques
       console.log('Admin submissions API - Received filters:', filters)
       console.log('Admin submissions API - URL search params:', Object.fromEntries(searchParams.entries()))
 
-      const submissionsData = await getOptimizedAdminSubmissions(filters, pagination)
+      // Bypass cache on explicit request or no-cache header
+      const bypassCache = searchParams.get('bypassCache') === '1' ||
+        request.headers.get('cache-control')?.toLowerCase().includes('no-cache') || false
+
+      const submissionsData = await getOptimizedAdminSubmissions(filters, pagination, { skipCache: bypassCache })
 
       const executionTime = Date.now() - startTime
       console.log(`⚡ Optimized admin submissions completed in ${executionTime}ms`)
@@ -83,7 +88,19 @@ const optimizedPostHandler = withPermission('admin_access')(async (request: Auth
       const { action, submissionIds, data } = body
 
       console.log(`🔄 Bulk ${action} for ${submissionIds.length} submissions`)
-      const result = await bulkUpdateSubmissions(submissionIds, action, data)
+      const result = await bulkUpdateSubmissions(submissionIds, action, data, request.user.id)
+
+      // Invalidate cached admin submissions lists on bulk updates
+      try {
+        const { QueryCache } = await import('@/lib/cache/query-cache')
+        await Promise.all([
+          QueryCache.invalidatePattern('admin_submissions:*'),
+          QueryCache.invalidatePattern('admin_submission_count:*'),
+          QueryCache.invalidatePattern('admin_submission_stats:*')
+        ])
+      } catch (e) {
+        console.warn('Cache invalidation failed (bulk admin_submissions):', e)
+      }
 
       return NextResponse.json(result)
     }
@@ -271,12 +288,16 @@ const originalGetHandler = withPermission('admin_access')(async (request: Authen
 
     // Transform submissions for frontend (simplified)
     const submissionsWithMetrics = submissions.map(submission => {
+      const platformLower = (submission.platform || '').toLowerCase()
+      const heuristicTaskType = submission.taskTypes?.[0]
+        || (platformLower.includes('twitter') || platformLower.includes('x.com') ? 'A'
+            : (platformLower.includes('reddit') || platformLower.includes('notion') || platformLower.includes('medium') ? 'B' : 'Unknown'))
       return {
         ...submission,
         // Transform fields to match frontend expectations
         title: `${submission.platform} submission`,
         content: `Submission from ${submission.url}`,
-        taskType: submission.taskTypes?.[0] || 'Unknown',
+        taskType: heuristicTaskType,
         xpAwarded: submission.finalXp || submission.aiXp || 0,
         peerXp: submission.peerXp || null,
         metrics: {
@@ -372,6 +393,7 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
 
       if (finalXp !== undefined) {
         updateData.finalXp = finalXp
+        updateData.status = 'FINALIZED'
 
         // If setting final XP, also update user's XP
         const submission = await prisma.submission.findUnique({
@@ -392,6 +414,11 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
         }
       }
 
+      const previous = await prisma.submission.findUnique({
+        where: { id: submissionId },
+        select: { finalXp: true, status: true, userId: true }
+      })
+
       const updatedSubmission = await prisma.submission.update({
         where: { id: submissionId },
         data: updateData,
@@ -403,6 +430,53 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
           }
         }
       })
+
+      // Best-effort admin action logs
+      try {
+        if (status) {
+          await prisma.adminAction.create({
+            data: {
+              adminId: request.user.id,
+              action: 'SYSTEM_CONFIG',
+              targetType: 'submission',
+              targetId: submissionId,
+              details: {
+                subAction: 'STATUS_CHANGE',
+                oldStatus: previous?.status,
+                newStatus: status,
+              }
+            }
+          })
+        }
+        if (finalXp !== undefined) {
+          await prisma.adminAction.create({
+            data: {
+              adminId: request.user.id,
+              action: 'XP_OVERRIDE',
+              targetType: 'submission',
+              targetId: submissionId,
+              details: {
+                oldXp: previous?.finalXp || 0,
+                newXp: finalXp,
+                difference: (finalXp - (previous?.finalXp || 0)),
+                reason: 'Single submission update',
+              }
+            }
+          })
+        }
+      } catch {}
+
+      // Invalidate cache for lists after single update too
+      try {
+        const { QueryCache } = await import('@/lib/cache/query-cache')
+        await Promise.all([
+          QueryCache.invalidatePattern('admin_submissions:*'),
+          QueryCache.invalidatePattern('admin_submission_count:*'),
+          QueryCache.invalidatePattern('admin_submission_stats:*')
+        ])
+      } catch (e) {
+        console.warn('Cache invalidation failed (single admin_submissions update):', e)
+      }
 
       return NextResponse.json({
         message: 'Submission updated successfully',
@@ -419,88 +493,21 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
         )
       }
 
-      let result
+      // Delegate to optimized bulk operation (with logging)
+      const result = await bulkUpdateSubmissions(submissionIds, action, data, request.user.id)
 
-      switch (action) {
-        case 'updateStatus':
-          if (!data?.status) {
-            return NextResponse.json(
-              { message: 'Status is required for updateStatus action' },
-              { status: 400 }
-            )
-          }
-
-          result = await prisma.submission.updateMany({
-            where: { id: { in: submissionIds } },
-            data: {
-              status: data.status,
-              updatedAt: new Date()
-            }
-          })
-          break
-
-        case 'updateXp':
-          if (typeof data?.xpAwarded !== 'number') {
-            return NextResponse.json(
-              { message: 'XP amount is required for updateXp action' },
-              { status: 400 }
-            )
-          }
-
-          // Update submissions and create XP transactions
-          const submissions = await prisma.submission.findMany({
-            where: { id: { in: submissionIds } },
-            include: { user: true }
-          })
-
-          for (const submission of submissions) {
-            const xpDifference = data.xpAwarded - (submission.finalXp || 0)
-
-            await prisma.$transaction([
-              // Update submission XP
-              prisma.submission.update({
-                where: { id: submission.id },
-                data: { finalXp: data.xpAwarded }
-              }),
-              // Update user total XP
-              prisma.user.update({
-                where: { id: submission.userId },
-                data: { totalXp: { increment: xpDifference } }
-              }),
-              // Create XP transaction record
-              prisma.xpTransaction.create({
-                data: {
-                  userId: submission.userId,
-                  amount: xpDifference,
-                  type: 'ADMIN_ADJUSTMENT',
-                  sourceId: submission.id,
-                  description: `Admin XP adjustment: ${data.reason || 'Manual adjustment'}`,
-                  weekNumber: Math.ceil(new Date().getDate() / 7)
-                }
-              })
-            ])
-          }
-
-          result = { count: submissions.length }
-          break
-
-        case 'delete':
-          result = await prisma.submission.deleteMany({
-            where: { id: { in: submissionIds } }
-          })
-          break
-
-        default:
-          return NextResponse.json(
-            { message: 'Invalid action' },
-            { status: 400 }
-          )
+      try {
+        const { QueryCache } = await import('@/lib/cache/query-cache')
+        await Promise.all([
+          QueryCache.invalidatePattern('admin_submissions:*'),
+          QueryCache.invalidatePattern('admin_submission_count:*'),
+          QueryCache.invalidatePattern('admin_submission_stats:*')
+        ])
+      } catch (e) {
+        console.warn('Cache invalidation failed (bulk admin_submissions update):', e)
       }
 
-      return NextResponse.json({
-        message: `Successfully ${action}d ${result.count} submissions`,
-        count: result.count
-      })
+      return NextResponse.json({ message: result.message, count: result.count })
     }
 
   } catch (error) {
@@ -518,4 +525,5 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
     )
   }
 })
+
 

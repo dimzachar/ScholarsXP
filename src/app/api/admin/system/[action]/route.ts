@@ -5,6 +5,7 @@ import { ValidationError } from '@/lib/api-error-handler'
 import { processWeeklyReset, checkMissedReviews } from '@/lib/weekly-manager'
 import { processReadySubmissions } from '@/lib/xp-aggregator'
 import { prisma } from '@/lib/prisma'
+import { logAdminAction } from '@/lib/audit-log'
 
 /**
  * Admin System Actions Router
@@ -139,6 +140,16 @@ async function handleWeeklyOperations(request: AuthenticatedRequest | null, trig
     if (isCron) {
       await logAutomationRun('weekly-operations-cron', 'weekly_operations', 'cron', true, result)
     }
+    // Admin action audit if triggered by admin
+    if (!isCron && request) {
+      await logAdminAction({
+        adminId: request.user.id,
+        action: 'SYSTEM_CONFIG',
+        targetType: 'system',
+        targetId: 'weekly',
+        details: result,
+      })
+    }
 
     return createSuccessResponse({
       message: 'Weekly operations completed successfully',
@@ -186,6 +197,16 @@ async function handleXpAggregation(request: AuthenticatedRequest | null, trigger
     // Log automation run if triggered by cron
     if (isCron) {
       await logAutomationRun('xp-aggregation-cron', 'xp_aggregation', 'cron', true, result)
+    }
+    // Admin action audit if triggered by admin
+    if (!isCron && request) {
+      await logAdminAction({
+        adminId: request.user.id,
+        action: 'SYSTEM_CONFIG',
+        targetType: 'system',
+        targetId: 'aggregate',
+        details: result,
+      })
     }
 
     return createSuccessResponse({
@@ -241,6 +262,16 @@ async function handleDataRefresh(request: AuthenticatedRequest | null, triggered
     // Log automation run if triggered by cron
     if (isCron) {
       await logAutomationRun('data-refresh-cron', 'data_refresh', 'cron', true, result)
+    }
+    // Admin action audit if triggered by admin
+    if (!isCron && request) {
+      await logAdminAction({
+        adminId: request.user.id,
+        action: 'SYSTEM_CONFIG',
+        targetType: 'system',
+        targetId: 'refresh',
+        details: result,
+      })
     }
 
     return createSuccessResponse({
