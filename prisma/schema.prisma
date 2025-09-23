@@ -94,6 +94,8 @@ model PeerReview {
   timeSpent      Int?       // in minutes
   qualityRating  Int?       @db.SmallInt // 1-5 rating
   isLate         Boolean    @default(false)
+  contentCategory String?
+  qualityTier     String?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
@@ -284,6 +286,8 @@ enum XpTransactionType {
   PENALTY
   ADMIN_ADJUSTMENT
   ACHIEVEMENT_BONUS
+  ROLE_PROMOTION
+  MONTHLY_WINNER_BONUS
 }
 
 enum NotificationType {
