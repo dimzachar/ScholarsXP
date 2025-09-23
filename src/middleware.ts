@@ -71,9 +71,14 @@ export async function middleware(request: NextRequest) {
     // Defaults
     let maxRequests = 60 // 60 RPM per path
     const windowMs = 60_000
-    // Use the first two path segments as endpoint key, e.g. /api/notifications
+    // Derive endpoint key to avoid cross-endpoint coupling
+    // Default: first two segments (e.g., /api/notifications)
     const segments = pathname.split('/').filter(Boolean)
-    const endpointKey = segments.length >= 2 ? `/api/${segments[1]}` : '/api'
+    let endpointKey = segments.length >= 2 ? `/api/${segments[1]}` : '/api'
+    // For admin APIs, use first three segments (e.g., /api/admin/system)
+    if (segments[1] === 'admin' && segments.length >= 3) {
+      endpointKey = `/api/${segments[1]}/${segments[2]}`
+    }
     let endpointType = endpointKey
 
     // Tuned limits by endpoint
@@ -82,7 +87,11 @@ export async function middleware(request: NextRequest) {
     } else if (endpointKey === '/api/peer-reviews') {
       maxRequests = 20
     } else if (endpointKey === '/api/admin') {
+      // Fallback for generic admin bucket (should be rare after three-segment key)
       maxRequests = 100
+    } else if (endpointKey === '/api/admin/system') {
+      // System operations (separate bucket from other admin APIs)
+      maxRequests = 30
     } else if (endpointKey === '/api/notifications') {
       // Higher allowance for polling/read operations
       maxRequests = 300

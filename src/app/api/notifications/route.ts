@@ -4,9 +4,9 @@ import {
   getUnreadCount
 } from '@/lib/notifications'
 import { withErrorHandling, createSuccessResponse } from '@/lib/api-middleware'
-import { withUserOptimization } from '@/middleware/api-optimization'
+import { withAPIOptimization } from '@/middleware/api-optimization'
 
-export const GET = withUserOptimization(
+export const GET = withAPIOptimization(
   withPermission('authenticated')(
     withErrorHandling(async (request: AuthenticatedRequest) => {
       const { searchParams } = new URL(request.url)
@@ -30,7 +30,8 @@ export const GET = withUserOptimization(
         unreadCount: await getUnreadCount(request.user.id)
       })
     })
-  )
+  ),
+  { rateLimitType: 'notifications', caching: true, compression: true, performanceMonitoring: true, rateLimit: true }
 )
 
 

@@ -138,15 +138,30 @@ function getFallbackBucket(key: string): FallbackBucket {
 }
 
 /**
- * Default key generator based on IP address
+ * Default key generator scoped by IP and endpoint
+ * - Uses first IP from x-forwarded-for (or request.ip) for client identity
+ * - Buckets by coarse endpoint path to avoid cross-endpoint coupling
  */
 function getDefaultKey(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for')
-  const ip = forwarded ? forwarded.split(',')[0].trim() : 
-             request.headers.get('x-real-ip') || 
-             request.ip || 
+  const ip = forwarded ? forwarded.split(',')[0].trim() :
+             request.headers.get('x-real-ip') ||
+             request.ip ||
              'unknown'
-  return ip
+
+  // Derive normalized endpoint key
+  try {
+    const url = new URL(request.url)
+    const parts = url.pathname.split('/').filter(Boolean)
+    let endpoint = parts.length >= 2 ? `/${parts[0]}/${parts[1]}` : url.pathname || '/'
+    // For admin APIs, use first three segments (e.g., /api/admin/system)
+    if (parts[0] === 'api' && parts[1] === 'admin' && parts.length >= 3) {
+      endpoint = `/${parts[0]}/${parts[1]}/${parts[2]}`
+    }
+    return `${ip}:${endpoint}`
+  } catch {
+    return `${ip}:/`
+  }
 }
 
 /**
@@ -208,6 +223,13 @@ export const RateLimiters = {
   upload: createRateLimit({
     windowMs: 60 * 1000, // 1 minute
     maxRequests: 5,
+    keyGenerator: getDefaultKey
+  }),
+
+  // Notifications (polling-friendly)
+  notifications: createRateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 300,
     keyGenerator: getDefaultKey
   })
 }
