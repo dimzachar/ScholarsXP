@@ -4,8 +4,9 @@ import { supabaseClient } from '@/lib/supabase'
 import { getWeekNumber } from '@/lib/utils'
 import { withErrorHandling, createSuccessResponse } from '@/lib/api-middleware'
 import { multiLayerCache } from '@/lib/cache/enhanced-cache'
+import { withPublicOptimization } from '@/middleware/api-optimization'
 
-export const GET = withErrorHandling(async (request: NextRequest) => {
+export const GET = withPublicOptimization(withErrorHandling(async (request: NextRequest) => {
   const { searchParams } = new URL(request.url)
   const weekParam = searchParams.get('week')
   const limitParam = searchParams.get('limit')
@@ -46,7 +47,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     console.error('Leaderboard API error:', error)
     throw error // Let withErrorHandling handle the error response
   }
-})
+}))
 
 async function fetchLeaderboardFromDatabase(currentWeek: number, limit: number, page: number, offset: number, type: string) {
 

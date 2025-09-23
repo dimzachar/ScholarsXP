@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withErrorHandling } from '@/lib/api-middleware'
 import { getMonthlyLeaderboard, getCurrentMonthUTC, getMonthlyWinners } from '@/lib/leaderboard-service'
 import { multiLayerCache } from '@/lib/cache/enhanced-cache'
+import { withPublicOptimization } from '@/middleware/api-optimization'
 
-export const GET = withErrorHandling(async (request: NextRequest) => {
+export const GET = withPublicOptimization(withErrorHandling(async (request: NextRequest) => {
   const { searchParams } = new URL(request.url)
   const month = searchParams.get('month') || getCurrentMonthUTC()
   const limit = Number(searchParams.get('limit') || 20)
@@ -23,4 +24,4 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   return NextResponse.json({ success: true, data }, {
     headers: { 'Cache-Control': 'public, max-age=300, stale-while-revalidate=600' }
   })
-})
+}))

@@ -53,6 +53,11 @@ export async function middleware(request: NextRequest) {
   // Apply rate limiting to API routes
   const shouldRateLimit = process.env.NODE_ENV === 'production' || process.env.RATE_LIMIT_ENABLED === 'true'
   if (pathname.startsWith('/api/') && shouldRateLimit) {
+    // Only apply global rate limiting to write/modify requests.
+    // GET requests are handled by route-level rate limiting wrappers.
+    if (request.method === 'GET') {
+      return response
+    }
     // Allowlist essential auth/session endpoints to prevent auth loops
     const rateLimitBypassPaths = [
       '/api/auth/session', // Supabase session cookie persistence

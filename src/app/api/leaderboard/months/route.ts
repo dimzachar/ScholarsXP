@@ -3,8 +3,9 @@ import { withErrorHandling } from '@/lib/api-middleware'
 import { getCurrentMonthUTC } from '@/lib/leaderboard-service'
 import { multiLayerCache } from '@/lib/cache/enhanced-cache'
 import { createServiceClient } from '@/lib/supabase-server'
+import { withPublicOptimization } from '@/middleware/api-optimization'
 
-export const GET = withErrorHandling(async (_request: NextRequest) => {
+export const GET = withPublicOptimization(withErrorHandling(async (_request: NextRequest) => {
   const cacheKey = `leaderboard:months`
   let data = await multiLayerCache.get<any>(cacheKey)
   if (!data) {
@@ -27,4 +28,4 @@ export const GET = withErrorHandling(async (_request: NextRequest) => {
     await multiLayerCache.set(cacheKey, data, 300)
   }
   return NextResponse.json({ success: true, data })
-})
+}))

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -64,37 +64,8 @@ export default function LeaderboardPage() {
   const [pageSize] = useState(20)
   const [activeTab, setActiveTab] = useState('weekly')
 
-  const fetchLeaderboardData = React.useCallback(async () => {
-    try {
-      setLoading(true)
-      const weeklyParams = new URLSearchParams({ page: String(weeklyPage), limit: String(pageSize) })
-      const allTimeParams = new URLSearchParams({ page: String(allTimePage), limit: String(pageSize) })
-
-      const [weeklyData, allTimeData, userPos] = await Promise.all([
-        apiGet(`/api/leaderboard/weekly?${weeklyParams}`),
-        apiGet(`/api/leaderboard/all-time?${allTimeParams}`),
-        fetchCurrentUserPosition(),
-      ])
-
-      setWeeklyStats(weeklyData?.data || weeklyData)
-      setAllTimeLeaders(allTimeData?.data?.items || allTimeData?.items || [])
-      setAllTimePagination(allTimeData?.data?.pagination || allTimeData?.pagination || null)
-      setAllTimeStats(allTimeData?.data?.stats || allTimeData?.stats || null)
-      setCurrentUserPosition(userPos)
-    } catch (e) {
-      console.error('Error fetching leaderboard data', e)
-    } finally {
-      setLoading(false)
-    }
-  }, [weeklyPage, allTimePage, pageSize, fetchCurrentUserPosition])
-
-  useEffect(() => { fetchLeaderboardData() }, [fetchLeaderboardData])
-
-  useEffect(() => {
-    if (!loading) fetchLeaderboardData()
-  }, [weeklyPage, allTimePage, loading, fetchLeaderboardData])
-
-  const fetchCurrentUserPosition = React.useCallback(async () => {
+  // Fetch current user position (defined first to avoid TDZ in deps)
+  const fetchCurrentUserPosition = useCallback(async () => {
     if (!user) {
       console.log('No user available for position fetch')
       return null
@@ -129,6 +100,38 @@ export default function LeaderboardPage() {
       }
     }
   }, [user])
+
+  const fetchLeaderboardData = useCallback(async () => {
+    try {
+      setLoading(true)
+      const weeklyParams = new URLSearchParams({ page: String(weeklyPage), limit: String(pageSize) })
+      const allTimeParams = new URLSearchParams({ page: String(allTimePage), limit: String(pageSize) })
+
+      const [weeklyData, allTimeData, userPos] = await Promise.all([
+        apiGet(`/api/leaderboard/weekly?${weeklyParams}`),
+        apiGet(`/api/leaderboard/all-time?${allTimeParams}`),
+        fetchCurrentUserPosition(),
+      ])
+
+      setWeeklyStats(weeklyData?.data || weeklyData)
+      setAllTimeLeaders(allTimeData?.data?.items || allTimeData?.items || [])
+      setAllTimePagination(allTimeData?.data?.pagination || allTimeData?.pagination || null)
+      setAllTimeStats(allTimeData?.data?.stats || allTimeData?.stats || null)
+      setCurrentUserPosition(userPos)
+    } catch (e) {
+      console.error('Error fetching leaderboard data', e)
+    } finally {
+      setLoading(false)
+    }
+  }, [weeklyPage, allTimePage, pageSize, fetchCurrentUserPosition])
+
+  useEffect(() => { fetchLeaderboardData() }, [fetchLeaderboardData])
+
+  useEffect(() => {
+    if (!loading) fetchLeaderboardData()
+  }, [weeklyPage, allTimePage, loading, fetchLeaderboardData])
+
+  // fetchCurrentUserPosition defined above
 
   // legacy fetchLeaderboardData removed; using useCallback version above
 
