@@ -238,6 +238,10 @@ function calculateSimilarity(str1: string, str2: string): number {
 // PostgreSQL-based rate limiting implementation
 import { prisma } from '@/lib/prisma'
 
+// Conservative fallback for rate limit backend failures
+type RLErrorState = { failures: number; firstAt: number; blockUntil?: number }
+const rlErrorState = new Map<string, RLErrorState>()
+
 export async function checkRateLimit(
   identifier: string,
   maxRequests: number,
@@ -246,6 +250,13 @@ export async function checkRateLimit(
 ): Promise<boolean> {
   const windowStart = new Date(Math.floor(Date.now() / windowMs) * windowMs)
   const expiresAt = new Date(windowStart.getTime() + windowMs)
+  const stateKey = `${identifier}:${endpointType}`
+
+  // If we recently saw repeated backend failures, apply short deny
+  const state = rlErrorState.get(stateKey)
+  if (state?.blockUntil && state.blockUntil > Date.now()) {
+    return false
+  }
 
   try {
     // Atomic upsert operation - no race conditions
@@ -269,6 +280,8 @@ export async function checkRateLimit(
       }
     })
 
+    // Success: reset error state on healthy backend
+    if (state) rlErrorState.delete(stateKey)
     return result.requestCount <= maxRequests
   } catch (error) {
     // Enhanced error handling with proper logging
@@ -279,8 +292,19 @@ export async function checkRateLimit(
       timestamp: new Date().toISOString()
     })
 
-    // Fail open for availability, but log for monitoring
-    // Frequent failures could indicate database issues or abuse attempts
+    // Conservative fallback: allow first transient errors, then short deny if repeated
+    const now = Date.now()
+    const cur = rlErrorState.get(stateKey)
+    if (!cur || now - cur.firstAt > 60_000) {
+      rlErrorState.set(stateKey, { failures: 1, firstAt: now })
+      return true
+    }
+    const failures = cur.failures + 1
+    if (failures >= 3) {
+      rlErrorState.set(stateKey, { failures, firstAt: cur.firstAt, blockUntil: now + 30_000 })
+      return false
+    }
+    rlErrorState.set(stateKey, { failures, firstAt: cur.firstAt })
     return true
   }
 }

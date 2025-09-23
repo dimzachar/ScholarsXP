@@ -5,6 +5,7 @@ import { enhancedDuplicateDetectionService } from '@/lib/enhanced-duplicate-dete
 import { aiEvaluationQueue } from '@/lib/ai-evaluation-queue'
 import { createNotification, NotificationType } from '@/lib/notifications'
 import { storeContentFingerprint } from '@/lib/duplicate-content-detector'
+import { ensureReviewAssignments } from '@/lib/auto-review-assignment'
 
 /**
  * Background processing queue for submissions
@@ -12,16 +13,20 @@ import { storeContentFingerprint } from '@/lib/duplicate-content-detector'
  */
 export class SubmissionProcessingQueue {
   private static instance: SubmissionProcessingQueue
-  private isProcessing = false
   private readonly MAX_RETRIES = 3
   private readonly PROCESSING_TIMEOUT = 300000 // 5 minutes
   private readonly CONTENT_FETCH_TIMEOUT = 15000 // 15 seconds (reduced from 30s)
+  private readonly BATCH_SIZE = 5
 
   static getInstance(): SubmissionProcessingQueue {
     if (!SubmissionProcessingQueue.instance) {
       SubmissionProcessingQueue.instance = new SubmissionProcessingQueue()
     }
     return SubmissionProcessingQueue.instance
+  }
+
+  private shouldProcessInline(): boolean {
+    return (process.env.ENABLE_IN_PROCESS_QUEUE || 'false').toLowerCase() === 'true'
   }
 
   /**
@@ -47,11 +52,10 @@ export class SubmissionProcessingQueue {
 
       console.log(`📥 Queued submission ${submissionId} for processing (priority: ${priority})`)
 
-      // Trigger immediate processing if not already running
-      if (!this.isProcessing) {
-        // Don't await - let it run in background
+      if (this.shouldProcessInline()) {
+        // Fire and forget so local/dev environments can still process immediately
         this.processQueue().catch(error => {
-          console.error('❌ Error in background submission processing:', error)
+          console.error('❌ Error in inline submission processing:', error)
         })
       }
     } catch (error) {
@@ -64,48 +68,81 @@ export class SubmissionProcessingQueue {
    * Process the submission queue
    */
   async processQueue(): Promise<{ processed: number; failed: number }> {
-    if (this.isProcessing) {
-      console.log('⏳ Submission processing already in progress')
-      return { processed: 0, failed: 0 }
-    }
-
-    this.isProcessing = true
     let processed = 0
     let failed = 0
 
     try {
       console.log('🚀 Starting submission processing queue...')
 
-      // Get pending submissions with priority ordering using raw SQL
-      const pendingSubmissions = await prisma.$queryRaw`
-        SELECT
-          sp.id,
-          sp."submissionId",
-          sp.status,
-          sp.priority,
-          sp."retryCount",
-          sp."createdAt",
-          s.id as submission_id,
-          s.url as submission_url,
-          s."userId" as submission_userId,
-          s.platform as submission_platform,
-          u.id as user_id,
-          u.username as user_username,
-          u.email as user_email
-        FROM "SubmissionProcessing" sp
-        JOIN "Submission" s ON sp."submissionId" = s.id
-        JOIN "User" u ON s."userId" = u.id
-        WHERE sp.status = 'PENDING'
-          AND sp."retryCount" < ${this.MAX_RETRIES}
-        ORDER BY
-          CASE sp.priority
-            WHEN 'HIGH' THEN 3
-            WHEN 'NORMAL' THEN 2
-            WHEN 'LOW' THEN 1
-          END DESC,
-          sp."createdAt" ASC
-        LIMIT 5
-      ` as any[]
+      const staleThreshold = new Date(Date.now() - this.PROCESSING_TIMEOUT)
+
+      // Claim a batch of jobs atomically so multiple workers can operate safely
+      const pendingSubmissions = await prisma.$transaction(async tx => {
+        return tx.$queryRaw`
+          WITH next_jobs AS (
+            SELECT
+              sp.id,
+              sp.priority,
+              sp."createdAt" AS job_created_at
+            FROM "SubmissionProcessing" sp
+            WHERE sp."retryCount" < ${this.MAX_RETRIES}
+              AND (
+                sp.status = 'PENDING'
+                OR (sp.status = 'PROCESSING' AND (sp."processingStartedAt" IS NULL OR sp."processingStartedAt" < ${staleThreshold}))
+              )
+            ORDER BY
+              CASE sp.priority
+                WHEN 'HIGH' THEN 3
+                WHEN 'NORMAL' THEN 2
+                WHEN 'LOW' THEN 1
+              END DESC,
+              sp."createdAt" ASC
+            LIMIT ${this.BATCH_SIZE}
+            FOR UPDATE SKIP LOCKED
+          ),
+          updated AS (
+            UPDATE "SubmissionProcessing" AS sp
+            SET status = 'PROCESSING',
+                "processingStartedAt" = NOW()
+            FROM next_jobs
+            WHERE sp.id = next_jobs.id
+            RETURNING
+              sp.id,
+              sp."submissionId",
+              sp.status,
+              sp.priority,
+              sp."retryCount",
+              sp."createdAt",
+              sp."processingStartedAt",
+              next_jobs.job_created_at
+          )
+          SELECT
+            updated.id,
+            updated."submissionId",
+            updated.status,
+            updated.priority,
+            updated."retryCount",
+            updated."createdAt",
+            updated."processingStartedAt",
+            s.id as submission_id,
+            s.url as submission_url,
+            s."userId" as submission_userId,
+            s.platform as submission_platform,
+            u.id as user_id,
+            u.username as user_username,
+            u.email as user_email
+          FROM updated
+          JOIN "Submission" s ON s.id = updated."submissionId"
+          JOIN "User" u ON u.id = s."userId"
+          ORDER BY
+            CASE updated.priority
+              WHEN 'HIGH' THEN 3
+              WHEN 'NORMAL' THEN 2
+              WHEN 'LOW' THEN 1
+            END DESC,
+            updated.job_created_at ASC
+        ` as any[]
+      })
 
       if (pendingSubmissions.length === 0) {
         console.log('📭 No submissions to process')
@@ -152,9 +189,9 @@ export class SubmissionProcessingQueue {
 
       console.log(`✅ Submission processing complete: ${processed} processed, ${failed} failed`)
       return { processed, failed }
-
-    } finally {
-      this.isProcessing = false
+    } catch (error) {
+      console.error('❌ Error running submission processing queue:', error)
+      return { processed, failed }
     }
   }
 
@@ -168,18 +205,59 @@ export class SubmissionProcessingQueue {
     try {
       console.log(`🔄 Processing submission ${submissionId}: ${submission.url}`)
 
-      // Mark as processing using raw SQL
-      await prisma.$executeRaw`
-        UPDATE "SubmissionProcessing"
-        SET status = 'PROCESSING', "processingStartedAt" = NOW()
-        WHERE id = ${processing.id}::uuid
-      `
-
       // Extract userId from the correct location
       const userId = submission.submission_userId || submission.userId || submission.user?.id
 
+      // Global kill-switch: skip content fetching/validation when disabled
+      const DISABLE_CONTENT_FETCH = (process.env.DISABLE_CONTENT_FETCH || 'false').toLowerCase() === 'true'
+      const ENABLE_AI_EVALUATION = (process.env.ENABLE_AI_EVALUATION || 'true').toLowerCase() === 'true'
+
+      const heuristicTaskTypes = (() => {
+        const platform = (submission.platform || '').toLowerCase()
+        if (platform.includes('twitter') || platform.includes('x.com')) return ['A']
+        if (platform.includes('reddit') || platform.includes('notion') || platform.includes('medium')) return ['B']
+        return []
+      })()
+      if (DISABLE_CONTENT_FETCH || !ENABLE_AI_EVALUATION) {
+        console.log(`⚙️  Content fetching/AI evaluation disabled. Fast-pathing ${submissionId} to AI_REVIEWED for peer review.`)
+
+        await prisma.submission.update({
+          where: { id: submissionId },
+          data: {
+            status: 'AI_REVIEWED',
+            aiXp: 0,
+            taskTypes: heuristicTaskTypes
+          }
+        })
+
+        await prisma.$executeRaw`
+          UPDATE "SubmissionProcessing"
+          SET status = 'COMPLETED', "processingCompletedAt" = NOW()
+          WHERE id = ${processing.id}::uuid
+        `
+
+        await createNotification(
+          userId,
+          NotificationType.SUBMISSION_PROCESSING,
+          '✅ Submission Ready for Review',
+          'Your submission is ready for peer review. AI evaluation is currently disabled.',
+          { submissionId, platform: submission.platform, skipAI: true }
+        )
+
+        if (userId) {
+          await ensureReviewAssignments(submissionId, userId, { taskTypes: heuristicTaskTypes })
+        } else {
+          console.warn(`[PeerReview] Skipping auto-assignment for ${submissionId}: submission userId missing`)
+        }
+
+        console.log(`✅ Submission ${submissionId} routed to peer review (AI disabled)`)
+        return true
+      }
+
       // Early platform check: Skip all validation for Twitter (peer review only)
-      if (submission.platform === 'Twitter') {
+      // Allow override via env to test thread extraction and AI evaluation for Twitter
+      const enableTwitterExtraction = (process.env.TWITTER_EXTRACT_THREADS || 'false').toLowerCase() === 'true'
+      if (submission.platform === 'Twitter' && !enableTwitterExtraction) {
         console.log(`🐦 Twitter submission detected - skipping content fetching and validation, routing directly to peer review`)
 
         // Skip AI evaluation and content validation, go directly to peer review
@@ -212,6 +290,12 @@ export class SubmissionProcessingQueue {
           { submissionId, platform: submission.platform, skipAI: true, skipValidation: true, taskTypes: ['A'] }
         )
 
+        if (userId) {
+          await ensureReviewAssignments(submissionId, userId, { taskTypes: ['A'] })
+        } else {
+          console.warn(`[PeerReview] Skipping auto-assignment for ${submissionId}: submission userId missing`)
+        }
+
         console.log(`✅ Twitter submission ${submissionId} routed directly to peer review (no validation or AI evaluation)`)
         return true
       }
@@ -220,11 +304,27 @@ export class SubmissionProcessingQueue {
       console.log(`📄 Fetching content for ${submissionId}`)
       let contentData
       try {
+        const isTwitter = submission.platform === 'Twitter'
+        const twitterThreadsEnabled = (process.env.TWITTER_EXTRACT_THREADS || 'false').toLowerCase() === 'true'
+        const contentFetchTimeout = (isTwitter && twitterThreadsEnabled)
+          ? Math.max(this.CONTENT_FETCH_TIMEOUT, 60000) // Allow up to 60s for Apify runs
+          : this.CONTENT_FETCH_TIMEOUT
+
         contentData = await this.withTimeout(
           fetchContentFromUrl(submission.url),
-          this.CONTENT_FETCH_TIMEOUT,
+          contentFetchTimeout,
           'Content fetching timeout'
         )
+
+        // Optional debug preview of extracted content
+        const logPreview = (process.env.LOG_EXTRACTED_CONTENT_PREVIEW || 'false').toLowerCase() === 'true'
+        if (logPreview && contentData && typeof contentData.content === 'string') {
+          const preview = contentData.content.substring(0, 600).replace(/\s+/g, ' ').trim()
+          console.log(`🧾 [Content Preview] ${submissionId} ` +
+            `(platform=${contentData.platform}, method=${contentData.metadata?.extractionMethod || 'unknown'}, ` +
+            `len=${contentData.content.length})\n` +
+            `${preview}${contentData.content.length > 600 ? '…' : ''}`)
+        }
       } catch (fetchError) {
         // If content fetching fails completely, reject with specific error
         if (fetchError.message.includes('timeout') || fetchError.message.includes('429')) {
@@ -370,7 +470,7 @@ export class SubmissionProcessingQueue {
       const submission = submissions[0]
       if (submission && submission.userId) {
         // Create detailed user-friendly notification with specific fixes
-        let notificationTitle = '❌ Submission Needs Attention'
+        const notificationTitle = '❌ Submission Needs Attention'
         let notificationMessage = ''
 
         if (reason === 'DUPLICATE_CONTENT') {
@@ -463,10 +563,12 @@ export class SubmissionProcessingQueue {
 
         console.log(`🔄 Retrying submission ${submissionId} in ${delay}ms (attempt ${retryCount + 2}/${this.MAX_RETRIES})`)
 
-        // Schedule retry
-        setTimeout(() => {
-          this.processQueue().catch(console.error)
-        }, delay)
+        if (this.shouldProcessInline()) {
+          // Allow inline processors (local/dev) to retry quickly without waiting for cron
+          setTimeout(() => {
+            this.processQueue().catch(console.error)
+          }, delay)
+        }
       } else {
         // Max retries exceeded - mark as failed
         await this.rejectSubmission(

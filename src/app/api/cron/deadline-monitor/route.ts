@@ -41,8 +41,15 @@ export async function GET(request: NextRequest) {
 // Also allow POST for manual triggering by admins
 export async function POST(request: NextRequest) {
   try {
-    // This would need admin authentication in a real implementation
-    // For now, we'll allow it for testing purposes
+    // Verify this is a legitimate cron request (same as GET)
+    const authHeader = request.headers.get('authorization')
+    const cronSecret = process.env.CRON_SECRET
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json(
+        { message: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
     
     console.log('🔧 Manual deadline monitoring triggered...')
 

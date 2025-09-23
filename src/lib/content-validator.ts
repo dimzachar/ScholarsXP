@@ -23,6 +23,7 @@ import { getWeekNumber } from '@/lib/utils'
 
 const REQUIRED_MENTION = '@ScholarsOfMove'
 const REQUIRED_HASHTAG = '#ScholarsOfMove'
+const DISABLE_MENTION_HASHTAG_VALIDATION = (process.env.DISABLE_MENTION_HASHTAG_VALIDATION || 'false').toLowerCase() === 'true'
 
 // Case-insensitive patterns for flexible detection
 const MENTION_PATTERNS = [
@@ -119,26 +120,31 @@ function validateUniversalRequirements(
   const errors: ValidationError[] = []
   const warnings: ValidationWarning[] = []
 
-  // Check for @ScholarsOfMove mention
-  if (!metadata.hasMention) {
-    errors.push({
-      code: 'MISSING_MENTION',
-      message: `Missing required @ScholarsOfMove mention`,
-      suggestion: `Add "${REQUIRED_MENTION}" anywhere in your content. This is required for all submissions.`,
-      field: 'content'
-    })
+  // Check for @ScholarsOfMove mention (can be disabled for testing)
+  if (!DISABLE_MENTION_HASHTAG_VALIDATION) {
+    if (!metadata.hasMention) {
+      errors.push({
+        code: 'MISSING_MENTION',
+        message: `Missing required @ScholarsOfMove mention`,
+        suggestion: `Add "${REQUIRED_MENTION}" anywhere in your content. This is required for all submissions.`,
+        field: 'content'
+      })
+    }
   }
 
   // Check for #ScholarsOfMove hashtag (temporarily disabled - only checking mention for now)
   // TODO: Re-enable hashtag requirement when tweets with both mention and hashtag are available
   /*
-  if (!metadata.hasHashtag) {
-    errors.push({
-      code: 'MISSING_HASHTAG',
-      message: `Missing required #ScholarsOfMove hashtag`,
-      suggestion: `Add "${REQUIRED_HASHTAG}" anywhere in your content. This is required for all submissions.`,
-      field: 'content'
-    })
+  // If we re-enable hashtag requirement in future, respect the disable flag as well
+  if (!DISABLE_MENTION_HASHTAG_VALIDATION) {
+    if (!metadata.hasHashtag) {
+      errors.push({
+        code: 'MISSING_HASHTAG',
+        message: `Missing required #ScholarsOfMove hashtag`,
+        suggestion: `Add "${REQUIRED_HASHTAG}" anywhere in your content. This is required for all submissions.`,
+        field: 'content'
+      })
+    }
   }
   */
 

@@ -54,6 +54,10 @@ export async function propagateXpChanges(
     const xpDifference = newXp - oldXp
     const currentWeek = getWeekNumber(new Date())
 
+    // Track applied diffs to communicate accurate changes
+    let appliedTotalChange = xpDifference
+    let appliedWeekChange = xpDifference
+
     // Execute all updates in a transaction
     await prisma.$transaction(async (tx) => {
       // 1. Update submission XP
@@ -62,21 +66,60 @@ export async function propagateXpChanges(
         data: { finalXp: newXp }
       })
 
-      // 2. Update user total XP
+      // 2. Read current user XP to safely clamp updates
+      const currentUser = await tx.user.findUnique({
+        where: { id: submission.userId },
+        select: { totalXp: true, currentWeekXp: true }
+      })
+
+      if (!currentUser) {
+        throw new Error('User not found for submission')
+      }
+
+      // 3. Read current weekly stats (if any) for precise clamping
+      const existingWeekly = await tx.weeklyStats.findUnique({
+        where: {
+          userId_weekNumber: {
+            userId: submission.userId,
+            weekNumber: currentWeek
+          }
+        },
+        select: { xpTotal: true }
+      })
+
+      // Compute clamped diffs to respect non-negative constraints
+      const appliedTotalDiff = xpDifference >= 0
+        ? xpDifference
+        : -Math.min(currentUser.totalXp, Math.abs(xpDifference))
+
+      const currentWeekUserXp = currentUser.currentWeekXp || 0
+      const currentWeekStatsXp = existingWeekly?.xpTotal || 0
+      const appliedWeekDiff = xpDifference >= 0
+        ? xpDifference
+        : -Math.min(currentWeekUserXp, Math.abs(xpDifference))
+
+      const newTotalXp = Math.max(0, currentUser.totalXp + appliedTotalDiff)
+      const newWeekXp = Math.max(0, currentWeekUserXp + appliedWeekDiff)
+      const newWeeklyStatsTotal = Math.max(0, currentWeekStatsXp + xpDifference)
+
+      appliedTotalChange = appliedTotalDiff
+      appliedWeekChange = appliedWeekDiff
+
+      // 4. Update user totals with clamped values
       await tx.user.update({
         where: { id: submission.userId },
         data: {
-          totalXp: { increment: xpDifference },
-          currentWeekXp: { increment: xpDifference }
+          totalXp: newTotalXp,
+          currentWeekXp: newWeekXp
         }
       })
       result.updatedEntities.userXp = true
 
-      // 3. Create XP transaction record
+      // 5. Create XP transaction record (amount reflects applied total diff)
       await tx.xpTransaction.create({
         data: {
           userId: submission.userId,
-          amount: xpDifference,
+          amount: appliedTotalDiff,
           type: 'ADMIN_ADJUSTMENT',
           sourceId: submissionId,
           description: `Admin XP modification: ${reason}`,
@@ -84,7 +127,7 @@ export async function propagateXpChanges(
         }
       })
 
-      // 4. Update weekly stats
+      // 6. Update weekly stats with clamped increment
       await tx.weeklyStats.upsert({
         where: {
           userId_weekNumber: {
@@ -93,7 +136,7 @@ export async function propagateXpChanges(
           }
         },
         update: {
-          xpTotal: { increment: xpDifference }
+          xpTotal: newWeeklyStatsTotal
         },
         create: {
           userId: submission.userId,
@@ -105,7 +148,7 @@ export async function propagateXpChanges(
       })
       result.updatedEntities.weeklyStats = true
 
-      // 5. Create admin action audit
+      // 7. Create admin action audit
       await tx.adminAction.create({
         data: {
           adminId,
@@ -116,6 +159,8 @@ export async function propagateXpChanges(
             oldXp,
             newXp,
             difference: xpDifference,
+            appliedTotalDiff,
+            appliedWeekDiff,
             reason
           }
         }
@@ -133,7 +178,7 @@ export async function propagateXpChanges(
       result.updatedEntities.achievements = true
 
       // Send real-time notification
-      await notifyXpChange(submission.userId, xpDifference, reason)
+      await notifyXpChange(submission.userId, appliedTotalChange, reason)
       result.updatedEntities.notifications = true
     } catch (postError) {
       console.warn('Non-critical post-transaction updates failed:', postError)

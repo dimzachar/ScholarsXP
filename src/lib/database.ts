@@ -146,6 +146,19 @@ export const userService = {
     }
     return count || 0
   }
+  ,
+  async sumTotalXp(): Promise<number> {
+    // Fetch only totalXp column for all users and sum client-side
+    const { data, error } = await supabaseClient
+      .from('User')
+      .select('totalXp')
+
+    if (error) {
+      console.error('Error summing total XP across users:', error)
+      return 0
+    }
+    return (data || []).reduce((sum, row: any) => sum + (row.totalXp || 0), 0)
+  }
 }
 
 // Submission operations
@@ -445,5 +458,19 @@ export const weeklyStatsService = {
       return 0
     }
     return count || 0
+  }
+  ,
+  async sumXpByWeek(weekNumber: number): Promise<number> {
+    // Fetch only xpTotal for the given week and sum client-side
+    const { data, error } = await supabaseClient
+      .from('WeeklyStats')
+      .select('xpTotal')
+      .eq('weekNumber', weekNumber)
+
+    if (error) {
+      console.error('Error summing weekly XP for week', weekNumber, error)
+      return 0
+    }
+    return (data || []).reduce((sum, row: any) => sum + (row.xpTotal || 0), 0)
   }
 }

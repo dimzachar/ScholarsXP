@@ -45,7 +45,7 @@ export const TASK_TYPES: Record<TaskTypeId, TaskTypeConfig> = {
   A: {
     id: 'A',
     name: 'Thread or Long Article',
-    description: 'Twitter/X thread (5+ tweets) OR long article',
+    description: 'Twitter/X thread (5+ tweets) OR Twitter Article',
     xpRange: { min: 20, max: 30 },
     maxCompletionsPerWeek: 3,
     weeklyLimit: 90, // 3 × 30
@@ -60,7 +60,7 @@ export const TASK_TYPES: Record<TaskTypeId, TaskTypeConfig> = {
     ],
     contentRequirements: [
       { platform: 'Twitter', minLength: 5, type: 'TWEET_COUNT' },
-      { platform: 'Any', minLength: 2000, type: 'CHARACTER_COUNT' }
+      { platform: 'Twitter', minLength: 2000, type: 'CHARACTER_COUNT' }
     ],
     canStackWith: ['C', 'D', 'E', 'F']
   },
@@ -68,7 +68,7 @@ export const TASK_TYPES: Record<TaskTypeId, TaskTypeConfig> = {
   B: {
     id: 'B',
     name: 'Platform Article',
-    description: 'Article in reddit/notion/medium (2000+ characters)',
+    description: 'Article on Medium or Reddit (2000+ characters)',
     xpRange: { min: 75, max: 150 },
     maxCompletionsPerWeek: 3,
     weeklyLimit: 450, // 3 × 150
@@ -81,16 +81,15 @@ export const TASK_TYPES: Record<TaskTypeId, TaskTypeConfig> = {
       },
       {
         type: 'PLATFORM_RESTRICTED',
-        description: 'Must be posted on Reddit, Notion, or Medium only',
-        platforms: ['Reddit', 'Notion', 'Medium']
+        description: 'Must be posted on Medium or Reddit only',
+        platforms: ['Reddit', 'Medium']
       }
     ],
     contentRequirements: [
       { platform: 'Reddit', minLength: 2000, type: 'CHARACTER_COUNT' },
-      { platform: 'Notion', minLength: 2000, type: 'CHARACTER_COUNT' },
       { platform: 'Medium', minLength: 2000, type: 'CHARACTER_COUNT' }
     ],
-    platformRestrictions: ['Reddit', 'Notion', 'Medium'],
+    platformRestrictions: ['Reddit', 'Medium'],
     canStackWith: ['A', 'C', 'D', 'E', 'F']
   },
 

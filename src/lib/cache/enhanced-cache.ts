@@ -70,6 +70,38 @@ export class SimplifiedMultiLayerCache {
     await this.dbCache.clear()
   }
 
+  /**
+   * Invalidate cache entries by simple substring pattern.
+   * Supports patterns like "admin_submissions:*" by matching the substring
+   * (the '*' wildcard is treated as any substring).
+   * Returns number of entries removed across layers.
+   */
+  async invalidateByPattern(pattern: string): Promise<number> {
+    const needle = pattern.replace(/\*/g, '')
+    let removed = 0
+
+    // Invalidate L1: memory cache
+    for (const key of this.memoryCache.keys()) {
+      if (key.includes(needle)) {
+        const ok = this.memoryCache.delete(key)
+        if (ok) removed += 1
+      }
+    }
+
+    // Invalidate L2: database cache (best-effort)
+    // DatabaseCache implements deleteByPattern; call it if available
+    const dbAny = this.dbCache as unknown as { deleteByPattern?: (needle: string) => Promise<number> }
+    if (dbAny.deleteByPattern) {
+      try {
+        removed += await dbAny.deleteByPattern(needle)
+      } catch (err) {
+        console.error('Database cache pattern invalidation error:', err)
+      }
+    }
+
+    return removed
+  }
+
   getStats() {
     return {
       memory: {

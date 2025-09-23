@@ -68,28 +68,28 @@ if (typeof window === 'undefined' && process.env.SUPPRESS_LOGS === 'true') {
   }
 
   // Override all console methods
-  console.log = (...args: any[]) => {
+  console.log = (...args: unknown[]) => {
     const message = args.join(' ')
     if (!shouldSuppress(message)) {
       original.log(...args)
     }
   }
 
-  console.info = (...args: any[]) => {
+  console.info = (...args: unknown[]) => {
     const message = args.join(' ')
     if (!shouldSuppress(message)) {
       original.info(...args)
     }
   }
 
-  console.warn = (...args: any[]) => {
+  console.warn = (...args: unknown[]) => {
     const message = args.join(' ')
     if (!shouldSuppress(message)) {
       original.warn(...args)
     }
   }
 
-  console.error = (...args: any[]) => {
+  console.error = (...args: unknown[]) => {
     const message = args.join(' ')
     // Be more careful with errors - only suppress obvious noise
     if (!shouldSuppress(message) || message.includes('Error:') || message.includes('Failed')) {
@@ -97,7 +97,7 @@ if (typeof window === 'undefined' && process.env.SUPPRESS_LOGS === 'true') {
     }
   }
 
-  console.debug = (...args: any[]) => {
+  console.debug = (...args: unknown[]) => {
     const message = args.join(' ')
     if (!shouldSuppress(message)) {
       original.debug(...args)

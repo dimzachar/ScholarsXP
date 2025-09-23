@@ -140,7 +140,7 @@ export const CacheTTL = {
   USER_LEADERBOARD: 300,    // 5 minutes
   
   // Submission data
-  SUBMISSIONS_LIST: 300,    // 5 minutes for admin lists (improved caching)
+  SUBMISSIONS_LIST: 60,    // 5 minutes for admin lists (improved caching)
   ADMIN_SUBMISSIONS: 180,   // 3 minutes specifically for admin submissions
   SUBMISSION_DETAILS: 300,  // 5 minutes for individual submissions
   

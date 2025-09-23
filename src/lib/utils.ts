@@ -109,11 +109,11 @@ export function detectPlatform(url: string): string | null {
       return 'Medium'
     }
 
-    if (hostname.includes('reddit.com')) {
+    if (hostname.includes('reddit.com') || hostname === 'redd.it') {
       return 'Reddit'
     }
 
-    if (hostname.includes('notion.so') || hostname.includes('notion.site')) {
+    if (hostname.includes('notion.so') || hostname.includes('notion.site') || hostname.includes('notion.com')) {
       return 'Notion'
     }
 

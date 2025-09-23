@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import { ContentAnalysis, ContentData } from '@/types/task-types'
+import { extractTwitterThread } from '@/lib/content-fetchers/twitter-thread'
 import { TASK_TYPES } from '@/lib/task-types'
 import { hasRequiredMention, hasRequiredHashtag } from '@/lib/content-validator'
 import { extractRedditContent as extractRedditContentAPI } from '@/lib/content-fetchers/reddit-api-client'
@@ -67,19 +68,22 @@ export async function evaluateContent(contentData: ContentData): Promise<Content
       },
     })
 
-    // Pre-validation: Check for required mention and hashtag
+    // Pre-validation: mention/hashtag checks (can be disabled for testing)
     const hasMention = hasRequiredMention(contentData.content)
     const hasHashtag = hasRequiredHashtag(contentData.content)
+    const disableValidation = (process.env.DISABLE_MENTION_HASHTAG_VALIDATION || 'false').toLowerCase() === 'true'
 
-    if (!hasMention || !hasHashtag) {
-      // Return minimal analysis for content missing requirements
-      return {
-        taskTypes: [],
-        baseXp: 0,
-        originalityScore: 0,
-        reasoning: `Content validation failed: Missing ${!hasMention ? '@ScholarsOfMove mention' : ''}${!hasMention && !hasHashtag ? ' and ' : ''}${!hasHashtag ? '#ScholarsOfMove hashtag' : ''}`,
-        confidence: 1.0,
-        qualityScore: 0
+    if (!disableValidation) {
+      if (!hasMention || !hasHashtag) {
+        // Return minimal analysis for content missing requirements
+        return {
+          taskTypes: [],
+          baseXp: 0,
+          originalityScore: 0,
+          reasoning: `Content validation failed: Missing ${!hasMention ? '@ScholarsOfMove mention' : ''}${!hasMention && !hasHashtag ? ' and ' : ''}${!hasHashtag ? '#ScholarsOfMove hashtag' : ''}`,
+          confidence: 1.0,
+          qualityScore: 0
+        }
       }
     }
 
@@ -125,7 +129,7 @@ Respond in JSON format:
 `
 
     const response = await openai.chat.completions.create({
-      model: 'openai/gpt-4o-mini',
+      model: 'openrouter/sonoma-dusk-alpha',
       messages: [
         {
           role: 'system',
@@ -229,6 +233,11 @@ function detectPlatform(url: string): string {
  * Includes timeout handling, retry logic, and graceful error handling
  */
 export async function fetchContentFromUrl(url: string): Promise<ContentData> {
+  // Global kill-switch for content fetching
+  const DISABLE_CONTENT_FETCH = (process.env.DISABLE_CONTENT_FETCH || 'false').toLowerCase() === 'true'
+  if (DISABLE_CONTENT_FETCH) {
+    throw new Error('Content fetching is disabled by DISABLE_CONTENT_FETCH flag')
+  }
   // Validate URL format
   if (!isValidUrl(url)) {
     throw new Error(`Invalid URL format: ${url}`)
@@ -239,6 +248,35 @@ export async function fetchContentFromUrl(url: string): Promise<ContentData> {
   const platform = detectPlatform(url)
 
   console.log(`🚀 Starting content extraction for ${url} (Platform: ${platform})`)
+
+  // New: Dedicated Twitter thread extractor first
+  if (platform === 'Twitter') {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🐦 Attempting Twitter thread extraction (attempt ${attempt}/${maxRetries})`)
+        const result = await withTimeout(
+          extractTwitterThread(url),
+          timeoutMs,
+          `Twitter extraction timed out after ${timeoutMs}ms`
+        )
+        if (result && result.content && result.content.trim().length > 0) {
+          console.log(`✅ Twitter thread extraction successful via ${result?.metadata?.extractionMethod || 'unknown'}`)
+          if ((result as any)?.metadata?.apifyActor) {
+            const m = (result as any).metadata
+            console.log(`🧩 Apify actor: ${m.apifyActor} run=${m.apifyRunId || '-'} dataset=${m.apifyDatasetId || '-'}`)
+          }
+          return result
+        }
+      } catch (error) {
+        console.error(`❌ Twitter extraction failed (attempt ${attempt}):`, error)
+        if (attempt === maxRetries) {
+          console.log(`All Twitter thread attempts failed, falling back to legacy flow`)
+          break
+        }
+        await new Promise(r => setTimeout(r, 1000 * attempt))
+      }
+    }
+  }
 
   // Try API-based extraction first (Reddit only - Twitter uses LLM fallback due to API restrictions)
   if (platform === 'Reddit') {
@@ -294,36 +332,11 @@ export async function fetchContentFromUrl(url: string): Promise<ContentData> {
     }
   }
 
-  // Try MCP approach with retries
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(`Attempting MCP content fetch for ${url} (attempt ${attempt}/${maxRetries})`)
-
-      const result = await withTimeout(
-        fetchContentWithMCP(url),
-        timeoutMs,
-        `MCP content fetching timed out after ${timeoutMs}ms`
-      )
-
-      console.log(`MCP content fetch successful for ${url}`)
-      return result
-    } catch (error) {
-      console.error(`MCP content fetching failed for ${url} (attempt ${attempt}):`, error)
-
-      if (attempt === maxRetries) {
-        break
-      }
-
-      // Wait before retry
-      await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
-    }
-  }
-
   // All approaches failed - return error for FLAGGED status
   console.error(`All content extraction attempts failed for ${url}`)
 
   // Provide more detailed error information for debugging
-  throw new Error(`Content extraction failed for ${url}: API, LLM, and MCP approaches all failed after ${maxRetries} attempts each. Please check the server logs for detailed error information. This submission will be flagged for manual review.`)
+  throw new Error(`Content extraction failed for ${url}: API and LLM approaches failed after ${maxRetries} attempts each. This submission will be flagged for manual review.`)
 }
 
 /**
@@ -363,7 +376,7 @@ async function fetchContentWithLLM(url: string): Promise<ContentData> {
   console.log(`📡 Making OpenRouter API call for ${url}`)
 
   const completion = await openrouter.chat.completions.create({
-    model: "openai/gpt-4o-mini",
+    model: "openrouter/sonoma-dusk-alpha",
     messages: [
       {
         role: "user",
@@ -699,8 +712,8 @@ function extractMediumContent(snapshot: string, url: string): { content: string;
 function extractRedditContent(snapshot: string, url: string): { content: string; title: string } {
   console.log(`🔴 Extracting Reddit content from snapshot`)
 
-  let title = 'Reddit Post'
-  let content = snapshot
+  const title = 'Reddit Post'
+  const content = snapshot
     .replace(/button|link|image|icon|menu|navigation|sidebar|vote|comment/gi, '')
     .replace(/\s+/g, ' ')
     .trim()
@@ -719,8 +732,8 @@ function extractRedditContent(snapshot: string, url: string): { content: string;
 function extractGenericContent(snapshot: string, url: string): { content: string; title: string } {
   console.log(`🌐 Extracting generic content from snapshot`)
 
-  let title = 'Web Content'
-  let content = snapshot
+  const title = 'Web Content'
+  const content = snapshot
     .replace(/button|link|image|icon|menu|navigation|sidebar|header|footer/gi, '')
     .replace(/\s+/g, ' ')
     .trim()

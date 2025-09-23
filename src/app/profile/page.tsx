@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { useAuth } from '@/contexts/AuthContext'
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout'
 import { MobileLayout, MobileSection, MobileHeader, MobileCardGrid } from '@/components/layout/MobileLayout'
@@ -33,8 +32,10 @@ interface UserProfileData {
     totalXp: number
     currentWeekXp: number
     streakWeeks: number
-    createdAt: string
-    updatedAt: string
+    // Optimized API returns joinedAt; keep createdAt optional for backward compat
+    joinedAt?: string
+    createdAt?: string
+    updatedAt?: string
   }
   statistics: {
     totalSubmissions: number
@@ -57,8 +58,12 @@ interface UserProfileData {
   recentSubmissions: Array<{
     id: string
     title: string
+    url?: string
+    platform?: string
     status: string
-    finalXp: number
+    // Optimized API uses xpAwarded; legacy may use finalXp
+    xpAwarded?: number
+    finalXp?: number
     createdAt: string
   }>
   recentReviews: Array<{
@@ -76,9 +81,9 @@ interface UserProfileData {
 }
 
 export default function ProfilePage() {
-  const { user, userProfile, loading: authLoading } = useAuth()
+  const { user, userProfile: _userProfile, loading: authLoading } = useAuth()
   const router = useRouter()
-  const { isMobile, isTablet } = useResponsiveLayout()
+  const { isMobile, isTablet: _isTablet } = useResponsiveLayout()
   
   const [profileData, setProfileData] = useState<UserProfileData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -125,12 +130,11 @@ export default function ProfilePage() {
     }
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })
+  const formatDate = (dateString?: string | null) => {
+    if (!dateString) return '—'
+    const d = new Date(dateString)
+    if (isNaN(d.getTime())) return '—'
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
   }
 
   if (authLoading || loading) {
@@ -174,7 +178,7 @@ export default function ProfilePage() {
     )
   }
 
-  const { profile, statistics, recentSubmissions, recentReviews, achievements } = profileData
+  const { profile, statistics, recentSubmissions, recentReviews: _recentReviews, achievements: _achievements } = profileData
 
   return (
     <MobileLayout>
@@ -319,9 +323,41 @@ export default function ProfilePage() {
               <Calendar className="h-5 w-5 text-muted-foreground" />
               <div>
                 <p className="text-sm font-medium">Member since</p>
-                <p className="text-sm text-muted-foreground">{formatDate(profile.createdAt)}</p>
+                <p className="text-sm text-muted-foreground">{formatDate(profile.joinedAt || profile.createdAt)}</p>
               </div>
             </div>
+          </CardContent>
+        </Card>
+      </MobileSection>
+
+      {/* Recent Submissions */}
+      <MobileSection spacing="normal">
+        <Card>
+          <CardHeader className={isMobile ? 'p-4 pb-2' : ''}>
+            <CardTitle className={isMobile ? 'text-base' : 'text-lg'}>Recent Submissions</CardTitle>
+          </CardHeader>
+          <CardContent className={isMobile ? 'p-4 pt-0' : ''}>
+            {recentSubmissions && recentSubmissions.length > 0 ? (
+              <div className="space-y-3">
+                {recentSubmissions.map((sub) => (
+                  <div key={sub.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="min-w-0 mr-3">
+                      <p className="font-medium truncate">{sub.title || sub.url || 'Untitled Submission'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDate(sub.createdAt)}
+                        {sub.platform ? ` • ${sub.platform}` : ''}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium">{(sub.xpAwarded ?? sub.finalXp ?? 0)} XP</p>
+                      <p className="text-xs text-muted-foreground">{sub.status}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-6">No recent submissions</p>
+            )}
           </CardContent>
         </Card>
       </MobileSection>

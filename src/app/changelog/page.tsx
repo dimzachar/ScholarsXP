@@ -7,8 +7,8 @@ import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Calendar, GitBranch, Plus, Edit, Bug, Trash2, Wrench, ChevronUp, Filter, X, Globe, Sparkles, Settings } from 'lucide-react'
-import { staticChangelogData, type ChangelogEntry } from '@/lib/changelog'
+import { Calendar, GitBranch, Plus, Edit, Bug, Trash2, Wrench, ChevronUp, Filter, Globe, Sparkles } from 'lucide-react'
+import { staticChangelogData } from '@/lib/changelog'
 
 
 const getChangeTypeConfig = (type: string) => {
@@ -292,7 +292,7 @@ export default function ChangelogPage() {
           <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-border"></div>
 
           <div className="space-y-12">
-            {displayedData.map((entry, index) => (
+            {displayedData.map((entry) => (
             <div
               key={entry.version}
               className="relative transition-all duration-300 ease-in-out"

@@ -228,7 +228,7 @@ export async function checkMissedReviews(): Promise<number> {
   }
 }
 
-export async function getWeeklyInsights(weekNumber?: number): Promise<any> {
+export async function getWeeklyInsights(weekNumber?: number): Promise<unknown> {
   try {
     const targetWeek = weekNumber || getWeekNumber(new Date()) - 1 // Previous week by default
 

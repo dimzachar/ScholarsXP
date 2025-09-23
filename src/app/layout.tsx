@@ -34,7 +34,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${oxanium.variable} font-sans`}>
+      <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+      </head>
+      <body suppressHydrationWarning className={`${oxanium.variable} font-sans`}>
           <ThemeProvider
             attribute="class"
             defaultTheme="system"

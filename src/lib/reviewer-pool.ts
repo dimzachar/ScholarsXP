@@ -10,6 +10,8 @@ export interface ReviewerPoolOptions {
   excludeUserIds?: string[]
   taskTypes?: string[]
   minReviewerRating?: number
+  minimumReviewers?: number
+  allowPartialAssignment?: boolean
 }
 
 export interface ReviewerCandidate {
@@ -127,7 +129,7 @@ export class ReviewerPoolService {
           }
 
           // Filter by minimum XP (ensure reviewer has some experience)
-          if (candidate.totalXp < 50) {
+          if (candidate.totalXp < 50 && candidate.role !== 'ADMIN') {
             return false
           }
 
@@ -173,15 +175,25 @@ export class ReviewerPoolService {
         options
       )
 
-      if (availableReviewers.length < this.MIN_REVIEWERS_REQUIRED) {
-        result.errors.push(
-          `Insufficient reviewers available. Found ${availableReviewers.length}, need ${this.MIN_REVIEWERS_REQUIRED}`
-        )
-        return result
+      const minimumReviewers = options.minimumReviewers ?? this.MIN_REVIEWERS_REQUIRED
+
+      if (availableReviewers.length < minimumReviewers) {
+        if (availableReviewers.length === 0) {
+          result.errors.push(`No eligible reviewers available. Need at least ${minimumReviewers}`)
+          return result
+        }
+
+        if (!options.allowPartialAssignment) {
+          result.errors.push(`Insufficient reviewers available. Found ${availableReviewers.length}, need ${minimumReviewers}`)
+          return result
+        }
+
+        result.warnings.push(`Insufficient reviewers available. Assigning ${availableReviewers.length} of ${minimumReviewers} requested`)
       }
 
-      // Select top 3 reviewers (already sorted by workload and XP)
-      const selectedReviewers = availableReviewers.slice(0, this.MIN_REVIEWERS_REQUIRED)
+      // Select reviewers (already sorted by workload and XP)
+      const reviewerCount = Math.min(availableReviewers.length, minimumReviewers)
+      const selectedReviewers = availableReviewers.slice(0, reviewerCount)
 
       // Calculate deadline (48 hours from now, excluding weekends)
       const deadline = this.calculateReviewDeadline()
@@ -338,7 +350,7 @@ export class ReviewerPoolService {
     }
 
     // Check experience
-    if (reviewer.totalXp < 50) {
+    if (reviewer.totalXp < 50 && reviewer.role !== 'ADMIN') {
       return { canAssign: false, reason: 'Insufficient experience (minimum 50 XP required)' }
     }
 

@@ -121,6 +121,40 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   }
 
+  const syncSessionCookies = async (nextSession: Session | null) => {
+    try {
+      if (nextSession?.access_token) {
+        const response = await fetch('/api/auth/session', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            accessToken: nextSession.access_token,
+            refreshToken: nextSession.refresh_token,
+            expiresAt: nextSession.expires_at ?? null
+          })
+        })
+
+        if (!response.ok) {
+          console.error('Failed to persist Supabase session cookie', await response.text())
+        }
+      } else {
+        const response = await fetch('/api/auth/session', {
+          method: 'DELETE',
+          credentials: 'include'
+        })
+
+        if (!response.ok) {
+          console.error('Failed to clear Supabase session cookie', await response.text())
+        }
+      }
+    } catch (error) {
+      console.error('Error syncing Supabase session cookies:', error)
+    }
+  }
+
   useEffect(() => {
     let mounted = true
 
@@ -133,12 +167,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setSession(session)
         setUser(session?.user ?? null)
 
-        // Set/clear the access token cookie for middleware
-        if (session?.access_token) {
-          document.cookie = `sb-access-token=${session.access_token}; path=/; max-age=3600; SameSite=Lax`
-        } else {
-          document.cookie = 'sb-access-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
-        }
+        await syncSessionCookies(session)
 
         // Fetch user profile when user is available
         if (session?.user) {
@@ -163,10 +192,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setSession(session)
         setUser(session?.user ?? null)
 
-        // Set the access token cookie for middleware
-        if (session?.access_token) {
-          document.cookie = `sb-access-token=${session.access_token}; path=/; max-age=3600; SameSite=Lax`
-        }
+        syncSessionCookies(session).catch(error => {
+          console.error('Error syncing initial Supabase session cookies:', error)
+        })
 
         // Fetch user profile if session exists
         if (session?.user) {
@@ -377,8 +405,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       localStorage.clear()
       sessionStorage.clear()
 
-      // Clear the access token cookie
-      document.cookie = 'sb-access-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+      await syncSessionCookies(null)
 
       // Sign out from Supabase with timeout
       const signOutPromise = supabase.auth.signOut()

@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { xpAnalyticsService } from './xp-analytics'
 import { prisma } from '@/lib/prisma'
-import { getWeekNumber } from '@/lib/utils'
+import { getWeekNumber, getWeekBoundaries } from '@/lib/utils'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -38,8 +38,8 @@ export interface ReviewerReliability {
  * Service for calculating consensus scores from AI and peer reviews
  */
 export class ConsensusCalculatorService {
-  private readonly AI_BASE_WEIGHT = 0.4 // 40% weight for AI evaluation
-  private readonly PEER_BASE_WEIGHT = 0.6 // 60% weight for peer reviews
+  private readonly AI_BASE_WEIGHT = 0.0 // AI disabled for consensus (peer-only)
+  private readonly PEER_BASE_WEIGHT = 1.0 // 100% weight for peer reviews
   private readonly MIN_REVIEWS_FOR_CONSENSUS = 2
   private readonly OUTLIER_THRESHOLD = 2.0 // Standard deviations
   private readonly HIGH_CONFIDENCE_THRESHOLD = 0.8
@@ -99,17 +99,15 @@ export class ConsensusCalculatorService {
         outliers
       )
 
-      // Determine dynamic weights based on agreement and quality
+      // Peer-only consensus: compute agreement among peers, ignore AI completely
       const agreement = this.calculateAgreement(peerXpScores)
-      const { aiWeight, peerWeight } = this.calculateDynamicWeights(
-        agreement,
-        reviews.length,
-        reviewerReliabilities
-      )
+      const aiWeight = 0
+      const peerWeight = 1
 
-      // Calculate final consensus score
-      const consensusScore = (submission.aiXp * aiWeight) + (weightedPeerAverage * peerWeight)
-      const finalXp = Math.round(consensusScore)
+      // Final XP is peer-only (weighted by reviewer reliability, outliers removed)
+      const finalXp = Math.round(weightedPeerAverage)
+      // Store consensusScore as peer agreement (0-1) for UI/analytics
+      const consensusScore = Math.round(agreement * 100) / 100
 
       // Calculate confidence level
       const confidence = this.calculateConfidence(agreement, reviews.length, reviewerReliabilities)
@@ -119,14 +117,11 @@ export class ConsensusCalculatorService {
       if (outliers.length > 0) {
         adjustments.push(`Excluded ${outliers.length} outlier review(s)`)
       }
-      if (aiWeight !== this.AI_BASE_WEIGHT) {
-        adjustments.push(`Adjusted AI weight to ${Math.round(aiWeight * 100)}%`)
-      }
 
       const result: ConsensusResult = {
         submissionId,
         finalXp,
-        consensusScore: Math.round(consensusScore * 100) / 100,
+        consensusScore,
         aiWeight,
         peerWeight,
         reviewCount: reviews.length,
@@ -152,6 +147,25 @@ export class ConsensusCalculatorService {
         `Consensus XP for submission ${submissionId}`,
         submissionId
       )
+
+      // Award reviewer quality bonuses automatically based on agreement with final XP
+      try {
+        const threshold = 15 // points within final XP to count as accurate
+        for (const r of reviews) {
+          const deviation = Math.abs((r.xpScore || 0) - finalXp)
+          if (deviation <= threshold) {
+            await xpAnalyticsService.recordXpTransaction(
+              r.reviewerId,
+              2,
+              'REVIEW_REWARD',
+              `Quality bonus for accurate review on submission ${submissionId}`,
+              submissionId
+            )
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to award reviewer quality bonuses:', e)
+      }
 
       console.log(`✅ Consensus calculated for submission ${submissionId}: ${finalXp} XP (confidence: ${confidence})`)
 
@@ -381,7 +395,21 @@ export class ConsensusCalculatorService {
           throw new Error(`Submission ${submissionId} not found`)
         }
 
-        // 2. Update submission with consensus results
+        // 2. Enforce weekly finalization cap (max 5 FINALIZED per user per week)
+        const now = new Date()
+        const { startDate, endDate } = getWeekBoundaries(getWeekNumber(now), now.getFullYear())
+        const finalizedThisWeek = await tx.submission.count({
+          where: {
+            userId: submission.userId,
+            status: 'FINALIZED',
+            createdAt: { gte: startDate, lte: endDate }
+          }
+        })
+        if (finalizedThisWeek >= 5) {
+          throw new Error('Weekly submission cap reached (5). Cannot finalize additional submissions this week.')
+        }
+
+        // 3. Update submission with consensus results
         await tx.submission.update({
           where: { id: submissionId },
           data: {
@@ -391,7 +419,7 @@ export class ConsensusCalculatorService {
           }
         })
 
-        // 3. Update user's total XP (atomic increment)
+        // 4. Update user's total XP (atomic increment)
         await tx.user.update({
           where: { id: submission.userId },
           data: {
@@ -400,7 +428,7 @@ export class ConsensusCalculatorService {
           }
         })
 
-        // 4. Update weekly stats (atomic upsert)
+        // 5. Update weekly stats (atomic upsert)
         const currentWeek = getWeekNumber(new Date())
         await tx.weeklyStats.upsert({
           where: {

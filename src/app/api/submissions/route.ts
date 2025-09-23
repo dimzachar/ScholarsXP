@@ -13,9 +13,10 @@
 import { detectPlatform, getWeekNumber } from '@/lib/utils'
 import { withPermission, withAuth, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { submissionProcessingQueue } from '@/lib/submission-processing-queue'
-import { createServiceClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { submissionService } from '@/lib/database'
 import { enhancedDuplicateDetectionService } from '@/lib/enhanced-duplicate-detection'
+import { withAPIOptimization } from '@/middleware/api-optimization'
 import {
   withErrorHandling,
   createSuccessResponse,
@@ -32,11 +33,12 @@ import {
  * Fast submission endpoint - provides immediate response while queuing heavy operations
  * Target response time: < 3 seconds
  */
-export const POST = withPermission('submit_content')(
-  withErrorHandling(async (request: AuthenticatedRequest) => {
-    const startTime = Date.now()
+export const POST = withAPIOptimization(
+  withPermission('submit_content')(
+    withErrorHandling(async (request: AuthenticatedRequest) => {
+      const startTime = Date.now()
 
-    const { url } = await request.json()
+      const { url } = await request.json()
 
     // ========================================
     // FAST OPERATIONS ONLY (< 2 seconds total)
@@ -79,9 +81,31 @@ export const POST = withPermission('submit_content')(
 
     console.log(`✅ Fast duplicate check passed - URL is unique`)
 
-    // 4. Create submission record with PROCESSING status (< 200ms)
-    const supabase = createServiceClient()
+    // 4. Weekly cap pre-check: max 5 non-rejected submissions this week
     const weekNumber = getWeekNumber()
+    const supabase = createServerSupabaseClient()
+    try {
+      const { count, error: capError } = await supabase
+        .from('Submission')
+        .select('*', { count: 'exact', head: true })
+        .eq('userId', request.user!.id)
+        .eq('weekNumber', weekNumber)
+        .neq('status', 'REJECTED')
+
+      if (capError) {
+        console.warn('Weekly cap check failed; proceeding without cap enforcement', capError)
+      } else if ((count || 0) >= 5) {
+        throw new ValidationError('Weekly submission cap reached (5 total this week)', {
+          weekNumber,
+          cap: 5
+        })
+      }
+    } catch (capCheckErr) {
+      if (capCheckErr instanceof ValidationError) throw capCheckErr
+      console.warn('Weekly cap check encountered an error; proceeding', capCheckErr)
+    }
+
+    // 5. Create submission record with PROCESSING status (< 200ms)
     const { data: submission, error: submissionError } = await supabase
       .from('Submission')
       .insert({
@@ -104,7 +128,7 @@ export const POST = withPermission('submit_content')(
       })
     }
 
-    // 5. Queue for background processing (< 100ms)
+    // 6. Queue for background processing (< 100ms)
     try {
       await submissionProcessingQueue.queueSubmission(submission.id, 'NORMAL')
       console.log(`📥 Queued submission ${submission.id} for background processing`)
@@ -117,41 +141,46 @@ export const POST = withPermission('submit_content')(
         .eq('id', submission.id)
     }
 
-    // 6. Return immediate success response
+    // 7. Return immediate success response
     const responseTime = Date.now() - startTime
     console.log(`⚡ Fast submission complete: ${submission.id} in ${responseTime}ms`)
 
-    return createSuccessResponse({
-      message: 'Submission received and is being processed',
-      submissionId: submission.id,
-      status: 'PROCESSING',
-      estimatedProcessingTime: '1-3 minutes',
-      trackingUrl: `/submissions/${submission.id}/status`,
-      responseTime: `${responseTime}ms`
+      return createSuccessResponse({
+        message: 'Submission received and is being processed',
+        submissionId: submission.id,
+        status: 'PROCESSING',
+        estimatedProcessingTime: '1-3 minutes',
+        trackingUrl: `/submissions/${submission.id}/status`,
+        responseTime: `${responseTime}ms`
+      })
     })
-  })
+  ),
+  { rateLimit: true, rateLimitType: 'api', compression: false, caching: false, performanceMonitoring: true }
 )
 
-export const GET = withAuth(
-  withErrorHandling(async (request: AuthenticatedRequest) => {
-    const { searchParams } = new URL(request.url)
-    const limit = parseInt(searchParams.get('limit') || '20')
-    const userOnly = searchParams.get('userOnly') === 'true'
+export const GET = withAPIOptimization(
+  withAuth(
+    withErrorHandling(async (request: AuthenticatedRequest) => {
+      const { searchParams } = new URL(request.url)
+      const limit = parseInt(searchParams.get('limit') || '20')
+      const userOnly = searchParams.get('userOnly') === 'true'
 
-    let submissions
+      let submissions
 
-    if (userOnly || request.userProfile!.role === 'USER') {
-      // Users can only see their own submissions
-      submissions = await submissionService.findManyByUser(request.user!.id, limit)
-    } else {
-      // Reviewers and admins can see all submissions
-      submissions = await submissionService.findManyWithUser(limit)
-    }
+      if (userOnly || request.userProfile!.role === 'USER') {
+        // Users can only see their own submissions
+        submissions = await submissionService.findManyByUser(request.user!.id, limit)
+      } else {
+        // Reviewers and admins can see all submissions
+        submissions = await submissionService.findManyWithUser(limit)
+      }
 
-    return createSuccessResponse({
-      submissions,
-      userRole: request.userProfile!.role
+      return createSuccessResponse({
+        submissions,
+        userRole: request.userProfile!.role
+      })
     })
-  })
+  ),
+  { rateLimit: true, rateLimitType: 'api', compression: true, caching: true, performanceMonitoring: true }
 )
 

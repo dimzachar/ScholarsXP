@@ -1,4 +1,5 @@
 import { supabaseClient } from '@/lib/supabase'
+import { createServiceClient } from '@/lib/supabase-server'
 
 export interface Notification {
   id: string
@@ -33,7 +34,9 @@ export async function createNotification(
   data?: any
 ): Promise<Notification> {
   try {
-    const { data: notification, error } = await supabaseClient
+    // Use service client for server-side writes to bypass RLS safely
+    const service = createServiceClient()
+    const { data: notification, error } = await service
       .from('notifications')
       .insert({
         userId,

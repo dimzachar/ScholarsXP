@@ -1,18 +1,17 @@
 import { prisma } from '@/lib/prisma'
 import { getWeekNumber } from '@/lib/utils'
-import { TASK_TYPES, getTaskType } from '@/lib/task-types'
+// import { TASK_TYPES, getTaskType } from '@/lib/task-types'
 import { classifyMultiTask } from '@/lib/multi-task-classifier'
 import { getCurrentWeeklyProgress } from '@/lib/weekly-task-tracker'
 import { fetchContentFromUrl } from '@/lib/ai-evaluator'
 import {
   MultiTaskResult,
-  TaskTypeId,
   XPAggregationResult,
   ContentData
 } from '@/types/task-types'
 
 // Updated weekly task caps based on new system
-const WEEKLY_TASK_CAPS = {
+const _WEEKLY_TASK_CAPS = {
   A: 90,  // Thread or Long Article - max 90 XP per week (3 × 30)
   B: 450, // Platform Article - max 450 XP per week (3 × 150)
   C: 90,  // Tutorial/Guide - max 90 XP per week (3 × 30)
@@ -73,7 +72,7 @@ export async function aggregateXP(submissionId: string): Promise<EnhancedXPAggre
 
       // Use multi-task result as base, but adjust with peer review quality assessment
       const qualityMultiplier = averagePeerXp / Math.max(aiXp, 1) // Peer vs AI quality ratio
-      const adjustedXp = Math.round(multiTaskResult.totalXp * Math.min(Math.max(qualityMultiplier, 0.5), 1.5))
+      const _adjustedXp = Math.round(multiTaskResult.totalXp * Math.min(Math.max(qualityMultiplier, 0.5), 1.5))
 
       // Get user's current weekly progress
       const weeklyProgress = await getCurrentWeeklyProgress(submission.userId)
@@ -203,7 +202,9 @@ export async function processReadySubmissions(): Promise<number> {
     for (const submission of readySubmissions) {
       if (submission.peerReviews.length >= 3) {
         try {
-          await aggregateXP(submission.id)
+          // Switch to peer-only consensus finalization
+          const { consensusCalculatorService } = await import('@/lib/consensus-calculator')
+          await consensusCalculatorService.calculateConsensus(submission.id)
           processedCount++
           console.log(`Processed XP aggregation for submission ${submission.id}`)
         } catch (error) {

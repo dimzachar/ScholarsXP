@@ -42,7 +42,8 @@ export async function getOptimizedAdminSubmissions(
     flagged?: boolean
     userId?: string
   },
-  pagination: PaginationParams
+  pagination: PaginationParams,
+  opts: { skipCache?: boolean } = {}
 ): Promise<AdminSubmissionsResponseDTO> {
   const cacheKey = QueryCache.createKey('admin_submissions', { ...filters, ...pagination })
   console.log('Admin submissions query - filters:', filters)
@@ -88,7 +89,7 @@ export async function getOptimizedAdminSubmissions(
         stats
       }
     },
-    { logPerformance: true }
+    { logPerformance: true, skipCache: !!opts.skipCache }
   )
 }
 
@@ -430,7 +431,8 @@ async function getSubmissionStats(whereClause: any, filters: any = {}) {
 export async function bulkUpdateSubmissions(
   submissionIds: string[],
   action: 'updateStatus' | 'updateXp' | 'delete',
-  data: any
+  data: any,
+  adminId?: string
 ): Promise<{ success: boolean; count: number; message: string }> {
   const startTime = Date.now()
   
@@ -442,14 +444,57 @@ export async function bulkUpdateSubmissions(
         if (!data?.status) {
           throw new Error('Status is required for updateStatus action')
         }
-        
+        // Normalize incoming status values to enum
+        const statusMap: Record<string, string> = {
+          COMPLETED: 'FINALIZED',
+          COMPLETE: 'FINALIZED',
+          DONE: 'FINALIZED',
+        }
+        const allowedStatuses = new Set([
+          'PENDING',
+          'AI_REVIEWED',
+          'UNDER_PEER_REVIEW',
+          'FINALIZED',
+          'FLAGGED',
+          'REJECTED',
+          'LEGACY_IMPORTED',
+        ])
+        const requested = String(data.status).toUpperCase()
+        const normalized = statusMap[requested] || requested
+        const newStatus = allowedStatuses.has(normalized) ? normalized : 'FINALIZED'
+
         result = await prisma.submission.updateMany({
           where: { id: { in: submissionIds } },
           data: {
-            status: data.status,
+            status: newStatus,
             updatedAt: new Date()
           }
         })
+
+        // Best-effort admin action audit per submission
+        if (adminId) {
+          try {
+            await prisma.$transaction(async (tx) => {
+              for (const id of submissionIds) {
+                await tx.adminAction.create({
+                  data: {
+                    adminId,
+                    action: 'SYSTEM_CONFIG',
+                    targetType: 'submission',
+                    targetId: id,
+                    details: {
+                      subAction: 'SUBMISSION_STATUS_CHANGE',
+                      newStatus,
+                      reason: data.reason || null,
+                    }
+                  }
+                })
+              }
+            })
+          } catch (e) {
+            console.warn('bulkUpdateSubmissions(updateStatus) audit log failed:', e)
+          }
+        }
         break
         
       case 'updateXp':
@@ -471,12 +516,15 @@ export async function bulkUpdateSubmissions(
               // Update submission XP
               tx.submission.update({
                 where: { id: submission.id },
-                data: { finalXp: data.xpAwarded }
+                data: { finalXp: data.xpAwarded, status: 'FINALIZED' }
               }),
               // Update user total XP
               tx.user.update({
                 where: { id: submission.userId },
-                data: { totalXp: { increment: xpDifference } }
+                data: { 
+                  totalXp: { increment: xpDifference },
+                  currentWeekXp: { increment: xpDifference }
+                }
               }),
               // Create XP transaction record
               tx.xpTransaction.create({
@@ -490,6 +538,24 @@ export async function bulkUpdateSubmissions(
                 }
               })
             ])
+
+            // Admin action log per submission (best-effort inside tx)
+            if (adminId) {
+              await tx.adminAction.create({
+                data: {
+                  adminId,
+                  action: 'XP_OVERRIDE',
+                  targetType: 'submission',
+                  targetId: submission.id,
+                  details: {
+                    oldXp: submission.finalXp || 0,
+                    newXp: data.xpAwarded,
+                    difference: xpDifference,
+                    reason: data.reason || 'Bulk update',
+                  }
+                }
+              })
+            }
           }
           
           return { count: submissions.length }
@@ -497,8 +563,54 @@ export async function bulkUpdateSubmissions(
         break
         
       case 'delete':
-        result = await prisma.submission.deleteMany({
-          where: { id: { in: submissionIds } }
+        // Deleting submissions: adjust user XP and cleanup transactions
+        result = await prisma.$transaction(async (tx) => {
+          const submissions = await tx.submission.findMany({
+            where: { id: { in: submissionIds } },
+            select: { id: true, userId: true, finalXp: true, aiXp: true }
+          })
+
+          // Adjust user XP totals (subtract awarded XP)
+          for (const sub of submissions) {
+            const awarded = sub.finalXp || sub.aiXp || 0
+            if (awarded !== 0) {
+              await tx.user.update({
+                where: { id: sub.userId },
+                data: {
+                  totalXp: { decrement: awarded },
+                  currentWeekXp: { decrement: awarded }
+                }
+              })
+            }
+          }
+
+          // Delete related XP transactions
+          await tx.xpTransaction.deleteMany({ where: { sourceId: { in: submissionIds } } })
+
+          // Delete submissions
+          const del = await tx.submission.deleteMany({ where: { id: { in: submissionIds } } })
+
+          // Admin action logs (best-effort)
+          if (adminId) {
+            for (const sub of submissions) {
+              try {
+                await tx.adminAction.create({
+                  data: {
+                    adminId,
+                    action: 'SYSTEM_CONFIG',
+                    targetType: 'submission',
+                    targetId: sub.id,
+                    details: {
+                      subAction: 'SUBMISSION_DELETE',
+                      hadAwardedXp: !!(sub.finalXp || sub.aiXp),
+                      awardedXp: sub.finalXp || sub.aiXp || 0,
+                    }
+                  }
+                })
+              } catch {}
+            }
+          }
+          return { count: del.count }
         })
         break
         

@@ -8,11 +8,9 @@
 import {
   WeeklyProgress,
   TaskTypeProgress,
-  WeeklySubmission,
-  TaskTypeId,
-  WeeklyLimitExceededError
+  TaskTypeId
 } from '@/types/task-types'
-import { TASK_TYPES, getTaskType } from '@/lib/task-types'
+import { TASK_TYPES } from '@/lib/task-types'
 import { getWeekNumber, getWeekBoundaries } from '@/lib/utils'
 import { prisma } from '@/lib/prisma'
 
@@ -82,7 +80,7 @@ export async function getWeeklyProgress(
 
   // Process submissions and calculate progress
   let totalXp = 0
-  let totalSubmissions = submissions.length
+  const totalSubmissions = submissions.length
 
   for (const submission of submissions) {
     const submissionXp = submission.finalXp || 0
@@ -333,7 +331,7 @@ export async function hasReachedWeeklyLimits(userId: string): Promise<{
 }> {
   const weeklyProgress = await getCurrentWeeklyProgress(userId)
   const limitedTaskTypes: string[] = []
-  const details: Record<string, any> = {}
+  const details: Record<string, { completions: number; maxCompletions: number; xpEarned: number; weeklyLimit: number }> = {}
 
   Object.entries(weeklyProgress.taskTypeProgress).forEach(([taskTypeId, progress]) => {
     details[taskTypeId] = {
@@ -364,7 +362,7 @@ export async function getRemainingCapacity(userId: string): Promise<Record<strin
   canSubmit: boolean
 }>> {
   const weeklyProgress = await getCurrentWeeklyProgress(userId)
-  const capacity: Record<string, any> = {}
+  const capacity: Record<string, { remainingCompletions: number; remainingXp: number; canSubmit: boolean }> = {}
 
   Object.entries(weeklyProgress.taskTypeProgress).forEach(([taskTypeId, progress]) => {
     capacity[taskTypeId] = {

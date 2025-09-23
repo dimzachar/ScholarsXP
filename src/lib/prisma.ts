@@ -32,3 +32,18 @@ if (typeof process !== 'undefined' && typeof process.on === 'function') {
   })
 }
 
+// Lightweight, idempotent schema patcher for local/dev environments
+// Adds XP v2 audit columns to PeerReview if missing to prevent runtime P2022 errors
+export async function patchPeerReviewV2Columns(): Promise<void> {
+  try {
+    await prisma.$executeRawUnsafe(
+      'ALTER TABLE "PeerReview" ADD COLUMN IF NOT EXISTS "contentCategory" TEXT'
+    )
+    await prisma.$executeRawUnsafe(
+      'ALTER TABLE "PeerReview" ADD COLUMN IF NOT EXISTS "qualityTier" TEXT'
+    )
+  } catch (err) {
+    // Non-fatal: if lacks privileges or already exists, continue
+    console.warn('[prisma] PeerReview v2 column patch skipped:', err)
+  }
+}

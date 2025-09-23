@@ -245,10 +245,10 @@ export default function XpBreakdownChart({
               {/* Center text */}
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center">
-                  <div className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-gray-100">
+                  <div className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-gray-900">
                     {data.total}
                   </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                  <div className="text-sm text-gray-600 dark:text-gray-700">
                     Total XP
                   </div>
                 </div>

@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { createAuthenticatedClient } from '@/lib/supabase-server'
+import { withErrorHandling, createSuccessResponse } from '@/lib/api-middleware'
 
-export const GET = withPermission('review_content')(async (request: AuthenticatedRequest) => {
-  try {
+export const GET = withPermission('review_content')(
+  withErrorHandling(async (request: AuthenticatedRequest) => {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') // 'pending', 'completed', 'all'
     const limit = parseInt(searchParams.get('limit') || '20')
@@ -62,10 +62,7 @@ export const GET = withPermission('review_content')(async (request: Authenticate
 
     if (error) {
       console.error('Error fetching assignments:', error)
-      return NextResponse.json(
-        { message: 'Failed to fetch assignments' },
-        { status: 500 }
-      )
+      throw error
     }
 
     // Get total count for pagination
@@ -122,7 +119,7 @@ export const GET = withPermission('review_content')(async (request: Authenticate
       }
     }) || []
 
-    return NextResponse.json({
+    return createSuccessResponse({
       assignments: enrichedAssignments,
       pagination: {
         total: count || 0,
@@ -135,12 +132,5 @@ export const GET = withPermission('review_content')(async (request: Authenticate
         overdue: enrichedAssignments.filter(a => a.isOverdue).length
       }
     })
-
-  } catch (error) {
-    console.error('Error in my assignments:', error)
-    return NextResponse.json(
-      { message: 'Internal server error' },
-      { status: 500 }
-    )
-  }
-})
+  })
+)

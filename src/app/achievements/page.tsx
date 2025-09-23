@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -44,21 +44,56 @@ interface AchievementProgress {
   earnedAt?: string
 }
 
+interface AchievementsStats {
+  earned: number
+  inProgress: number
+  total: number
+  totalXpFromAchievements: number
+}
+
+interface CategoryStat {
+  category: string
+  earned: number
+  total: number
+  percentage: number
+}
+
+interface RecentlyEarned {
+  id: string
+  achievement: Achievement
+  earnedAt: string
+}
+
+interface AchievementsInsights {
+  achievementVelocity: number
+  averageXpPerAchievement: number
+  daysToNextAchievement?: number
+}
+
+interface AchievementsMilestones {
+  firstAchievement?: RecentlyEarned
+  mostValuableAchievement?: RecentlyEarned
+}
+
+interface AchievementsData {
+  stats: AchievementsStats
+  achievements: AchievementProgress[]
+  nextToEarn: AchievementProgress[]
+  categoryStats: CategoryStat[]
+  recentlyEarned: RecentlyEarned[]
+  insights?: AchievementsInsights
+  milestones?: AchievementsMilestones
+}
+
 export default function AchievementsPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
-  const [achievementsData, setAchievementsData] = useState<any>(null)
+  const [achievementsData, setAchievementsData] = useState<AchievementsData | null>(null)
   const [loadingAchievements, setLoadingAchievements] = useState(true)
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [selectedStatus, setSelectedStatus] = useState('all')
 
-  useEffect(() => {
-    if (user) {
-      fetchAchievementsData()
-    }
-  }, [user, selectedCategory, selectedStatus])
-
-  const fetchAchievementsData = async () => {
+  const fetchAchievementsData = useCallback(async () => {
     try {
       setLoadingAchievements(true)
       
@@ -69,7 +104,7 @@ export default function AchievementsPage() {
       const response = await fetch(`/api/user/achievements?${params.toString()}`)
       
       if (response.ok) {
-        const data = await response.json()
+        const data: AchievementsData = await response.json()
         setAchievementsData(data)
       }
     } catch (error) {
@@ -77,7 +112,13 @@ export default function AchievementsPage() {
     } finally {
       setLoadingAchievements(false)
     }
-  }
+  }, [selectedCategory, selectedStatus])
+
+  useEffect(() => {
+    if (user) {
+      fetchAchievementsData()
+    }
+  }, [user, fetchAchievementsData])
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
@@ -342,9 +383,9 @@ export default function AchievementsPage() {
                         Next to Earn
                       </CardTitle>
                       <CardDescription>
-                        Achievements you're closest to completing
+                        Achievements you&apos;re closest to completing
                       </CardDescription>
-                    </CardHeader>
+                      </CardHeader>
                     <CardContent>
                       <div className="space-y-4">
                         {achievementsData.nextToEarn.map((achievement: AchievementProgress) => (
@@ -382,7 +423,7 @@ export default function AchievementsPage() {
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-4">
-                          {achievementsData.categoryStats.map((category: any) => (
+                          {achievementsData.categoryStats.map((category: CategoryStat) => (
                             <div key={category.category} className="space-y-2">
                               <div className="flex justify-between items-center">
                                 <div className="flex items-center gap-2">
@@ -428,7 +469,7 @@ export default function AchievementsPage() {
                 <CardContent>
                   {achievementsData?.recentlyEarned && achievementsData.recentlyEarned.length > 0 ? (
                     <div className="space-y-4">
-                      {achievementsData.recentlyEarned.map((achievement: any) => (
+                      {achievementsData.recentlyEarned.map((achievement: RecentlyEarned) => (
                         <div key={achievement.id} className="flex items-center gap-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                           <div className="h-12 w-12 bg-yellow-100 rounded-full flex items-center justify-center">
                             <Award className="h-6 w-6 text-yellow-600" />

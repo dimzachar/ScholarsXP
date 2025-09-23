@@ -92,7 +92,7 @@ export default function RoleGuard({
               </div>
               <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
               <p className="text-muted-foreground mb-4">
-                You don't have the required permissions to access this page.
+                You don’t have the required permissions to access this page.
               </p>
               <div className="bg-muted p-3 rounded-lg mb-4">
                 <div className="flex items-center justify-center space-x-2 text-sm">

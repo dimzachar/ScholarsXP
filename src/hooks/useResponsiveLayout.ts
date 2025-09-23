@@ -26,9 +26,11 @@ export function useResponsiveLayout(breakpoints: ResponsiveLayoutConfig = defaul
       const width = window.innerWidth
       setWindowWidth(width)
       
+      // Treat widths from mobile up to (but not including) desktop as tablet.
+      // This makes 1024px (iPad Pro portrait) fall under tablet.
       if (width < breakpoints.mobile) {
         setCurrentBreakpoint('mobile')
-      } else if (width < breakpoints.tablet) {
+      } else if (width < breakpoints.desktop) {
         setCurrentBreakpoint('tablet')
       } else {
         setCurrentBreakpoint('desktop')

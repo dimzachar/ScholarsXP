@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,28 +13,37 @@ import {
   BarChart3,
   TrendingUp,
   Target,
-  Award,
-  Calendar,
   Download,
   RefreshCw,
   ArrowLeft
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
+type AnalyticsData = {
+  xpBreakdown?: {
+    breakdown?: unknown
+    insights?: Array<{ type: 'positive' | 'warning' | 'info'; title: string; description: string }>
+    summary?: { positiveTransactions: number; negativeTransactions: number; totalTransactions: number; averageTransactionValue: number }
+  }
+  profile?: {
+    totalXp?: number
+    xpAnalytics?: { rank?: { weekly?: number }; weeklyTrends?: unknown[]; goalProgress?: Array<{ taskType: string; current: number; maximum: number; percentage: number }> }
+    streakWeeks?: number
+    achievements?: { earned?: number }
+    stats?: { metrics?: { submissionSuccessRate?: number; reviewCompletionRate?: number } }
+  }
+  weeklyTrends?: unknown[]
+  goalProgress?: Array<{ taskType: string; current: number; maximum: number; percentage: number }>
+}
+
 export default function AnalyticsPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
-  const [analyticsData, setAnalyticsData] = useState<any>(null)
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null)
   const [loadingAnalytics, setLoadingAnalytics] = useState(true)
   const [selectedTimeframe, setSelectedTimeframe] = useState('current_week')
 
-  useEffect(() => {
-    if (user) {
-      fetchAnalyticsData()
-    }
-  }, [user, selectedTimeframe])
-
-  const fetchAnalyticsData = async () => {
+  const fetchAnalyticsData = useCallback(async () => {
     try {
       setLoadingAnalytics(true)
       
@@ -61,7 +70,13 @@ export default function AnalyticsPage() {
     } finally {
       setLoadingAnalytics(false)
     }
-  }
+  }, [selectedTimeframe])
+
+  useEffect(() => {
+    if (user) {
+      fetchAnalyticsData()
+    }
+  }, [user, fetchAnalyticsData])
 
   if (loading) {
     return (
@@ -231,7 +246,7 @@ export default function AnalyticsPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {analyticsData.xpBreakdown.insights.map((insight: any, index: number) => (
+                      {analyticsData.xpBreakdown.insights.map((insight, index: number) => (
                         <div 
                           key={index}
                           className={`p-4 rounded-lg border ${
@@ -353,7 +368,7 @@ export default function AnalyticsPage() {
                 <CardContent>
                   {analyticsData?.goalProgress && analyticsData.goalProgress.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {analyticsData.goalProgress.map((goal: any) => (
+                      {analyticsData.goalProgress.map((goal) => (
                         <div key={goal.taskType} className="space-y-3">
                           <div className="flex justify-between items-center">
                             <div>

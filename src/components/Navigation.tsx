@@ -10,7 +10,7 @@ import NotificationCenter from '@/components/NotificationCenter'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { MobileBottomNav, createNavItem } from '@/components/navigation/MobileBottomNav'
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout'
-import { Home, Users, Trophy, Settings, Zap, LogOut, User } from 'lucide-react'
+import { Home, Users, Trophy, Gem, Settings, Zap, LogOut, User } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   DropdownMenu,
@@ -45,7 +45,8 @@ export default function Navigation() {
     }
 
     // Add leaderboard for everyone
-    baseItems.push({ href: '/leaderboard', label: 'Leaderboard', icon: Trophy })
+    baseItems.push({ href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
+      { href: '/featured', label: 'Featured', icon: Gem },)
 
     // Add admin for admins only
     if (isAdmin) {
@@ -60,6 +61,7 @@ export default function Navigation() {
   // Mobile navigation items (same order as desktop)
   const mobileNavItems = [
     createNavItem('/dashboard', 'Submit', Home),
+    createNavItem('/featured', 'Featured', Trophy),
     ...(isReviewer || isAdmin ? [createNavItem('/review', 'Review', Users)] : []),
     createNavItem('/leaderboard', 'Leaderboard', Trophy),
     ...(isAdmin ? [createNavItem('/admin', 'Admin', Settings)] : []),
@@ -75,7 +77,7 @@ export default function Navigation() {
       />
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 shadow-sm">
       <div className="container flex h-16 items-center max-w-7xl mx-auto px-4">
-        <div className="mr-4 hidden lg:flex">
+        <div className="mr-4 hidden xl:flex">
           <Link href="/" className="mr-6 flex items-center space-x-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
               <Zap className="h-5 w-5 text-primary-foreground" />
@@ -108,9 +110,9 @@ export default function Navigation() {
         </div>
 
         {/* Mobile navigation */}
-        <div className="flex flex-1 items-center justify-between space-x-2 lg:justify-end">
-          <div className="w-full flex-1 lg:w-auto lg:flex-none">
-            <div className="lg:hidden">
+        <div className="flex flex-1 items-center justify-between space-x-2 xl:justify-end">
+          <div className="w-full flex-1 xl:w-auto xl:flex-none">
+            <div className="xl:hidden">
               <Link href="/" className="flex items-center space-x-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
                   <Zap className="h-5 w-5 text-primary-foreground" />

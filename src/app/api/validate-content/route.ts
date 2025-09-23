@@ -66,38 +66,60 @@ export const POST = withAuth(
       console.log(`✅ [VALIDATE-CONTENT] No URL duplicates found`)
     }
 
-    // Fetch content
-    let contentData: ContentData
-    try {
-      contentData = await fetchContentFromUrl(url)
-    } catch (error) {
-      // Return validation failure response instead of throwing error
-      return createSuccessResponse({
-        isValid: false,
-        errors: [{
-          code: 'CONTENT_FETCH_FAILED',
-          message: 'Could not fetch content from URL',
-          suggestion: 'Please ensure the URL is accessible and publicly viewable'
-        }],
-        warnings: [],
+    // If content fetch is disabled, return limited validation (URL-only)
+    const DISABLE_CONTENT_FETCH = (process.env.DISABLE_CONTENT_FETCH || 'false').toLowerCase() === 'true'
+    let contentData: ContentData | null = null
+    if (!DISABLE_CONTENT_FETCH) {
+      try {
+        contentData = await fetchContentFromUrl(url)
+      } catch (error) {
+        // Return validation failure response instead of throwing error
+        return createSuccessResponse({
+          isValid: false,
+          errors: [{
+            code: 'CONTENT_FETCH_FAILED',
+            message: 'Could not fetch content from URL',
+            suggestion: 'Please ensure the URL is accessible and publicly viewable'
+          }],
+          warnings: [],
+          metadata: {
+            hasMention: false,
+            hasHashtag: false,
+            contentLength: 0,
+            platform: detectedPlatform,
+            weekNumber: 0,
+            isOriginal: false,
+            weeklyCompletions: {}
+          }
+        })
+      }
+    }
+
+    // Validate content (or return limited validation when disabled)
+    let validationResult: any
+    if (DISABLE_CONTENT_FETCH || !contentData) {
+      validationResult = {
+        isValid: true,
+        errors: [],
+        warnings: [{ code: 'LIMITED_VALIDATION', message: 'Content fetch disabled; validation limited to URL checks' }],
+        qualifyingTaskTypes: [],
         metadata: {
           hasMention: false,
           hasHashtag: false,
           contentLength: 0,
           platform: detectedPlatform,
           weekNumber: 0,
-          isOriginal: false,
+          isOriginal: true,
           weeklyCompletions: {}
         }
-      })
+      }
+    } else {
+      validationResult = await validateSubmission(
+        contentData, 
+        request.user!.id, 
+        taskType ? [taskType as TaskTypeId] : undefined
+      )
     }
-
-    // Validate content
-    const validationResult = await validateSubmission(
-      contentData, 
-      request.user!.id, 
-      taskType ? [taskType as TaskTypeId] : undefined
-    )
 
     // Check weekly limits for qualifying task types
     let weeklyLimitCheck = { canSubmit: true, blockedTaskTypes: [], reasons: [] }
@@ -109,18 +131,15 @@ export const POST = withAuth(
     }
 
     // Check for duplicate content
-    const duplicateCheck = await checkForDuplicateContent(contentData, request.user!.id)
+    const duplicateCheck = contentData ? await checkForDuplicateContent(contentData, request.user!.id) : {
+      isDuplicate: false,
+      duplicateType: 'UNIQUE',
+      similarityScore: 0
+    }
 
     // Calculate estimated XP range
-    let estimatedXp = { min: 0, max: 0 }
-    if (validationResult.qualifyingTaskTypes.length > 0) {
-      // This would use the task type configurations to estimate XP
-      // For now, provide a basic estimate
-      estimatedXp = {
-        min: validationResult.qualifyingTaskTypes.length * 20,
-        max: validationResult.qualifyingTaskTypes.length * 150
-      }
-    }
+    // With content fetch disabled or limited, we cannot estimate XP reliably
+    const estimatedXp = { min: 0, max: 0 }
 
     return createSuccessResponse({
       isValid: validationResult.isValid,
@@ -156,12 +175,14 @@ function generateRecommendations(
   const recommendations: string[] = []
 
   // Universal validation recommendations
-  if (!validationResult.metadata.hasMention) {
-    recommendations.push('Add "@ScholarsOfMove" mention to your content - this is required for all submissions')
-  }
-
-  if (!validationResult.metadata.hasHashtag) {
-    recommendations.push('Add "#ScholarsOfMove" hashtag to your content - this is required for all submissions')
+  const disableValidation = (process.env.DISABLE_MENTION_HASHTAG_VALIDATION || 'false').toLowerCase() === 'true'
+  if (!disableValidation) {
+    if (!validationResult.metadata.hasMention) {
+      recommendations.push('Add "@ScholarsOfMove" mention to your content - this is required for all submissions')
+    }
+    if (!validationResult.metadata.hasHashtag) {
+      recommendations.push('Add "#ScholarsOfMove" hashtag to your content - this is required for all submissions')
+    }
   }
 
   // Content quality recommendations
@@ -213,12 +234,12 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 
   const validationRules = {
     universal: {
-      mention: {
+      mention: (process.env.DISABLE_MENTION_HASHTAG_VALIDATION || 'false').toLowerCase() === 'true' ? undefined : {
         required: '@ScholarsOfMove',
         description: 'Must mention @ScholarsOfMove in content',
         caseInsensitive: true
       },
-      hashtag: {
+      hashtag: (process.env.DISABLE_MENTION_HASHTAG_VALIDATION || 'false').toLowerCase() === 'true' ? undefined : {
         required: '#ScholarsOfMove',
         description: 'Must include #ScholarsOfMove hashtag',
         caseInsensitive: true

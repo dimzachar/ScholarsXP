@@ -229,6 +229,25 @@ export class XpAnalyticsService {
     try {
       const currentWeek = this.getCurrentWeekNumber()
 
+      // V2: Overall weekly cap progress (max 5 finalized submissions)
+      try {
+        const { count, error } = await supabase
+          .from('Submission')
+          .select('*', { count: 'exact', head: true })
+          .eq('userId', userId)
+          .eq('weekNumber', currentWeek)
+          .eq('status', 'FINALIZED')
+
+        if (!error) {
+          const finalized = count || 0
+          const maximum = 5
+          const percentage = Math.min(100, Math.round((finalized / maximum) * 100))
+          return [{ taskType: 'Submissions', current: finalized, maximum, percentage }]
+        }
+      } catch (e) {
+        console.warn('Weekly cap goal progress fallback to legacy logic', e)
+      }
+
       // Get current week submissions grouped by task type
       const { data: submissions, error } = await supabase
         .from('Submission')
@@ -307,7 +326,7 @@ export class XpAnalyticsService {
 
 
       // Get all-time rank by counting users with higher totalXp
-      const { count: allTimeRank, error: allTimeError } = await supabase
+      const { count: allTimeRank, error: _allTimeError } = await supabase
         .from('User')
         .select('*', { count: 'exact', head: true })
         .gt('totalXp', user.totalXp)

@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-server'
+import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 
-export async function POST(request: NextRequest) {
+export const POST = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
     // Create service client for admin operations (user synchronization requires elevated privileges)
     const supabaseAdmin = createServiceClient()
@@ -104,4 +105,4 @@ export async function POST(request: NextRequest) {
       error: 'Server error: ' + (error instanceof Error ? error.message : 'Unknown error')
     }, { status: 500 })
   }
-}
+})

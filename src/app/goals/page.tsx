@@ -1,12 +1,12 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+// Tabs not used in this view
 import WeeklyGoalsWidget from '@/components/WeeklyGoalsWidget'
 import {
   Target,
@@ -30,7 +30,7 @@ const getTaskTypeDisplayName = (taskType: string): string => {
   try {
     const taskConfig = getTaskType(taskType as TaskTypeId)
     return taskConfig.name
-  } catch (error) {
+  } catch {
     return `Task ${taskType}`
   }
 }
@@ -38,17 +38,20 @@ const getTaskTypeDisplayName = (taskType: string): string => {
 export default function GoalsPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
-  const [goalsData, setGoalsData] = useState<any>(null)
+  type GoalProgressItem = { taskType: string; current: number; maximum: number; percentage: number }
+  type GoalsData = {
+    goalProgress: GoalProgressItem[]
+    currentWeekXp: number
+    projectedWeeklyXp: number
+    weeklyTrends: unknown[]
+    profile: unknown
+    insights?: Array<{ type: 'positive' | 'warning' | 'info'; title: string; description: string }>
+  }
+  const [goalsData, setGoalsData] = useState<GoalsData | null>(null)
   const [loadingGoals, setLoadingGoals] = useState(true)
-  const [selectedTimeframe, setSelectedTimeframe] = useState('current_week')
+  const [selectedTimeframe] = useState('current_week')
 
-  useEffect(() => {
-    if (user) {
-      fetchGoalsData()
-    }
-  }, [user, selectedTimeframe])
-
-  const fetchGoalsData = async () => {
+  const fetchGoalsData = useCallback(async () => {
     try {
       setLoadingGoals(true)
       
@@ -77,7 +80,13 @@ export default function GoalsPage() {
     } finally {
       setLoadingGoals(false)
     }
-  }
+  }, [selectedTimeframe])
+
+  useEffect(() => {
+    if (user) {
+      fetchGoalsData()
+    }
+  }, [user, fetchGoalsData])
 
   if (loading) {
     return (
@@ -93,7 +102,7 @@ export default function GoalsPage() {
   }
 
   // Calculate statistics
-  const completedGoals = goalsData?.goalProgress?.filter((g: any) => g.percentage >= 100).length || 0
+  const completedGoals = goalsData?.goalProgress?.filter((g) => g.percentage >= 100).length || 0
   const totalGoals = goalsData?.goalProgress?.length || 0
   const overallProgress = totalGoals > 0 ? (completedGoals / totalGoals) * 100 : 0
 
@@ -217,7 +226,7 @@ export default function GoalsPage() {
                   {goalsData?.goalProgress && goalsData.goalProgress.length > 0 ? (
                     <div className="space-y-3">
                       <h4 className="font-medium text-sm">Task Type Progress</h4>
-                      {goalsData.goalProgress.map((goal: any) => (
+                      {goalsData.goalProgress.map((goal) => (
                         <div key={goal.taskType} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
@@ -294,7 +303,7 @@ export default function GoalsPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {goalsData.insights.map((insight: any, index: number) => (
+                {goalsData.insights?.map((insight, index: number) => (
                   <div 
                     key={index}
                     className={`p-4 rounded-lg border ${
@@ -340,7 +349,7 @@ export default function GoalsPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {goalsData.weeklyTrends.slice(-4).map((week: any, index: number) => (
+                {goalsData.weeklyTrends.slice(-4).map((week: { week: number; weekStart: string; weekEnd: string; xpEarned: number }) => (
                   <div key={week.week} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                     <div>
                       <p className="font-medium text-sm">Week {week.week}</p>

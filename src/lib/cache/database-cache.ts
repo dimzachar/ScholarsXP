@@ -78,4 +78,43 @@ export class DatabaseCache {
       console.error('Database cache clear error:', error)
     }
   }
+
+  /**
+   * Delete cache entries whose keys match the provided substring pattern.
+   * The pattern is a simple substring (e.g., 'admin_submissions:').
+   * Returns number of rows deleted.
+   */
+  async deleteByPattern(pattern: string): Promise<number> {
+    try {
+      const supabase = this.getSupabaseClient()
+      const likeValue = `%${pattern}%`
+
+      // Select keys to delete first to compute affected count reliably
+      const { data: rows, error: selectError } = await supabase
+        .from('cache_entries')
+        .select('key')
+        .like('key', likeValue)
+
+      if (selectError || !rows || rows.length === 0) {
+        return 0
+      }
+
+      const keys = rows.map((r: any) => r.key)
+
+      const { error: deleteError } = await supabase
+        .from('cache_entries')
+        .delete()
+        .in('key', keys)
+
+      if (deleteError) {
+        console.error('Database cache deleteByPattern delete error:', deleteError)
+        return 0
+      }
+
+      return keys.length
+    } catch (error) {
+      console.error('Database cache deleteByPattern error:', error)
+      return 0
+    }
+  }
 }

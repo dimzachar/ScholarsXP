@@ -89,7 +89,7 @@ export function ProgressTab({
                 <BarChart3 className="h-4 w-4 text-blue-500" />
                 <div>
                   <p className="text-sm font-medium">Total XP</p>
-                  <p className="text-2xl font-bold">{analyticsData?.breakdown?.total || 0}</p>
+                  <p className="text-2xl font-bold dark:text-accent">{analyticsData?.breakdown?.total || 0}</p>
                 </div>
               </div>
             </Card>

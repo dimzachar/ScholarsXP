@@ -1,29 +1,25 @@
 'use client'
+/* eslint @typescript-eslint/no-explicit-any: off */
 
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardData } from '@/hooks/useDashboardData'
-import SubmissionForm from '@/components/SubmissionForm'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
 
 
 import { WeeklyProgressIndicator } from '@/components/dashboard/MiniChart'
-import { AchievementGallery } from '@/components/dashboard/AchievementGallery'
 
 import { ProgressTab } from '@/components/dashboard/ProgressTab'
 import { ResponsiveStatCard, createStatCardData } from '@/components/ui/responsive-stat-card'
 import { MobileTabNavigation, createTabItem } from '@/components/dashboard/MobileTabNavigation'
 import { MobileActionCard, createActionCardData } from '@/components/dashboard/MobileActionCard'
-import { GestureWrapper, SwipeableTabs } from '@/components/ui/gesture-wrapper'
+import { GestureWrapper } from '@/components/ui/gesture-wrapper'
 import { MobileLayout, MobileSection, MobileCardGrid, MobileHeader } from '@/components/layout/MobileLayout'
 import { LazyWrapper, MobileLazyComponents, usePerformanceMonitor } from '@/components/optimization/LazyLoader'
 import { useResponsiveLayout, getResponsiveGridClasses } from '@/hooks/useResponsiveLayout'
-import { cn } from '@/lib/utils'
+import { cn, getWeekNumber } from '@/lib/utils'
 import {
   Zap,
   BookOpen,
@@ -41,12 +37,15 @@ import {
 export default function DashboardPage() {
   const { user, loading, isAdmin, isReviewer } = useAuth()
   const router = useRouter()
+  // Hooks must be called unconditionally
+  const { isMobile } = useResponsiveLayout()
+  usePerformanceMonitor()
   const [activeTab, setActiveTab] = useState('overview')
   const [selectedTimeframe, setSelectedTimeframe] = useState('current_week')
 
   // Use optimized data fetching hooks
   const {
-    profile: { data: profileData, loading: loadingProfile },
+    profile: { data: profileData, loading: _loadingProfile },
     analytics: { data: analyticsData, loading: loadingAnalytics, error: analyticsError },
     refetchAll
   } = useDashboardData(user?.id, activeTab, selectedTimeframe)
@@ -82,10 +81,7 @@ export default function DashboardPage() {
     )
   }
 
-  const { isMobile } = useResponsiveLayout()
-
-  // Performance monitoring for mobile
-  usePerformanceMonitor()
+  
 
   // Pull to refresh handler
   const handleRefresh = async () => {
@@ -189,7 +185,7 @@ function StatCardsSection({ profileData }: { profileData: any }) {
   // Create stat card data using the new responsive format
   // Fix: Access correct data paths from API response
   const userProfile = profileData?.profile || {}
-  const userStats = profileData?.statistics || {}
+  // const userStats = profileData?.statistics || {}
 
   const totalXpData = createStatCardData(
     'Total XP',
@@ -227,7 +223,7 @@ function StatCardsSection({ profileData }: { profileData: any }) {
         max: Math.max(userProfile?.currentWeekXp || 100, 100),
         label: 'Activity'
       },
-      subtitle: `Week ${Math.ceil(new Date().getDate() / 7)}`,
+      subtitle: `Week ${getWeekNumber(new Date())}`,
       additionalInfo: (
         <div className="space-y-2">
           {userProfile?.streakWeeks && userProfile.streakWeeks > 0 && (
@@ -237,7 +233,7 @@ function StatCardsSection({ profileData }: { profileData: any }) {
             </div>
           )}
           <WeeklyProgressIndicator
-            currentWeek={Math.ceil(new Date().getDate() / 7)}
+            currentWeek={getWeekNumber(new Date())}
             totalWeeks={52}
           />
         </div>
@@ -306,8 +302,8 @@ function QuickActionsSection({
           color: 'primary',
           onClick: () => router.push('/review'),
           badges: [
-            { text: '+15-25 XP per review', variant: 'outline' },
-            { text: 'Community Impact', variant: 'outline' }
+            { text: 'Base 5 XP', variant: 'outline' },
+            { text: 'Bonuses up to +11', variant: 'outline' }
           ]
         }
       )

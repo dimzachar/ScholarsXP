@@ -54,7 +54,7 @@ export class ReviewIncentivesService {
   async awardReviewXp(
     reviewerId: string,
     submissionId: string,
-    qualityRating: number,
+    qualityRating: number | null,
     timeSpent: number,
     isLate: boolean,
     assignedAt: Date
@@ -70,10 +70,8 @@ export class ReviewIncentivesService {
         netReward: 0
       }
 
-      // Calculate quality bonus
-      if (qualityRating >= this.QUALITY_BONUS_THRESHOLD) {
-        reward.qualityBonus = this.QUALITY_BONUS_AMOUNT
-      }
+      // V2: Remove self-assessed quality bonus (determined automatically post-consensus)
+      reward.qualityBonus = 0
 
       // Calculate timeliness bonus
       const completionTime = Date.now() - assignedAt.getTime()
@@ -245,7 +243,7 @@ export class ReviewIncentivesService {
       }
 
       // Get reviewers with their performance metrics
-      let query = supabase
+      const query = supabase
         .from('User')
         .select(`
           id,

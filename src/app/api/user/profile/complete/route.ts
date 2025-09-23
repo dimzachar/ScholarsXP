@@ -3,7 +3,7 @@ import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { withUserOptimization } from '@/middleware/api-optimization'
 import { QueryCache, CacheTTL, withQueryCache } from '@/lib/cache/query-cache'
 import { CompleteUserProfileDTO, ResponseTransformer } from '@/types/api-responses'
-import { createServiceClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { getWeekNumber } from '@/lib/utils'
 import { xpAnalyticsService } from '@/lib/xp-analytics'
 
@@ -57,7 +57,7 @@ async function getOptimizedCompleteProfile(userId: string): Promise<CompleteUser
     cacheKey,
     CacheTTL.USER_PROFILE,
     async () => {
-      const supabase = createServiceClient()
+      const supabase = createServerSupabaseClient()
 
       // Get basic user profile
       const { data: userProfile, error: userError } = await supabase

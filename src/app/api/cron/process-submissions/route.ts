@@ -7,6 +7,12 @@ import { submissionProcessingQueue } from '@/lib/submission-processing-queue'
  */
 export async function POST(request: NextRequest) {
   try {
+    // Verify this is a legitimate cron request
+    const authHeader = request.headers.get('authorization')
+    const cronSecret = process.env.CRON_SECRET
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+    }
     console.log('🔄 [CRON] Starting submission processing job...')
     
     // Process the submission queue

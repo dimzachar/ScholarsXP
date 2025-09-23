@@ -261,13 +261,18 @@ export class ResponseTransformer {
    * Transform full submission object to AdminSubmissionDTO
    */
   static toAdminSubmissionDTO(submission: any): AdminSubmissionDTO {
+    const platformLower = (submission.platform || '').toLowerCase()
+    const inferredTaskType = submission.taskTypes?.[0]
+      || submission.taskType
+      || (platformLower.includes('twitter') || platformLower.includes('x.com') ? 'A'
+        : (platformLower.includes('reddit') || platformLower.includes('notion') || platformLower.includes('medium') ? 'B' : 'Unknown'))
     return {
       id: submission.id,
       title: submission.title || `${submission.platform} submission`,
       content: submission.content || `Submission from ${submission.url}`,
       url: submission.url,
       platform: submission.platform,
-      taskType: submission.taskTypes?.[0] || submission.taskType || 'Unknown',
+      taskType: inferredTaskType,
       status: submission.status,
       xpAwarded: submission.finalXp || submission.aiXp || 0,
       aiXp: submission.aiXp || null,

@@ -1,6 +1,13 @@
+import { NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { createAuthenticatedClient } from '@/lib/supabase-server'
 import { getTaskType } from '@/lib/task-types'
+import {
+  resolveTaskFromPlatform,
+  getXpForTier,
+  isValidCategory,
+  isValidTier
+} from '@/lib/xp-rules-v2'
 import { withErrorHandling, createSuccessResponse, validateRequiredFields } from '@/lib/api-middleware'
 import { ValidationError } from '@/lib/api-error-handler'
 
@@ -8,14 +15,22 @@ export const POST = withPermission('review_content')(
   withErrorHandling(async (request: AuthenticatedRequest) => {
     const {
       submissionId,
-      xpScore,
+      xpScore: xpScoreInput,
       comments,
       criteria,
       timeSpent,
-      qualityRating
+      qualityRating,
+      category,
+      tier
     } = await request.json()
 
-    validateRequiredFields({ submissionId, xpScore }, ['submissionId', 'xpScore'])
+    // Require submissionId always; require either numeric xpScore (legacy) or category+tier (v2)
+    validateRequiredFields({ submissionId }, ['submissionId'])
+    if (!(isValidCategory(category) && isValidTier(tier)) && (xpScoreInput === undefined || xpScoreInput === null)) {
+      throw new ValidationError('Provide category+tier (v2) or legacy xpScore', {
+        required: ['submissionId', 'category+tier' /* or xpScore */]
+      })
+    }
 
     if (!comments || comments.trim().length < 20) {
       throw new ValidationError('Comments are required and must be at least 20 characters', {
@@ -39,10 +54,10 @@ export const POST = withPermission('review_content')(
       request.user.refresh_token || request.cookies.get('sb-refresh-token')?.value
     )
 
-    // Get submission to validate XP score against task-specific ranges
+    // Get submission to determine platform/task for XP mapping
     const { data: submission, error: submissionError } = await supabase
       .from('Submission')
-      .select('taskTypes')
+      .select('platform, taskTypes')
       .eq('id', submissionId)
       .single()
 
@@ -57,25 +72,63 @@ export const POST = withPermission('review_content')(
       }, { status: 404 })
     }
 
-    // Validate XP score against task-specific ranges
-    if (submission.taskTypes && submission.taskTypes.length > 0) {
-      const primaryTaskType = submission.taskTypes[0]
-      const taskTypeConfig = getTaskType(primaryTaskType)
-      const { min, max } = taskTypeConfig.xpRange
-
-      if (xpScore < min || xpScore > max) {
+    // Compute XP via v2 mapping when category+tier provided; otherwise support legacy xpScore validation
+    let computedXp: number
+    if (isValidCategory(category) && isValidTier(tier)) {
+      const task = resolveTaskFromPlatform(submission.platform)
+      if (!task) {
         return NextResponse.json({
           success: false,
           error: {
-            error: `XP score must be between ${min} and ${max} for task type ${primaryTaskType}`,
-            code: 'VALIDATION_ERROR',
-            details: { min, max, taskType: primaryTaskType, provided: xpScore }
+            error: `Unsupported platform for review mapping: ${submission.platform}`,
+            code: 'INVALID_PLATFORM'
           }
         }, { status: 400 })
       }
+      // Enforce platform restrictions: A => Twitter only; B => Medium/Reddit only
+      if (task === 'A' && submission.platform !== 'Twitter') {
+        return NextResponse.json({
+          success: false,
+          error: {
+            error: `Task A applies to Twitter only; got ${submission.platform}`,
+            code: 'INVALID_PLATFORM'
+          }
+        }, { status: 400 })
+      }
+      if (task === 'B' && submission.platform !== 'Medium' && submission.platform !== 'Reddit') {
+        return NextResponse.json({
+          success: false,
+          error: {
+            error: `Task B applies to Medium or Reddit; got ${submission.platform}`,
+            code: 'INVALID_PLATFORM'
+          }
+        }, { status: 400 })
+      }
+      computedXp = getXpForTier(task, category, tier)
     } else {
-      // Fallback to old validation if no task types (legacy submissions)
-      if (xpScore < 0 || xpScore > 100) {
+      // Legacy path: validate numeric xpScore against task-specific range if available, else 0-100
+      const xpScore = Number(xpScoreInput)
+      if (Number.isNaN(xpScore)) {
+        return NextResponse.json({
+          success: false,
+          error: { error: 'Invalid xpScore', code: 'VALIDATION_ERROR' }
+        }, { status: 400 })
+      }
+      if (submission.taskTypes && submission.taskTypes.length > 0) {
+        const primaryTaskType = submission.taskTypes[0]
+        const taskTypeConfig = getTaskType(primaryTaskType)
+        const { min, max } = taskTypeConfig.xpRange
+        if (xpScore < min || xpScore > max) {
+          return NextResponse.json({
+            success: false,
+            error: {
+              error: `XP score must be between ${min} and ${max} for task type ${primaryTaskType}`,
+              code: 'VALIDATION_ERROR',
+              details: { min, max, taskType: primaryTaskType, provided: xpScore }
+            }
+          }, { status: 400 })
+        }
+      } else if (xpScore < 0 || xpScore > 100) {
         return NextResponse.json({
           success: false,
           error: {
@@ -85,12 +138,13 @@ export const POST = withPermission('review_content')(
           }
         }, { status: 400 })
       }
+      computedXp = Math.round(xpScore)
     }
 
     // Check if reviewer has an active assignment for this submission
     const { data: assignment, error: assignmentError } = await supabase
       .from('ReviewAssignment')
-      .select('id, deadline, status')
+      .select('id, deadline, status, assignedAt')
       .eq('submissionId', submissionId)
       .eq('reviewerId', reviewerId)
       .single()
@@ -128,10 +182,13 @@ export const POST = withPermission('review_content')(
       .insert({
         reviewerId,
         submissionId,
-        xpScore,
+        xpScore: computedXp,
+        contentCategory: isValidCategory(category) ? category : null,
+        qualityTier: isValidTier(tier) ? tier : null,
         comments: comments.trim(),
         timeSpent: timeSpent || 1,
-        qualityRating: qualityRating || 4,
+        // No self-assessed quality in v2; persist null
+        qualityRating: null,
         isLate
       })
       .select()
@@ -163,17 +220,23 @@ export const POST = withPermission('review_content')(
     }
 
     // Award XP using the incentives system
-    const { reviewIncentivesService } = await import('@/lib/review-incentives')
-    const { consensusCalculatorService } = await import('@/lib/consensus-calculator')
-
-    const rewardDetails = await reviewIncentivesService.awardReviewXp(
-      reviewerId,
-      submissionId,
-      qualityRating || 4,
-      timeSpent || 1,
-      isLate,
-      new Date(assignment.assignedAt)
-    )
+    let rewardDetails = null
+    const assignedAtDate = assignment.assignedAt ? new Date(assignment.assignedAt) : now
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const { reviewIncentivesService } = await import('@/lib/review-incentives')
+      rewardDetails = await reviewIncentivesService.awardReviewXp(
+        reviewerId,
+        submissionId,
+        null,
+        timeSpent || 1,
+        isLate,
+        assignedAtDate
+      )
+    } else {
+      console.warn(
+        'SUPABASE_SERVICE_ROLE_KEY not set; skipping review incentive reward calculation.'
+      )
+    }
 
     // Check if all reviews are complete and trigger consensus calculation
     const { data: remainingAssignments } = await supabase
@@ -184,9 +247,17 @@ export const POST = withPermission('review_content')(
 
     let consensusResult = null
     if (!remainingAssignments || remainingAssignments.length === 0) {
-      // All reviews completed, calculate consensus
-      consensusResult = await consensusCalculatorService.calculateConsensus(submissionId)
-      console.log(`🎯 All reviews completed for submission ${submissionId}, consensus calculated`)
+      // All reviews completed, calculate consensus if service role available
+      if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        const { consensusCalculatorService } = await import('@/lib/consensus-calculator')
+        consensusResult = await consensusCalculatorService.calculateConsensus(submissionId)
+        console.log(`🎯 All reviews completed for submission ${submissionId}, consensus calculated`)
+      } else {
+        console.warn(
+          'SUPABASE_SERVICE_ROLE_KEY not set; skipping consensus calculation for submission',
+          submissionId
+        )
+      }
     }
 
     console.log(`✅ Review submitted by ${reviewerId} for submission ${submissionId}: ${xpScore} XP, quality: ${qualityRating}/5, time: ${timeSpent}min, late: ${isLate}`)
