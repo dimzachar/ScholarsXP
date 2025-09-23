@@ -1,16 +1,16 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { BarChart3, TrendingUp, Clock, Zap, AlertTriangle, CheckCircle } from 'lucide-react'
+import { BarChart3, TrendingUp, Clock, AlertTriangle, CheckCircle } from 'lucide-react'
 
 interface PerformanceData {
-  metrics: any[]
+  metrics: Array<{ name: string; value: number }>
   aggregations: Record<string, any>
   timeframe: string
   count: number
@@ -30,11 +30,7 @@ export function PerformanceDashboard() {
   const [timeframe, setTimeframe] = useState('24h')
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchPerformanceData()
-  }, [timeframe])
-
-  const fetchPerformanceData = async () => {
+  const fetchPerformanceData = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -51,7 +47,11 @@ export function PerformanceDashboard() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [timeframe])
+
+  useEffect(() => {
+    fetchPerformanceData()
+  }, [fetchPerformanceData])
 
   const getWebVitals = (): WebVitalMetric[] => {
     if (!data?.aggregations._webVitalsSummary) return []
@@ -61,7 +61,7 @@ export function PerformanceDashboard() {
       { name: 'FID', label: 'First Input Delay', unit: 'ms', threshold: { good: 100, poor: 300 } },
       { name: 'CLS', label: 'Cumulative Layout Shift', unit: '', threshold: { good: 0.1, poor: 0.25 } },
       { name: 'FCP', label: 'First Contentful Paint', unit: 'ms', threshold: { good: 1800, poor: 3000 } },
-      { name: 'TTFB', label: 'Time to First Byte', unit: 'ms', threshold: { good: 800, poor: 1800 } }
+      { name: 'TTFB', label: 'Time to First Byte', unit: 'ms', threshold: { good: 800, poor: 1800 } },
     ]
 
     return vitals.map(vital => ({
@@ -187,8 +187,7 @@ export function PerformanceDashboard() {
                     {vital.rating.replace('-', ' ')}
                   </Badge>
                   <div className="text-xs text-muted-foreground mt-2">
-                    Good: ≤{formatValue(vital.threshold.good, vital.unit)} • 
-                    Poor: >{formatValue(vital.threshold.poor, vital.unit)}
+                    Good: {formatValue(vital.threshold.good, vital.unit)} - Poor: &gt;{formatValue(vital.threshold.poor, vital.unit)}
                   </div>
                 </CardContent>
               </Card>
@@ -282,3 +281,4 @@ export function PerformanceDashboard() {
     </div>
   )
 }
+

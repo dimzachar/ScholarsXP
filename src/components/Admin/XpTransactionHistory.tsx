@@ -5,17 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { 
-  History, 
-  TrendingUp, 
-  TrendingDown, 
-  RefreshCw,
-  Calendar,
-  User,
-  AlertTriangle,
-  Award,
-  Settings
-} from 'lucide-react'
+import { History, TrendingUp, RefreshCw, Calendar, User, AlertTriangle, Award, Settings } from 'lucide-react'
 
 interface XpTransaction {
   id: string

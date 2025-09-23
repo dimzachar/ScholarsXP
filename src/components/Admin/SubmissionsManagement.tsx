@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -90,6 +90,11 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
   const [loadingSubmissions, setLoadingSubmissions] = useState(true)
   const [exportingData, setExportingData] = useState(false)
   const [selectedSubmissions, setSelectedSubmissions] = useState<string[]>([])
+  const [bulkLoading, setBulkLoading] = useState(false)
+  const [bulkMessage, setBulkMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+  const [modifyXpModal, setModifyXpModal] = useState({ open: false })
+  const [modifyXpForm, setModifyXpForm] = useState({ xpAwarded: '', reason: '' })
+  const [modifyXpLoading, setModifyXpLoading] = useState(false)
 
   // Pagination state
   const [pagination, setPagination] = useState({
@@ -102,6 +107,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
   })
 
   // Filter state - Initialize with URL parameters
+  const initialUserId = searchParams?.get('userId') || ''
   const [filters, setFilters] = useState({
     status: '',
     platform: '',
@@ -110,16 +116,9 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
     dateTo: '',
     search: '',
     flagged: false,
-    userId: '' // Will be set in useEffect
+    // Seed from URL search params on first render to avoid an initial unfiltered fetch
+    userId: initialUserId
   })
-
-  // Initialize userId from URL parameters
-  useEffect(() => {
-    const userIdFromUrl = searchParams?.get('userId')
-    if (userIdFromUrl && userIdFromUrl !== filters.userId) {
-      setFilters(prev => ({ ...prev, userId: userIdFromUrl }))
-    }
-  }, [searchParams, filters.userId])
 
   // Sort state
   const [sortBy, setSortBy] = useState('createdAt')
@@ -145,14 +144,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
   })
   const [quickEditLoading, setQuickEditLoading] = useState(false)
 
-  useEffect(() => {
-    // Only fetch when user is loaded and is admin, and pagination is initialized
-    if (!loading && userProfile?.role === 'ADMIN' && pagination) {
-      fetchSubmissions()
-    }
-  }, [pagination?.page, filters, sortBy, sortOrder, userProfile?.role, loading])
-
-  const fetchSubmissions = async (forceRefresh = false) => {
+  const fetchSubmissions = useCallback(async (forceRefresh = false) => {
     try {
       setLoadingSubmissions(true)
 
@@ -214,7 +206,14 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
     } finally {
       setLoadingSubmissions(false)
     }
-  }
+  }, [pagination, filters, sortBy, sortOrder])
+
+  useEffect(() => {
+    // Only fetch when user is loaded and is admin, and pagination is initialized
+    if (!loading && userProfile?.role === 'ADMIN' && pagination) {
+      fetchSubmissions()
+    }
+  }, [pagination, filters, sortBy, sortOrder, userProfile?.role, loading, fetchSubmissions])
 
   const handleFilterChange = (key: string, value: any) => {
     setFilters(prev => ({ ...prev, [key]: value }))
@@ -251,7 +250,10 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
   }
 
   const handleBulkAction = async (action: string, data?: any) => {
-    if (selectedSubmissions.length === 0) return
+    if (selectedSubmissions.length === 0) return null
+
+    setBulkLoading(true)
+    setBulkMessage(null)
 
     try {
       const response = await fetch('/api/admin/submissions', {
@@ -264,12 +266,25 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
         })
       })
 
+      const result = await response.json()
+
       if (response.ok) {
-        fetchSubmissions()
+        fetchSubmissions(true)
         setSelectedSubmissions([])
+        setBulkMessage({ text: result.message || `Successfully performed ${action} on ${result.count || selectedSubmissions.length} submissions`, type: 'success' })
+        setTimeout(() => setBulkMessage(null), 3000)
+        return result
+      } else {
+        setBulkMessage({ text: result.message || 'Failed to perform bulk action', type: 'error' })
+        return { success: false, message: result.message || 'Failed to perform bulk action' }
       }
     } catch (error) {
       console.error('Error performing bulk action:', error)
+      const errorMsg = 'Network error: Unable to perform bulk action'
+      setBulkMessage({ text: errorMsg, type: 'error' })
+      return { success: false, message: errorMsg }
+    } finally {
+      setBulkLoading(false)
     }
   }
 
@@ -343,7 +358,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
         'Username',
         'User Email',
         'User Role',
-        'AI XP',
+        'AI XP (disabled)',
         'Peer XP',
         'Final XP',
         'Review Count',
@@ -410,8 +425,8 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
     switch (status) {
       case 'PENDING': return 'bg-warning/10 text-warning'
       case 'AI_REVIEWED': return 'bg-info/10 text-info'
-      case 'PEER_REVIEW': return 'bg-purple/10 text-purple'
-      case 'COMPLETED': return 'bg-success/10 text-success'
+      case 'UNDER_PEER_REVIEW': return 'bg-purple/10 text-purple'
+      case 'FINALIZED': return 'bg-success/10 text-success'
       case 'REJECTED': return 'bg-destructive/10 text-destructive'
       default: return 'bg-muted text-muted-foreground'
     }
@@ -458,7 +473,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
       })
 
       if (response.ok) {
-        fetchSubmissions()
+        fetchSubmissions(true)
         closeQuickEdit()
       } else {
         console.error('Failed to update submission')
@@ -609,8 +624,8 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                   <SelectItem value="all">All statuses</SelectItem>
                   <SelectItem value="PENDING">Pending</SelectItem>
                   <SelectItem value="AI_REVIEWED">AI Reviewed</SelectItem>
-                  <SelectItem value="PEER_REVIEW">Peer Review</SelectItem>
-                  <SelectItem value="COMPLETED">Completed</SelectItem>
+                  <SelectItem value="UNDER_PEER_REVIEW">Peer Review</SelectItem>
+                  <SelectItem value="FINALIZED">Completed</SelectItem>
                   <SelectItem value="REJECTED">Rejected</SelectItem>
                 </SelectContent>
               </Select>
@@ -699,7 +714,8 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleBulkAction('updateStatus', { status: 'COMPLETED' })}
+                  onClick={() => handleBulkAction('updateStatus', { status: 'FINALIZED' })}
+                  disabled={bulkLoading}
                 >
                   Mark Complete
                 </Button>
@@ -707,16 +723,15 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                   variant="outline"
                   size="sm"
                   onClick={() => handleBulkAction('updateStatus', { status: 'REJECTED' })}
+                  disabled={bulkLoading}
                 >
                   Reject
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    // TODO: Implement bulk XP modification
-                    console.log('Bulk XP modification for:', selectedSubmissions)
-                  }}
+                  onClick={() => setModifyXpModal({ open: true })}
+                  disabled={bulkLoading}
                 >
                   <Award className="h-4 w-4 mr-2" />
                   Modify XP
@@ -725,6 +740,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                   variant="destructive"
                   size="sm"
                   onClick={() => handleBulkAction('delete')}
+                  disabled={bulkLoading}
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
                   Delete
@@ -733,14 +749,93 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                   variant="outline"
                   size="sm"
                   onClick={() => setSelectedSubmissions([])}
+                  disabled={bulkLoading}
                 >
                   Clear Selection
                 </Button>
               </div>
             </div>
+            {bulkMessage && (
+              <div className={`mt-2 p-2 rounded-md ${
+                bulkMessage.type === 'success'
+                  ? 'bg-green-100 border border-green-200 text-green-800'
+                  : 'bg-red-100 border border-red-200 text-red-800'
+              } text-sm`}
+              >
+                {bulkMessage.text}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
+    
+      {/* Modify XP Modal */}
+      <Dialog open={modifyXpModal.open} onOpenChange={(open) => !open && setModifyXpModal({ open: false })}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Award className="h-5 w-5" />
+              Modify XP for {selectedSubmissions.length} Submission{selectedSubmissions.length !== 1 ? 's' : ''}
+            </DialogTitle>
+            <DialogDescription>
+              Set the final XP amount for the selected submissions. This will update user totals and create an audit trail.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="xpAwarded">XP Amount</Label>
+              <Input
+                id="xpAwarded"
+                type="number"
+                placeholder="Enter XP amount"
+                value={modifyXpForm.xpAwarded}
+                onChange={(e) => setModifyXpForm(prev => ({ ...prev, xpAwarded: e.target.value }))}
+                min="0"
+                step="1"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reason">Reason (Optional)</Label>
+              <Textarea
+                id="reason"
+                placeholder="Enter reason for XP modification..."
+                value={modifyXpForm.reason}
+                onChange={(e) => setModifyXpForm(prev => ({ ...prev, reason: e.target.value }))}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModifyXpModal({ open: false })} disabled={modifyXpLoading}>
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!modifyXpForm.xpAwarded || selectedSubmissions.length === 0) return
+                setModifyXpLoading(true)
+                try {
+                  const result = await handleBulkAction('updateXp', {
+                    xpAwarded: parseInt(modifyXpForm.xpAwarded),
+                    reason: modifyXpForm.reason || 'Bulk XP modification'
+                  })
+                  if (result.success) {
+                    setModifyXpModal({ open: false })
+                    setModifyXpForm({ xpAwarded: '', reason: '' })
+                  }
+                } catch (error) {
+                  console.error('Modify XP error:', error)
+                } finally {
+                  setModifyXpLoading(false)
+                }
+              }}
+              disabled={modifyXpLoading || !modifyXpForm.xpAwarded}
+            >
+              {modifyXpLoading && <RefreshCw className="h-4 w-4 mr-2 animate-spin" />}
+              Update XP
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* Submissions Table */}
       <Card>
         <CardContent className="p-0">
@@ -925,8 +1020,8 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                 >
                   <option value="PENDING">Pending</option>
                   <option value="AI_REVIEWED">AI Reviewed</option>
-                  <option value="PEER_REVIEW">Peer Review</option>
-                  <option value="COMPLETED">Completed</option>
+                  <option value="UNDER_PEER_REVIEW">Peer Review</option>
+                  <option value="FINALIZED">Completed</option>
                   <option value="REJECTED">Rejected</option>
                 </select>
               </div>

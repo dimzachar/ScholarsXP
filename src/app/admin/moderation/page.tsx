@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -34,12 +34,10 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import {
-  AlertTriangle,
   Shield,
   Eye,
   Check,
   X,
-  Flag,
   RefreshCw,
   Filter,
   ChevronLeft,
@@ -88,8 +86,8 @@ interface ContentFlag {
 }
 
 export default function AdminModerationPage() {
-  const { user, loading } = useAuth()
-  const router = useRouter()
+  const { user: _user, loading } = useAuth()
+  const _router = useRouter()
   const [contentFlags, setContentFlags] = useState<ContentFlag[]>([])
   const [loadingFlags, setLoadingFlags] = useState(true)
   const [selectedFlags, setSelectedFlags] = useState<string[]>([])
@@ -134,11 +132,7 @@ export default function AdminModerationPage() {
   const [resolution, setResolution] = useState('')
   const [adminNotes, setAdminNotes] = useState('')
 
-  useEffect(() => {
-    fetchContentFlags()
-  }, [pagination.page, filters, sortBy, sortOrder])
-
-  const fetchContentFlags = async () => {
+  const fetchContentFlags = useCallback(async () => {
     try {
       setLoadingFlags(true)
       
@@ -169,9 +163,13 @@ export default function AdminModerationPage() {
     } finally {
       setLoadingFlags(false)
     }
-  }
+  }, [pagination.page, pagination.limit, sortBy, sortOrder, filters])
 
-  const handleFilterChange = (key: string, value: any) => {
+  useEffect(() => {
+    fetchContentFlags()
+  }, [fetchContentFlags])
+
+  const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }))
     setPagination(prev => ({ ...prev, page: 1 })) // Reset to first page
   }
@@ -201,7 +199,7 @@ export default function AdminModerationPage() {
     }
   }
 
-  const handleBulkAction = async (action: string, data?: any) => {
+  const handleBulkAction = async (action: string, data?: Record<string, unknown>) => {
     if (selectedFlags.length === 0) return
 
     try {

@@ -45,6 +45,7 @@ interface SubmissionDetailHeaderProps {
 }
 
 export default function SubmissionDetailHeader({ submission }: SubmissionDetailHeaderProps) {
+  const AI_DISABLED = (process.env.NEXT_PUBLIC_AI_DISABLED || 'false') === 'true'
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'FINALIZED': return 'bg-green-100 text-green-800 border-green-200'
@@ -70,11 +71,12 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
   }
 
   const calculateProgress = () => {
+    if (submission.status === 'FINALIZED') return 100
     let progress = 0
-    if (submission.aiXp > 0) progress += 33
-    if (submission.peerXp !== null) progress += 33
-    if (submission.finalXp !== null) progress += 34
-    return progress
+    if (!AI_DISABLED && submission.aiXp > 0) progress += 33
+    if (submission.peerXp !== null) progress += AI_DISABLED ? 50 : 33
+    if (submission.finalXp !== null) progress += AI_DISABLED ? 50 : 34
+    return Math.min(100, progress)
   }
 
   return (
@@ -112,18 +114,20 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
       
       <CardContent>
         {/* XP Metrics */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="text-center p-4 bg-blue-50 rounded-lg">
-            <div className={`text-2xl font-bold ${getXpStatusColor(submission.aiXp)}`}>
-              {submission.aiXp}
-            </div>
-            <div className="text-sm text-muted-foreground">AI XP</div>
-            {submission.originalityScore && (
-              <div className="text-xs text-blue-600 mt-1">
-                {(submission.originalityScore * 100).toFixed(0)}% original
+        <div className={`grid ${AI_DISABLED ? 'grid-cols-3' : 'grid-cols-2 md:grid-cols-4'} gap-4 mb-6`}>
+          {!AI_DISABLED && (
+            <div className="text-center p-4 bg-blue-50 rounded-lg">
+              <div className={`text-2xl font-bold ${getXpStatusColor(submission.aiXp)}`}>
+                {submission.aiXp}
               </div>
-            )}
-          </div>
+              <div className="text-sm text-muted-foreground">AI XP (disabled)</div>
+              {submission.originalityScore && (
+                <div className="text-xs text-blue-600 mt-1">
+                  {(submission.originalityScore * 100).toFixed(0)}% original
+                </div>
+              )}
+            </div>
+          )}
           
           <div className="text-center p-4 bg-green-50 rounded-lg">
             <div className={`text-2xl font-bold ${getXpStatusColor(submission.peerXp)}`}>
@@ -142,7 +146,7 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
               {submission.finalXp || 'Pending'}
             </div>
             <div className="text-sm text-muted-foreground">Final XP</div>
-            {submission.finalXp && submission.aiXp && (
+            {!AI_DISABLED && submission.finalXp && submission.aiXp && (
               <div className="text-xs text-purple-600 mt-1">
                 {submission.finalXp > submission.aiXp ? '+' : ''}
                 {submission.finalXp - submission.aiXp} vs AI
@@ -174,9 +178,18 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
             />
           </div>
           <div className="flex justify-between text-xs text-muted-foreground mt-1">
-            <span>AI Review</span>
-            <span>Peer Review</span>
-            <span>Finalized</span>
+            {AI_DISABLED ? (
+              <>
+                <span>Peer Review</span>
+                <span>Finalized</span>
+              </>
+            ) : (
+              <>
+                <span>AI Review</span>
+                <span>Peer Review</span>
+                <span>Finalized</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -236,7 +249,7 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
         <div className="mt-4 p-3 bg-muted/50 rounded-lg">
           <div className="text-sm text-muted-foreground">
             <strong>Summary:</strong> This submission has been processed through{' '}
-            {submission.aiXp > 0 ? 'AI evaluation' : 'initial review'}{' '}
+            {AI_DISABLED ? 'initial review (AI disabled)' : (submission.aiXp > 0 ? 'AI evaluation' : 'initial review')}{' '}
             {submission.peerXp ? `and peer review (${submission.reviewCount} reviews)` : 'but is pending peer review'}.{' '}
             {submission.finalXp ? 
               `Final XP of ${submission.finalXp} has been awarded.` : 

@@ -38,8 +38,8 @@ interface AdminStats {
 }
 
 export default function AdminDashboardPage() {
-  const { user, loading } = useAuth()
-  const router = useRouter()
+  const { user: _user, loading } = useAuth()
+  const _router = useRouter()
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [loadingStats, setLoadingStats] = useState(true)
 

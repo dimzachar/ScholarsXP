@@ -133,18 +133,19 @@ export default function AutomationStatus() {
       setError(null)
       const response = await api.get('/api/admin/automation/status')
       setStatus(response.data || response)
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to fetch automation status:', err)
 
       // Handle different error formats
       let errorMessage = 'Failed to fetch automation status'
 
-      if (err?.response?.data?.error?.error) {
-        errorMessage = err.response.data.error.error
-      } else if (err?.response?.data?.error?.message) {
-        errorMessage = err.response.data.error.message
-      } else if (err?.message) {
-        errorMessage = err.message
+      const e = err as any
+      if (e?.response?.data?.error?.error) {
+        errorMessage = e.response.data.error.error
+      } else if (e?.response?.data?.error?.message) {
+        errorMessage = e.response.data.error.message
+      } else if (e?.message) {
+        errorMessage = e.message
       }
 
       // Check if this is a database/migration issue

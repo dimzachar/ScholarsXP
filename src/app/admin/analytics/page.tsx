@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { getTaskType } from '@/lib/task-types'
 import type { TaskTypeId } from '@/types/task-types'
@@ -30,7 +30,7 @@ import {
   Download,
   Calendar
 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+// import { useRouter } from 'next/navigation'
 
 interface AnalyticsData {
   overview: {
@@ -97,23 +97,19 @@ interface AnalyticsData {
 
 export default function AdminAnalyticsPage() {
   const { user, loading } = useAuth()
-  const router = useRouter()
+  // const router = useRouter()
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null)
   const [loadingAnalytics, setLoadingAnalytics] = useState(true)
   const [timeframe, setTimeframe] = useState('last_30_days')
 
-  useEffect(() => {
-    fetchAnalyticsData()
-  }, [timeframe])
-
-  const fetchAnalyticsData = async () => {
+  const fetchAnalyticsData = useCallback(async () => {
     try {
       setLoadingAnalytics(true)
       
       const response = await fetch(`/api/admin/analytics?timeframe=${timeframe}`)
       
       if (response.ok) {
-        const data = await response.json()
+        const data: AnalyticsData = await response.json()
         setAnalyticsData(data)
       }
     } catch (error) {
@@ -121,7 +117,11 @@ export default function AdminAnalyticsPage() {
     } finally {
       setLoadingAnalytics(false)
     }
-  }
+  }, [timeframe])
+
+  useEffect(() => {
+    fetchAnalyticsData()
+  }, [fetchAnalyticsData])
 
   const formatNumber = (num: number) => {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M'
@@ -328,7 +328,7 @@ export default function AdminAnalyticsPage() {
                         try {
                           const taskConfig = getTaskType(taskType as TaskTypeId)
                           taskTypeName = taskConfig.name
-                        } catch (error) {
+                        } catch {
                           // Keep original taskType if not found
                         }
                         return (
@@ -549,7 +549,7 @@ export default function AdminAnalyticsPage() {
                       try {
                         const taskConfig = getTaskType(taskType.taskType as TaskTypeId)
                         taskTypeName = taskConfig.name
-                      } catch (error) {
+                      } catch {
                         // Keep original name if not found
                       }
                       return (

@@ -1,4 +1,5 @@
 'use client'
+/* eslint react/no-unescaped-entities: off */
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -6,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Loader2, Upload, CheckCircle, AlertCircle, Download } from 'lucide-react'
+import { Loader2, CheckCircle, AlertCircle, Download } from 'lucide-react'
 
 interface ImportResult {
   success: boolean
@@ -14,12 +15,15 @@ interface ImportResult {
   imported?: number
   errors?: string[]
   duplicates?: number
+  duplicateDetails?: { url: string; type: 'LEGACY' | 'CURRENT' }[]
 }
 
 export default function LegacyImportPage() {
   const [csvData, setCsvData] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
+  const [progress, setProgress] = useState<{ total: number; processed: number; imported: number; duplicates: number; errors: number; etaSec: number } | null>(null)
+  const [chunkSize, setChunkSize] = useState(100)
 
   const handleImport = async () => {
     if (!csvData.trim()) {
@@ -32,37 +36,61 @@ export default function LegacyImportPage() {
 
     setIsLoading(true)
     setResult(null)
+    setProgress(null)
 
     try {
-      const response = await fetch('/api/admin/import-legacy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          csvData: csvData.trim()
-        })
-      })
+      // Split into lines and batch import for progress visibility
+      const rawLines = csvData.trim().split('\n').map(l => l.trim()).filter(Boolean)
+      const lines = rawLines[0]?.toLowerCase().startsWith('timestamp') ? rawLines.slice(1) : rawLines
 
-      const data = await response.json()
+      const total = lines.length
+      const startedAt = Date.now()
+      let processed = 0
+      let imported = 0
+      let duplicates = 0
+      let allErrors: string[] = []
+      let duplicateDetailsAgg: { url: string; type: 'LEGACY' | 'CURRENT' }[] = []
 
-      if (response.ok) {
-        setResult({
-          success: true,
-          message: data.message,
-          imported: data.imported,
-          duplicates: data.duplicates,
-          errors: data.errors
-        })
-        // Clear form on success
-        setCsvData('')
-      } else {
-        setResult({
-          success: false,
-          message: data.error || 'Import failed'
-        })
+      // Helper to update progress and ETA
+      const updateProgress = () => {
+        const elapsedSec = (Date.now() - startedAt) / 1000
+        const rate = processed > 0 ? processed / Math.max(elapsedSec, 0.001) : 0
+        const remaining = Math.max(total - processed, 0)
+        const etaSec = rate > 0 ? remaining / rate : 0
+        setProgress({ total, processed, imported, duplicates, errors: allErrors.length, etaSec })
       }
-    } catch (error) {
+
+      for (let i = 0; i < total; i += chunkSize) {
+        const batch = lines.slice(i, i + chunkSize)
+        const response = await fetch('/api/admin/import-legacy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ csvData: batch.join('\n') })
+        })
+        const data = await response.json()
+        if (response.ok) {
+          imported += data.imported || 0
+          duplicates += data.duplicates || 0
+          if (Array.isArray(data.errors)) allErrors = allErrors.concat(data.errors)
+          if (Array.isArray(data.duplicateDetails)) duplicateDetailsAgg = duplicateDetailsAgg.concat(data.duplicateDetails)
+        } else {
+          allErrors.push(data.error || `Batch ${i / chunkSize + 1} failed`)
+        }
+        processed += batch.length
+        updateProgress()
+      }
+
+      setResult({
+        success: true,
+        message: `Legacy import completed: ${imported} imported, ${duplicates} duplicates skipped, ${allErrors.length} errors`,
+        imported,
+        duplicates,
+        errors: allErrors,
+        duplicateDetails: duplicateDetailsAgg
+      })
+      // Clear form on success
+      setCsvData('')
+    } catch {
       setResult({
         success: false,
         message: 'Network error occurred during import'
@@ -133,6 +161,21 @@ export default function LegacyImportPage() {
                 rows={12}
                 className="font-mono text-sm"
               />
+              <div className="flex items-center gap-3 mt-2">
+                <Label htmlFor="chunkSize" className="text-sm">Batch size</Label>
+                <input
+                  id="chunkSize"
+                  type="number"
+                  min={25}
+                  max={500}
+                  step={25}
+                  value={chunkSize}
+                  disabled={isLoading}
+                  onChange={(e) => setChunkSize(Math.max(25, Math.min(500, Number(e.target.value) || 100)))}
+                  className="w-24 border rounded px-2 py-1 text-sm"
+                />
+                <span className="text-xs text-gray-500">Lower if DB is flaky</span>
+              </div>
               <p className="text-sm text-gray-600 mt-1">
                 Copy and paste the entire CSV content from your Google Forms export
               </p>
@@ -147,6 +190,24 @@ export default function LegacyImportPage() {
               {isLoading ? 'Importing Legacy Data...' : 'Import Legacy Data'}
             </Button>
           </div>
+
+          {progress && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-gray-700">
+                <span>Progress: {progress.processed} / {progress.total}</span>
+                <span>ETA: {Math.ceil(progress.etaSec)}s</span>
+              </div>
+              <div className="w-full h-3 bg-gray-200 rounded">
+                <div
+                  className="h-3 bg-blue-600 rounded"
+                  style={{ width: `${Math.min(100, (progress.processed / Math.max(progress.total, 1)) * 100)}%` }}
+                />
+              </div>
+              <div className="text-xs text-gray-600">
+                Imported: {progress.imported} • Duplicates: {progress.duplicates} • Errors: {progress.errors}
+              </div>
+            </div>
+          )}
 
           {result && (
             <Alert className={result.success ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}>
@@ -173,6 +234,44 @@ export default function LegacyImportPage() {
                         <li>• Errors: {result.errors.length}</li>
                       )}
                     </ul>
+
+                    {result.duplicateDetails && result.duplicateDetails.length > 0 && (
+                      <div className="mt-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium text-green-900">Duplicate URLs (first 10 shown):</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const header = 'url,type\n'
+                              const rows = (result.duplicateDetails || []).map(d => `${d.url},${d.type}`).join('\n')
+                              const csv = header + rows
+                              const blob = new Blob([csv], { type: 'text/csv' })
+                              const url = window.URL.createObjectURL(blob)
+                              const a = document.createElement('a')
+                              a.href = url
+                              a.download = 'legacy_import_duplicates.csv'
+                              a.click()
+                              window.URL.revokeObjectURL(url)
+                            }}
+                          >
+                            <Download className="w-4 h-4 mr-2" />
+                            Download duplicates (CSV)
+                          </Button>
+                        </div>
+                        <ul className="text-sm text-green-800 mt-1 max-h-40 overflow-y-auto list-disc pl-5">
+                          {(result.duplicateDetails || []).slice(0, 10).map((d, i) => (
+                            <li key={`${d.url}-${i}`} className="truncate">
+                              <span className="font-mono">{d.url}</span>
+                              <span className="ml-2 text-xs text-gray-600">[{d.type}]</span>
+                            </li>
+                          ))}
+                          {result.duplicateDetails.length > 10 && (
+                            <li>... and {result.duplicateDetails.length - 10} more</li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
 

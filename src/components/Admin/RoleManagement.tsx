@@ -9,11 +9,9 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Users, Shield, Crown, User } from 'lucide-react'
 import { toast } from 'sonner'
-import { api, handleApiError } from '@/lib/api-client'
+// import { api, handleApiError } from '@/lib/api-client'
 
-interface UserWithRole extends UserProfile {
-  // Additional fields if needed
-}
+type UserWithRole = UserProfile
 
 export default function RoleManagement() {
   const { isAdmin, refreshUserProfile } = useAuth()

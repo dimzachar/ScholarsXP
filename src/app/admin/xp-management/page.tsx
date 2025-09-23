@@ -4,10 +4,9 @@ import { useState, useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Search, Edit, Save, X, Plus, Minus, Trophy, Users, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Loader2, Search, Edit, Save, X, Trophy, Users, ChevronLeft, ChevronRight } from 'lucide-react'
 import { MobileCardGrid } from '@/components/layout/MobileLayout'
 import { useResponsiveLayout, TOUCH_TARGET_SIZE } from '@/hooks/useResponsiveLayout'
 import { cn } from '@/lib/utils'
@@ -57,7 +56,7 @@ export default function XpManagementPage() {
   })
 
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const { isMobile, isTablet, currentBreakpoint } = useResponsiveLayout()
+  const { isMobile, isTablet: _isTablet, currentBreakpoint: _currentBreakpoint } = useResponsiveLayout()
 
   const searchUsers = useCallback(async (query: string, page: number = 1) => {
     if (!query.trim()) {
@@ -98,7 +97,7 @@ export default function XpManagementPage() {
         setResult({ success: false, message: 'Failed to search users' })
         setUsers([])
       }
-    } catch (error) {
+    } catch {
       setResult({ success: false, message: 'Error searching users' })
       setUsers([])
     } finally {
@@ -167,7 +166,7 @@ export default function XpManagementPage() {
           message: data.error || 'Failed to update XP'
         })
       }
-    } catch (error) {
+    } catch {
       setResult({
         success: false,
         message: 'Network error occurred'

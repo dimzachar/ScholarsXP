@@ -1,4 +1,5 @@
 'use client'
+/* eslint @typescript-eslint/no-explicit-any: off */
 
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
@@ -28,7 +29,6 @@ import {
   Activity
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import AutomationStatus from '@/components/Admin/AutomationStatus'
 import SubmissionsManagement from '@/components/Admin/SubmissionsManagement'
 
@@ -63,10 +63,10 @@ const getHealthColor = (health: { submissionSuccessRate: number; avgReviewScore:
 }
 
 export default function AdminDashboardPage() {
-  const { user, userProfile, loading } = useAuth()
+  const { user: _user, userProfile: _userProfile, loading } = useAuth()
   const router = useRouter()
   const [stats, setStats] = useState<AdminStats | null>(null)
-  const [loadingStats, setLoadingStats] = useState(true)
+  const [, setLoadingStats] = useState(true)
   const [message, setMessage] = useState<string>('')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
@@ -174,21 +174,21 @@ export default function AdminDashboardPage() {
 
       console.log(`✅ [ADMIN UI] System action completed: ${action}`)
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`❌ [ADMIN UI] System action failed: ${action}`, error)
 
       // Extract error details for better user feedback
       let errorMessage = `Error executing ${action} action`
 
-      if (error?.response?.data?.error) {
-        const errorData = error.response.data.error
+      if ((error as any)?.response?.data?.error) {
+        const errorData = (error as any).response.data.error
         if (typeof errorData === 'string') {
           errorMessage = `${getActionDisplayName(action)} failed: ${errorData}`
         } else if (errorData.message) {
           errorMessage = `${getActionDisplayName(action)} failed: ${errorData.message}`
         }
-      } else if (error?.message) {
-        errorMessage = `${getActionDisplayName(action)} failed: ${error.message}`
+      } else if ((error as any)?.message) {
+        errorMessage = `${getActionDisplayName(action)} failed: ${(error as any).message}`
       }
 
       setMessage(errorMessage)
@@ -208,7 +208,7 @@ export default function AdminDashboardPage() {
 
 
 
-  const adminModules = [
+  const _adminModules = [
     {
       title: 'Submission Management',
       description: 'Manage and moderate all platform submissions',
@@ -300,9 +300,23 @@ export default function AdminDashboardPage() {
         { label: 'Users', value: stats.totalUsers }
       ] : []
     }
+    ,
+    {
+      title: 'Audit Logs',
+      description: 'View and filter platform actions',
+      icon: Activity,
+      href: '/admin/logs',
+      color: 'bg-slate/10 border-slate/20 hover:bg-slate/20',
+      iconColor: 'text-slate',
+      stats: [
+        { label: 'Filter', value: 'Time & Type' },
+        { label: 'Sort', value: 'Columns' },
+        { label: 'Search', value: 'Details' }
+      ]
+    }
   ]
 
-  const quickActions = [
+  const _quickActions = [
     {
       title: 'Import Legacy Data',
       description: 'Import Google Forms submissions for duplicate detection',
@@ -650,6 +664,24 @@ export default function AdminDashboardPage() {
                       >
                         <ArrowRight className="mr-2 h-4 w-4" />
                         Open Leaderboard
+                      </Button>
+                    </div>
+
+                    <div className="p-4 bg-muted/50 border border-border rounded-lg">
+                      <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                        <Award className="h-4 w-4" />
+                        Monthly Leaderboards (Admin)
+                      </h3>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Preview standings, award winners, manage cooldowns and history
+                      </p>
+                      <Button
+                        onClick={() => window.open('/admin/leaderboards', '_blank')}
+                        className="w-full"
+                        variant="outline"
+                      >
+                        <ArrowRight className="mr-2 h-4 w-4" />
+                        Open Monthly Leaderboards
                       </Button>
                     </div>
                   </div>

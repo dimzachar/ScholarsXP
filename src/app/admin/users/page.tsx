@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -45,11 +45,9 @@ import {
   Filter,
   Download,
   RefreshCw,
-  Edit,
+  
   Shield,
   User,
-  ChevronLeft,
-  ChevronRight,
   ArrowUpDown,
   Crown,
   Users,
@@ -58,7 +56,7 @@ import {
   FileText,
   UserCheck,
   UserX,
-  Settings
+  
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { Pagination } from '@/components/ui/pagination'
@@ -86,7 +84,7 @@ interface UserData {
 }
 
 export default function AdminUsersPage() {
-  const { user, loading } = useAuth()
+  const { user: _user, loading } = useAuth()
   const router = useRouter()
   const [users, setUsers] = useState<UserData[]>([])
   const [loadingUsers, setLoadingUsers] = useState(true)
@@ -134,11 +132,7 @@ export default function AdminUsersPage() {
   const [deactivationReason, setDeactivationReason] = useState('')
   const [userToDeactivate, setUserToDeactivate] = useState<{id: string, username: string, action: 'deactivate' | 'reactivate'} | null>(null)
 
-  useEffect(() => {
-    fetchUsers()
-  }, [pagination.page, filters, sortBy, sortOrder])
-
-  const fetchUsers = async () => {
+  const fetchUsers = React.useCallback(async () => {
     try {
       setLoadingUsers(true)
       
@@ -169,9 +163,13 @@ export default function AdminUsersPage() {
     } finally {
       setLoadingUsers(false)
     }
-  }
+  }, [pagination, filters, sortBy, sortOrder])
 
-  const handleFilterChange = (key: string, value: any) => {
+  useEffect(() => {
+    fetchUsers()
+  }, [fetchUsers])
+
+  const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }))
     setPagination(prev => ({ ...prev, page: 1 })) // Reset to first page
   }
@@ -418,7 +416,7 @@ export default function AdminUsersPage() {
       ]
 
       // Helper function to escape CSV values
-      const escapeCSV = (value: any): string => {
+      const escapeCSV = (value: unknown): string => {
         if (value === null || value === undefined) return 'N/A'
         const str = String(value)
         // If the value contains comma, quote, or newline, wrap in quotes and escape internal quotes
@@ -775,7 +773,7 @@ export default function AdminUsersPage() {
                       <div className="space-y-4">
                         <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
                           <p className="text-sm text-blue-800">
-                            <strong>Note:</strong> This adds/subtracts XP from users' current totals.
+                            <strong>Note:</strong> This adds/subtracts XP from users’ current totals.
                             For setting absolute XP values (e.g., legacy data import), use the dedicated
                             <a href="/admin/xp-management" className="underline ml-1">XP Management page</a>.
                           </p>

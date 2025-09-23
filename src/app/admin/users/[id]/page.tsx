@@ -1,19 +1,17 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { MobileLayout, MobileSection, MobileCardGrid } from '@/components/layout/MobileLayout'
-import { MobileTabNavigation } from '@/components/dashboard/MobileTabNavigation'
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout'
 import { toast } from 'sonner'
 import {
@@ -27,7 +25,7 @@ import {
   MessageSquare,
   Shield,
   Crown,
-  Users,
+  
   Edit,
   UserX,
   UserCheck
@@ -75,7 +73,7 @@ export default function UserProfilePage() {
   const params = useParams()
   const router = useRouter()
   const userId = params.id as string
-  const { isMobile, isTablet } = useResponsiveLayout()
+  const { isMobile, isTablet: _isTablet } = useResponsiveLayout()
 
   const [user, setUser] = useState<UserProfileData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -87,11 +85,7 @@ export default function UserProfilePage() {
   const [newRole, setNewRole] = useState<string>('')
   const [updating, setUpdating] = useState(false)
 
-  useEffect(() => {
-    fetchUserProfile()
-  }, [userId])
-
-  const fetchUserProfile = async () => {
+  const fetchUserProfile = useCallback(async () => {
     try {
       setLoading(true)
       const response = await fetch(`/api/admin/users/${userId}`)
@@ -113,7 +107,11 @@ export default function UserProfilePage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [userId])
+
+  useEffect(() => {
+    fetchUserProfile()
+  }, [fetchUserProfile])
 
   const getRoleIcon = (role: string) => {
     switch (role) {

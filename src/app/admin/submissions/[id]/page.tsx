@@ -1,23 +1,18 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { 
   ArrowLeft, 
   ExternalLink, 
-  Calendar, 
-  User, 
-  Award,
   AlertTriangle,
-  RefreshCw,
-  Edit
+  RefreshCw
 } from 'lucide-react'
 import Link from 'next/link'
 import SubmissionDetailHeader from '@/components/Admin/SubmissionDetailHeader'
@@ -81,7 +76,7 @@ interface SubmissionDetail {
 
 
 export default function AdminSubmissionDetailPage() {
-  const { user, userProfile, loading } = useAuth()
+  const { user: _user, userProfile, loading } = useAuth()
   const router = useRouter()
   const params = useParams()
   const submissionId = params.id as string
@@ -99,9 +94,9 @@ export default function AdminSubmissionDetailPage() {
     if (submissionId) {
       fetchSubmissionDetails()
     }
-  }, [submissionId, userProfile?.role, loading])
+  }, [submissionId, userProfile?.role, loading, router, fetchSubmissionDetails])
 
-  const fetchSubmissionDetails = async () => {
+  const fetchSubmissionDetails = useCallback(async () => {
     try {
       setLoadingSubmission(true)
       setError(null)
@@ -120,7 +115,7 @@ export default function AdminSubmissionDetailPage() {
     } finally {
       setLoadingSubmission(false)
     }
-  }
+  }, [submissionId])
 
 
 

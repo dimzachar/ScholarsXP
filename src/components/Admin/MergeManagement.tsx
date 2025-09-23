@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -66,11 +66,7 @@ export default function MergeManagement() {
   const [error, setError] = useState<string | null>(null)
   const [retryingMerge, setRetryingMerge] = useState<string | null>(null)
 
-  useEffect(() => {
-    loadMergeData()
-  }, [])
-
-  const loadMergeData = async () => {
+  const loadMergeData = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -89,7 +85,11 @@ export default function MergeManagement() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    loadMergeData()
+  }, [loadMergeData])
 
   const loadMergeStatistics = async () => {
     try {

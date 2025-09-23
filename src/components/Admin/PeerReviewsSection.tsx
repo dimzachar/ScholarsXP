@@ -21,6 +21,8 @@ interface PeerReview {
   id: string
   reviewerId: string
   xpScore: number
+  contentCategory?: string | null
+  qualityTier?: string | null
   comments: string | null
   timeSpent: number | null
   qualityRating: number | null
@@ -92,6 +94,34 @@ export default function PeerReviewsSection({
       peerReviews.filter(r => r.qualityRating).length
     : null
 
+  const handleExportCsv = () => {
+    const rows = peerReviews.map(r => ({
+      reviewer: r.reviewer.username,
+      xpScore: r.xpScore,
+      category: r.contentCategory || '',
+      tier: r.qualityTier || '',
+      qualityRating: r.qualityRating ?? '',
+      timeSpent: r.timeSpent ?? '',
+      isLate: r.isLate ? 'yes' : 'no',
+      createdAt: new Date(r.createdAt).toISOString(),
+      comments: (r.comments || '').replace(/\n/g, ' ')
+    }))
+
+    const headers = Object.keys(rows[0] || { reviewer: '', xpScore: '', category: '', tier: '', qualityRating: '', timeSpent: '', isLate: '', createdAt: '', comments: '' })
+    const csv = [
+      headers.join(','),
+      ...rows.map(row => headers.map(h => `"${String((row as any)[h]).replace(/"/g, '""')}"`).join(','))
+    ].join('\n')
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `peer-reviews-${submissionId}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <>
       <Card>
@@ -106,14 +136,23 @@ export default function PeerReviewsSection({
                 Individual reviewer scores with edit capabilities
               </CardDescription>
             </div>
-            {peerReviews.length > 0 && (
-              <div className="text-right">
-                <div className={`text-2xl font-bold ${getScoreColor(averageScore)}`}>
-                  {averageScore}
+            <div className="flex items-center gap-3">
+              {peerReviews.length > 0 && (
+                <div className="text-right">
+                  <div className={`text-2xl font-bold ${getScoreColor(averageScore)}`}>
+                    {averageScore}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Average Score</div>
                 </div>
-                <div className="text-sm text-muted-foreground">Average Score</div>
-              </div>
-            )}
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportCsv}
+              >
+                Export CSV
+              </Button>
+            </div>
           </div>
         </CardHeader>
         
@@ -183,7 +222,7 @@ export default function PeerReviewsSection({
                     </Button>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3">
                     {/* XP Score */}
                     <div className="text-center p-3 bg-muted/50 rounded">
                       <div className={`text-2xl font-bold ${getScoreColor(review.xpScore)}`}>
@@ -191,6 +230,23 @@ export default function PeerReviewsSection({
                       </div>
                       <div className="text-sm text-muted-foreground">XP Score</div>
                       {getScoreBadge(review.xpScore)}
+                    </div>
+
+                    {/* Category/Tier */}
+                    <div className="text-center p-3 bg-muted/50 rounded">
+                      <div className="flex items-center justify-center gap-2 mb-1">
+                        {review.contentCategory ? (
+                          <Badge variant="outline" className="text-xs capitalize">{review.contentCategory}</Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-xs">No category</Badge>
+                        )}
+                        {review.qualityTier ? (
+                          <Badge variant="secondary" className="text-xs capitalize">{review.qualityTier}</Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-xs">No tier</Badge>
+                        )}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Category · Tier</div>
                     </div>
 
                     {/* Quality Rating */}
@@ -265,3 +321,5 @@ export default function PeerReviewsSection({
     </>
   )
 }
+
+

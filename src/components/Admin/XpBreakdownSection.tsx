@@ -6,11 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { 
-  Edit, 
-  Award, 
-  Bot, 
-  Users, 
+import {
+  Edit,
+  Award,
+  Bot,
+  Users,
   Calculator,
   TrendingUp,
   AlertTriangle,
@@ -34,6 +34,8 @@ interface XpBreakdownSectionProps {
 }
 
 export default function XpBreakdownSection({ submission, onUpdate }: XpBreakdownSectionProps) {
+  const AI_DISABLED = (process.env.NEXT_PUBLIC_AI_DISABLED || 'false') === 'true'
+
   const [modificationDialog, setModificationDialog] = useState<{
     open: boolean
     xpType: 'ai' | 'peer' | 'final'
@@ -70,14 +72,12 @@ export default function XpBreakdownSection({ submission, onUpdate }: XpBreakdown
 
   const calculateFinalXpSuggestion = () => {
     if (submission.peerXp === null) return null
-    
-    // Simple weighted average: 40% AI, 60% Peer
-    const suggested = Math.round((submission.aiXp * 0.4) + (submission.peerXp * 0.6))
-    return suggested
+    if (AI_DISABLED) return Math.round(submission.peerXp)
+    return Math.round((submission.aiXp * 0.4) + (submission.peerXp * 0.6))
   }
 
   const suggestedFinalXp = calculateFinalXpSuggestion()
-  const hasDiscrepancy = submission.finalXp && suggestedFinalXp && 
+  const hasDiscrepancy = submission.finalXp && suggestedFinalXp &&
                         Math.abs(submission.finalXp - suggestedFinalXp) > 10
 
   return (
@@ -95,43 +95,57 @@ export default function XpBreakdownSection({ submission, onUpdate }: XpBreakdown
         
         <CardContent className="space-y-6">
           {/* AI XP Section */}
-          <div className="p-4 border rounded-lg">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Bot className="h-5 w-5 text-blue-600" />
-                <h3 className="font-semibold">AI Evaluation</h3>
-              </div>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => openModificationDialog('ai', submission.aiXp)}
-              >
-                <Edit className="h-4 w-4 mr-2" />
-                Modify
-              </Button>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className={`text-3xl font-bold ${getXpStatusColor(submission.aiXp)}`}>
-                  {submission.aiXp}
+          {AI_DISABLED ? (
+            <div className="p-4 border rounded-lg opacity-70">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <Bot className="h-5 w-5 text-gray-400" />
+                  <h3 className="font-semibold text-gray-500">AI Evaluation (disabled)</h3>
                 </div>
-                <div className="text-sm text-muted-foreground">XP Score</div>
               </div>
-              <div className="text-right">
-                {getXpStatusBadge(submission.aiXp)}
-                {submission.originalityScore && (
-                  <div className="text-sm text-muted-foreground mt-1">
-                    {(submission.originalityScore * 100).toFixed(1)}% originality
+              <div className="text-sm text-muted-foreground">
+                Final XP is determined solely by peer reviews.
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 border rounded-lg">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Bot className="h-5 w-5 text-blue-600" />
+                  <h3 className="font-semibold">AI Evaluation</h3>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => openModificationDialog('ai', submission.aiXp)}
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Modify
+                </Button>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className={`text-3xl font-bold ${getXpStatusColor(submission.aiXp)}`}>
+                    {submission.aiXp}
                   </div>
-                )}
+                  <div className="text-sm text-muted-foreground">XP Score</div>
+                </div>
+                <div className="text-right">
+                  {getXpStatusBadge(submission.aiXp)}
+                  {submission.originalityScore && (
+                    <div className="text-sm text-muted-foreground mt-1">
+                      {(submission.originalityScore * 100).toFixed(1)}% originality
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <div className="mt-3 text-sm text-muted-foreground">
+                Automated evaluation based on content quality, originality, and task completion.
               </div>
             </div>
-            
-            <div className="mt-3 text-sm text-muted-foreground">
-              Automated evaluation based on content quality, originality, and task completion.
-            </div>
-          </div>
+          )}
 
           {/* Peer XP Section */}
           <div className="p-4 border rounded-lg">
@@ -221,13 +235,15 @@ export default function XpBreakdownSection({ submission, onUpdate }: XpBreakdown
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm font-medium">Suggested Final XP</div>
-                    <div className="text-xs text-muted-foreground">
-                      Based on weighted average (40% AI, 60% Peer)
-                    </div>
+                    {AI_DISABLED ? (
+                      <div className="text-xs text-muted-foreground">Based on peer reviews only</div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground">Based on weighted average (40% AI, 60% Peer)</div>
+                    )}
                   </div>
                   <div className="text-right">
                     <div className="text-lg font-bold text-blue-600">{suggestedFinalXp}</div>
-                    {submission.finalXp && (
+                    {!AI_DISABLED && submission.finalXp && (
                       <div className={`text-xs ${
                         hasDiscrepancy ? 'text-orange-600' : 'text-green-600'
                       }`}>
@@ -260,20 +276,21 @@ export default function XpBreakdownSection({ submission, onUpdate }: XpBreakdown
               XP Flow
             </h4>
             <div className="flex items-center justify-between text-sm">
-              <div className="text-center">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-2">
-                  <Bot className="h-6 w-6 text-blue-600" />
-                </div>
-                <div className="font-medium">{submission.aiXp}</div>
-                <div className="text-xs text-muted-foreground">AI Score</div>
-              </div>
-              
-              <div className="flex-1 h-px bg-border mx-4 relative">
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-xs text-muted-foreground">
-                  +
-                </div>
-              </div>
-              
+              {!AI_DISABLED && (
+                <>
+                  <div className="text-center">
+                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-2">
+                      <Bot className="h-6 w-6 text-blue-600" />
+                    </div>
+                    <div className="font-medium">{submission.aiXp}</div>
+                    <div className="text-xs text-muted-foreground">AI Score</div>
+                  </div>
+                  <div className="flex-1 h-px bg-border mx-4 relative">
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-xs text-muted-foreground">+</div>
+                  </div>
+                </>
+              )}
+
               <div className="text-center">
                 <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-2">
                   <Users className="h-6 w-6 text-green-600" />
@@ -283,9 +300,7 @@ export default function XpBreakdownSection({ submission, onUpdate }: XpBreakdown
               </div>
               
               <div className="flex-1 h-px bg-border mx-4 relative">
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-xs text-muted-foreground">
-                  =
-                </div>
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-xs text-muted-foreground">=</div>
               </div>
               
               <div className="text-center">
@@ -312,3 +327,4 @@ export default function XpBreakdownSection({ submission, onUpdate }: XpBreakdown
     </>
   )
 }
+

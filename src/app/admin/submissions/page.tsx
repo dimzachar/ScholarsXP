@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -30,7 +30,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -41,15 +40,12 @@ import {
   Edit,
   Trash2,
   Eye,
-  ChevronLeft,
-  ChevronRight,
   ArrowUpDown,
   Award
 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Pagination } from '@/components/ui/pagination'
-import AuthGuard from '@/components/Auth/AuthGuard'
-import { AdminGuard } from '@/components/Auth/RoleGuard'
+// Guards are handled at route level; no direct usage here
 
 interface Submission {
   id: string
@@ -83,7 +79,7 @@ interface Submission {
 }
 
 export default function AdminSubmissionsPage() {
-  const { user, userProfile, loading } = useAuth()
+  const { user: _user, userProfile, loading } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [submissions, setSubmissions] = useState<Submission[]>([])
@@ -101,6 +97,7 @@ export default function AdminSubmissionsPage() {
   })
 
   // Filter state - Initialize with URL parameters
+  const initialUserId = searchParams?.get('userId') || ''
   const [filters, setFilters] = useState({
     status: '',
     platform: '',
@@ -109,16 +106,9 @@ export default function AdminSubmissionsPage() {
     dateTo: '',
     search: '',
     flagged: false,
-    userId: '' // Will be set in useEffect
+    // Seed from URL search params on first render to avoid an initial unfiltered fetch
+    userId: initialUserId
   })
-
-  // Initialize userId from URL parameters
-  useEffect(() => {
-    const userIdFromUrl = searchParams?.get('userId')
-    if (userIdFromUrl && userIdFromUrl !== filters.userId) {
-      setFilters(prev => ({ ...prev, userId: userIdFromUrl }))
-    }
-  }, [searchParams, filters.userId])
 
   // Sort state
   const [sortBy, setSortBy] = useState('createdAt')
@@ -144,14 +134,7 @@ export default function AdminSubmissionsPage() {
   })
   const [quickEditLoading, setQuickEditLoading] = useState(false)
 
-  useEffect(() => {
-    // Only fetch when user is loaded and is admin, and pagination is initialized
-    if (!loading && userProfile?.role === 'ADMIN' && pagination) {
-      fetchSubmissions()
-    }
-  }, [pagination?.page, filters, sortBy, sortOrder, userProfile?.role, loading])
-
-  const fetchSubmissions = async () => {
+  const fetchSubmissions = React.useCallback(async () => {
     try {
       setLoadingSubmissions(true)
 
@@ -182,7 +165,12 @@ export default function AdminSubmissionsPage() {
 
       const apiUrl = `/api/admin/submissions?${params.toString()}`
 
-      const response = await fetch(apiUrl)
+      const response = await fetch(apiUrl, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      })
 
       if (response.ok) {
         const responseData = await response.json()
@@ -206,9 +194,16 @@ export default function AdminSubmissionsPage() {
     } finally {
       setLoadingSubmissions(false)
     }
-  }
+  }, [pagination, sortBy, sortOrder, filters])
 
-  const handleFilterChange = (key: string, value: any) => {
+  useEffect(() => {
+    // Only fetch when user is loaded and is admin
+    if (!loading && userProfile?.role === 'ADMIN') {
+      fetchSubmissions()
+    }
+  }, [fetchSubmissions, userProfile?.role, loading])
+
+  const handleFilterChange = (key: string, value: string | boolean) => {
     setFilters(prev => ({ ...prev, [key]: value }))
     setPagination(prev => ({ ...prev, page: 1 })) // Reset to first page
   }
@@ -242,7 +237,7 @@ export default function AdminSubmissionsPage() {
     }
   }
 
-  const handleBulkAction = async (action: string, data?: any) => {
+  const handleBulkAction = async (action: string, data?: Record<string, unknown>) => {
     if (selectedSubmissions.length === 0) return
 
     try {
