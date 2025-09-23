@@ -8,7 +8,7 @@ const gzipAsync = promisify(gzip)
  * Response compression middleware for API routes
  * Provides 60-70% size reduction for JSON responses
  */
-export function withCompression<T extends any[]>(
+export function withCompression<T extends unknown[]>(
   handler: (...args: T) => Promise<NextResponse>
 ) {
   return async (...args: T): Promise<NextResponse> => {
@@ -83,7 +83,7 @@ export function withCompression<T extends any[]>(
 /**
  * Simple compression utility for direct use
  */
-export async function compressResponse(data: any): Promise<{
+export async function compressResponse(data: unknown): Promise<{
   compressed: Buffer
   originalSize: number
   compressedSize: number

@@ -63,7 +63,8 @@ export async function checkRateLimit(
 ): Promise<RateLimitResult> {
   const key = config.keyGenerator ? config.keyGenerator(request) : getDefaultKey(request)
   const windowKey = `rate_limit:${key}:${Math.floor(Date.now() / config.windowMs)}`
-  
+  const fallbackKey = `${key}:${config.windowMs}:${config.maxRequests}`
+
   try {
     // Get current count from cache
     const currentCount = await multiLayerCache.get<number>(windowKey) || 0
@@ -94,17 +95,46 @@ export async function checkRateLimit(
       remaining,
       resetTime
     }
-    
+
   } catch (error) {
     console.error('Rate limit check error:', error)
-    // On error, allow the request (fail open)
+    // In-memory fallback token bucket to avoid fail-open
+    const now = Date.now()
+    const bucket = getFallbackBucket(fallbackKey)
+    // Refill
+    if (now >= bucket.resetAt) {
+      bucket.tokens = config.maxRequests
+      bucket.resetAt = now + config.windowMs
+    }
+    if (bucket.tokens <= 0) {
+      return {
+        success: false,
+        limit: config.maxRequests,
+        remaining: 0,
+        resetTime: new Date(bucket.resetAt),
+        retryAfter: Math.ceil((bucket.resetAt - now) / 1000)
+      }
+    }
+    bucket.tokens -= 1
     return {
       success: true,
       limit: config.maxRequests,
-      remaining: config.maxRequests - 1,
-      resetTime: new Date(Date.now() + config.windowMs)
+      remaining: Math.max(0, bucket.tokens),
+      resetTime: new Date(bucket.resetAt)
     }
   }
+}
+
+// Simple in-memory fallback buckets (per process)
+type FallbackBucket = { tokens: number; resetAt: number }
+const fallbackBuckets = new Map<string, FallbackBucket>()
+function getFallbackBucket(key: string): FallbackBucket {
+  let b = fallbackBuckets.get(key)
+  if (!b) {
+    b = { tokens: 0, resetAt: 0 }
+    fallbackBuckets.set(key, b)
+  }
+  return b
 }
 
 /**
@@ -185,7 +215,7 @@ export const RateLimiters = {
 /**
  * Rate limit middleware wrapper for API routes
  */
-export function withRateLimit<T extends any[]>(
+export function withRateLimit<T extends unknown[]>(
   rateLimiter: (request: NextRequest) => Promise<NextResponse | null>,
   handler: (...args: T) => Promise<NextResponse>
 ) {

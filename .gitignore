@@ -51,7 +51,7 @@ next-env.d.ts
 !README.md
 !ARCHITECTURE.md
 !changelog.md
-
+*.py
 
 *.csv
 *.tsv
@@ -110,7 +110,7 @@ test-reddit-direct-api.js
 test-reddit-direct.js
 test-specific-post.js
 test-submission-flow.js
-clean_legacy_data.py
+# clean_legacy_data.py
 
 # Unused public assets (not referenced in components)
 public/file.svg
@@ -142,3 +142,8 @@ tests/memory-leak-test.md
 # Supabase Temporary Files (only files that actually exist)
 supabase/.temp/
 .vercel
+*.txt
+*.roo/*
+scripts/*
+tmp_*
+backup/*

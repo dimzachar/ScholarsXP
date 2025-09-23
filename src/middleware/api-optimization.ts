@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withCompression } from './compression'
 import { withCDNHeaders, getSmartCacheConfig } from './cdn-headers'
+import type { CacheConfig } from './cdn-headers'
 import { withRateLimit, RateLimiters } from './rate-limit'
 import { withServerPerformanceMonitoring } from '@/lib/server-performance-monitor'
 
@@ -15,13 +16,13 @@ export interface OptimizationConfig {
   rateLimit?: boolean
   performanceMonitoring?: boolean
   rateLimitType?: 'api' | 'strict' | 'auth' | 'admin' | 'upload'
-  customCacheConfig?: any
+  customCacheConfig?: CacheConfig
 }
 
 /**
  * Apply all optimizations to an API handler
  */
-export function withAPIOptimization<T extends any[]>(
+export function withAPIOptimization<T extends unknown[]>(
   handler: (...args: T) => Promise<NextResponse>,
   config: OptimizationConfig = {}
 ) {
@@ -63,9 +64,9 @@ export function withAPIOptimization<T extends any[]>(
 /**
  * Smart caching wrapper that determines cache config based on endpoint
  */
-function withSmartCaching<T extends any[]>(
+function withSmartCaching<T extends unknown[]>(
   handler: (...args: T) => Promise<NextResponse>,
-  customConfig?: any
+  customConfig?: CacheConfig
 ) {
   return async (...args: T): Promise<NextResponse> => {
     const request = args[0] as NextRequest
@@ -161,22 +162,22 @@ export const OptimizationPresets = {
 /**
  * Convenience functions for common optimization patterns
  */
-export const withPublicOptimization = <T extends any[]>(handler: (...args: T) => Promise<NextResponse>) =>
+export const withPublicOptimization = <T extends unknown[]>(handler: (...args: T) => Promise<NextResponse>) =>
   withAPIOptimization(handler, OptimizationPresets.public)
 
-export const withAdminOptimization = <T extends any[]>(handler: (...args: T) => Promise<NextResponse>) =>
+export const withAdminOptimization = <T extends unknown[]>(handler: (...args: T) => Promise<NextResponse>) =>
   withAPIOptimization(handler, OptimizationPresets.admin)
 
-export const withAuthOptimization = <T extends any[]>(handler: (...args: T) => Promise<NextResponse>) =>
+export const withAuthOptimization = <T extends unknown[]>(handler: (...args: T) => Promise<NextResponse>) =>
   withAPIOptimization(handler, OptimizationPresets.auth)
 
-export const withUserOptimization = <T extends any[]>(handler: (...args: T) => Promise<NextResponse>) =>
+export const withUserOptimization = <T extends unknown[]>(handler: (...args: T) => Promise<NextResponse>) =>
   withAPIOptimization(handler, OptimizationPresets.user)
 
-export const withAnalyticsOptimization = <T extends any[]>(handler: (...args: T) => Promise<NextResponse>) =>
+export const withAnalyticsOptimization = <T extends unknown[]>(handler: (...args: T) => Promise<NextResponse>) =>
   withAPIOptimization(handler, OptimizationPresets.analytics)
 
-export const withUploadOptimization = <T extends any[]>(handler: (...args: T) => Promise<NextResponse>) =>
+export const withUploadOptimization = <T extends unknown[]>(handler: (...args: T) => Promise<NextResponse>) =>
   withAPIOptimization(handler, OptimizationPresets.upload)
 
 /**
@@ -247,7 +248,6 @@ export function getOptimizationHealthCheck(): {
  * Middleware for enabling optimizations based on environment
  */
 export function createEnvironmentOptimization() {
-  const isDevelopment = process.env.NODE_ENV === 'development'
   const isProduction = process.env.NODE_ENV === 'production'
   
   return {
@@ -269,7 +269,7 @@ export function createOptimizationABTest(
   testName: string,
   variants: Record<string, OptimizationConfig>
 ) {
-  return <T extends any[]>(handler: (...args: T) => Promise<NextResponse>) => {
+  return <T extends unknown[]>(handler: (...args: T) => Promise<NextResponse>) => {
     return async (...args: T): Promise<NextResponse> => {
       const request = args[0] as NextRequest
       

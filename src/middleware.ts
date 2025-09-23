@@ -50,8 +50,9 @@ export async function middleware(request: NextRequest) {
     // User authenticated successfully (log removed to reduce console noise)
   }
 
-  // Apply rate limiting to API routes (disabled in development)
-  if (pathname.startsWith('/api/') && process.env.NODE_ENV === 'production') {
+  // Apply rate limiting to API routes
+  const shouldRateLimit = process.env.NODE_ENV === 'production' || process.env.RATE_LIMIT_ENABLED === 'true'
+  if (pathname.startsWith('/api/') && shouldRateLimit) {
     const clientIP = request.ip || request.headers.get('x-forwarded-for') || 'unknown'
 
     // Different rate limits for different endpoints
@@ -97,11 +98,27 @@ export async function middleware(request: NextRequest) {
     response.headers.set(
       'Content-Security-Policy',
       "default-src 'self'; " +
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; " +
+      // Allow Twitter widgets script. Inline scripts remain disallowed.
+      "script-src 'self' https://cdn.jsdelivr.net https://platform.twitter.com; " +
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
       "font-src 'self' https://fonts.gstatic.com; " +
       "img-src 'self' data: https:; " +
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co; " +
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://platform.twitter.com https://syndication.twitter.com https://api.twitter.com https://*.twimg.com https://*.twitter.com; " +
+      // Allow embeds for YouTube, Twitter, Reddit, Notion, LinkedIn
+      "frame-src 'self' https://platform.twitter.com https://syndication.twitter.com https://www.redditmedia.com https://embed.reddit.com https://www.notion.so https://notion.so https://notion.site https://www.notion.com https://notion.com https://www.linkedin.com; " +
+      // Disallow this app from being embedded elsewhere
+      "frame-ancestors 'none';"
+    )
+  } else if (process.env.DEV_CSP_ENABLED === 'true') {
+    // Optional permissive CSP for development to catch regressions without breaking tools
+    response.headers.set(
+      'Content-Security-Policy',
+      "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:; " +
+      "img-src 'self' data: https: blob:; " +
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+      "font-src 'self' https://fonts.gstatic.com; " +
+      "connect-src 'self' https: wss:; " +
+      "frame-src *; " +
       "frame-ancestors 'none';"
     )
   }

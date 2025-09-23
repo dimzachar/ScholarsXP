@@ -110,7 +110,7 @@ function generateETag(response: NextResponse): string | null {
     }
     
     return `"${Math.abs(hash).toString(36)}"`
-  } catch (error) {
+  } catch {
     return null
   }
 }
@@ -118,7 +118,7 @@ function generateETag(response: NextResponse): string | null {
 /**
  * Middleware wrapper for adding CDN headers
  */
-export function withCDNHeaders<T extends any[]>(
+export function withCDNHeaders<T extends unknown[]>(
   config: CacheConfig,
   handler: (...args: T) => Promise<NextResponse>
 ) {
