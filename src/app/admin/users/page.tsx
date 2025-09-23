@@ -150,7 +150,7 @@ export default function AdminUsersPage() {
         }
       })
 
-      const response = await fetch(`/api/admin/users?${params.toString()}`)
+      const response = await fetch(`/api/admin/users?${params.toString()}`, { credentials: 'include' })
       
       if (response.ok) {
         const data = await response.json()
@@ -205,6 +205,7 @@ export default function AdminUsersPage() {
     try {
       const response = await fetch('/api/admin/users', {
         method: 'PATCH',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'updateRole',
@@ -231,6 +232,7 @@ export default function AdminUsersPage() {
     try {
       const response = await fetch('/api/admin/users', {
         method: 'PATCH',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'adjustXp',
@@ -289,6 +291,7 @@ export default function AdminUsersPage() {
     try {
       const response = await fetch('/api/admin/users', {
         method: 'PATCH',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'toggleStatus',

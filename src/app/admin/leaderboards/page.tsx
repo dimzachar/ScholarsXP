@@ -66,7 +66,7 @@ export default function AdminLeaderboardsPage() {
 
   useEffect(() => {
     const load = async () => {
-      const res = await fetch('/api/leaderboard/months')
+      const res = await fetch('/api/leaderboard/months', { credentials: 'include' })
       const json = await res.json()
       const list: string[] = json?.data?.months || []
       setMonths(list)
@@ -80,8 +80,10 @@ export default function AdminLeaderboardsPage() {
     const run = async () => {
       setLoading(true)
       const [p, h] = await Promise.all([
-        fetch(`/api/admin/leaderboards/month/${month}/preview`).then((r) => r.json()),
-        fetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`).then((r) => r.json()),
+        fetch(`/api/admin/leaderboards/month/${month}/preview`, { credentials: 'include' })
+          .then(async (r) => (r.ok ? r.json() : Promise.reject(await r.text()))),
+        fetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`, { credentials: 'include' })
+          .then(async (r) => (r.ok ? r.json() : Promise.reject(await r.text()))),
       ])
       setPreview(p?.data || null)
       setHistory(h?.data?.items || [])
@@ -97,13 +99,13 @@ export default function AdminLeaderboardsPage() {
     if (!month) return
     setAwardLoading(true)
     try {
-      const res = await fetch(`/api/leaderboard/winners/${month}`, { method: 'POST' })
+      const res = await fetch(`/api/leaderboard/winners/${month}`, { method: 'POST', credentials: 'include' })
       if (res.ok) {
         const body = await res.json().catch(() => ({}))
         // Refresh preview and history so UI reflects award instantly
         const [p, h] = await Promise.all([
-          fetch(`/api/admin/leaderboards/month/${month}/preview`).then((r) => r.json()),
-          fetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`).then((r) => r.json()),
+          fetch(`/api/admin/leaderboards/month/${month}/preview`, { credentials: 'include' }).then((r) => r.json()),
+          fetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`, { credentials: 'include' }).then((r) => r.json()),
         ])
         setPreview(p?.data || null)
         setHistory(h?.data?.items || [])
@@ -127,13 +129,14 @@ export default function AdminLeaderboardsPage() {
     const res = await fetch(`/api/admin/leaderboards/winners/${month}/override`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ userId: overrideUserId, reason: overrideReason }),
     })
     if (res.ok) {
       setOverrideOpen(false)
       setOverrideUserId('')
       setOverrideReason('')
-      const p = await fetch(`/api/admin/leaderboards/month/${month}/preview`).then((r) => r.json())
+      const p = await fetch(`/api/admin/leaderboards/month/${month}/preview`, { credentials: 'include' }).then((r) => r.json())
       setPreview(p?.data || null)
     }
   }
@@ -141,15 +144,15 @@ export default function AdminLeaderboardsPage() {
   const handleBulkAward = async () => {
     try {
       setBulkAwardLoading(true)
-      const res = await fetch(`/api/admin/leaderboards/winners/bulk-award`, { method: 'POST' })
+      const res = await fetch(`/api/admin/leaderboards/winners/bulk-award`, { method: 'POST', credentials: 'include' })
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error || 'Bulk award failed')
       setOpsMessage(`Awarded: ${json?.data?.awarded?.length || 0}, Skipped: ${json?.data?.skipped?.length || 0}, Errors: ${json?.data?.errors?.length || 0}`)
       // Refresh preview/history
       if (month) {
         const [p, h] = await Promise.all([
-          fetch(`/api/admin/leaderboards/month/${month}/preview`).then((r) => r.json()),
-          fetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`).then((r) => r.json()),
+          fetch(`/api/admin/leaderboards/month/${month}/preview`, { credentials: 'include' }).then((r) => r.json()),
+          fetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`, { credentials: 'include' }).then((r) => r.json()),
         ])
         setPreview(p?.data || null)
         setHistory(h?.data?.items || [])
@@ -182,7 +185,7 @@ export default function AdminLeaderboardsPage() {
   useEffect(() => {
     const id = setTimeout(async () => {
       if (!searchUser || searchUser.length < 2) { setUserResults([]); return }
-      const res = await fetch(`/api/admin/users/search?q=${encodeURIComponent(searchUser)}&limit=8`)
+      const res = await fetch(`/api/admin/users/search?q=${encodeURIComponent(searchUser)}&limit=8`, { credentials: 'include' })
       const json = await res.json()
       setUserResults(json?.data || [])
     }, 300)

@@ -3,8 +3,9 @@ import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
 import { CacheKeys, CacheTTL } from '@/lib/cache'
 import { withEnhancedCache, EnhancedCacheKeys, EnhancedCacheTTL } from '@/lib/cache/enhanced-utils'
+import { withAdminOptimization } from '@/middleware/api-optimization'
 
-export const GET = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
+export const GET = withAdminOptimization(withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
     const { searchParams } = new URL(request.url)
 
@@ -83,7 +84,7 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
       { status: 500 }
     )
   }
-})
+}))
 
 // Extracted data fetching function for caching
 async function fetchUserMetricsData(

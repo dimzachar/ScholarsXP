@@ -52,13 +52,13 @@ export default function AdminDashboardPage() {
       setLoadingStats(true)
 
       // Fetch all-time stats (includes legacy data)
-      const statsResponse = await fetch('/api/admin/stats')
+      const statsResponse = await fetch('/api/admin/stats', { credentials: 'include' })
 
       if (statsResponse.ok) {
         const statsData = await statsResponse.json()
 
         // Also fetch recent analytics for additional metrics
-        const analyticsResponse = await fetch('/api/admin/analytics?timeframe=last_30_days')
+        const analyticsResponse = await fetch('/api/admin/analytics?timeframe=last_30_days', { credentials: 'include' })
         const analyticsData = analyticsResponse.ok ? await analyticsResponse.json() : null
 
         setStats({

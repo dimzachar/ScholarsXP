@@ -166,6 +166,7 @@ export default function AdminSubmissionsPage() {
       const apiUrl = `/api/admin/submissions?${params.toString()}`
 
       const response = await fetch(apiUrl, {
+        credentials: 'include',
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache'
@@ -243,6 +244,7 @@ export default function AdminSubmissionsPage() {
     try {
       const response = await fetch('/api/admin/submissions', {
         method: 'PATCH',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action,

@@ -80,7 +80,7 @@ export default function XpManagementPage() {
         limit: '20'
       })
 
-      const response = await fetch(`/api/admin/users?${params}`)
+      const response = await fetch(`/api/admin/users?${params}`, { credentials: 'include' })
       const data: SearchResult = await response.json()
 
       if (response.ok) {
@@ -132,6 +132,7 @@ export default function XpManagementPage() {
 
       const response = await fetch('/api/admin/update-xp', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },

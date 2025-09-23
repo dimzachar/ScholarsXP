@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { MergeService } from '@/lib/services/MergeService'
+import { withAPIOptimization } from '@/middleware/api-optimization'
 
 interface MergeInitiateRequest {
   realUserId: string
@@ -21,7 +22,7 @@ interface MergeInitiateRequest {
  * POST /api/merge/initiate
  * Initiates a legacy account merge
  */
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const body: MergeInitiateRequest = await request.json()
 
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest) {
  * GET /api/merge/initiate?userId=<uuid>
  * Gets merge status for a user
  */
-export async function GET(request: NextRequest) {
+async function getHandler(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('userId')
@@ -199,7 +200,7 @@ export async function GET(request: NextRequest) {
  * PUT /api/merge/initiate
  * Retries a failed merge
  */
-export async function PUT(request: NextRequest) {
+async function putHandler(request: NextRequest) {
   try {
     const body: { mergeId: string } = await request.json()
 
@@ -271,3 +272,7 @@ export async function PUT(request: NextRequest) {
     }, { status: 500 })
   }
 }
+
+export const POST = withAPIOptimization(postHandler, { rateLimitType: 'strict', caching: false, compression: true, performanceMonitoring: true })
+export const GET = withAPIOptimization(getHandler, { rateLimitType: 'strict', caching: false, compression: true, performanceMonitoring: true })
+export const PUT = withAPIOptimization(putHandler, { rateLimitType: 'strict', caching: false, compression: true, performanceMonitoring: true })

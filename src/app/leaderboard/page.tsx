@@ -108,15 +108,35 @@ export default function LeaderboardPage() {
       const allTimeParams = new URLSearchParams({ page: String(allTimePage), limit: String(pageSize) })
 
       const [weeklyData, allTimeData, userPos] = await Promise.all([
-        apiGet(`/api/leaderboard/weekly?${weeklyParams}`),
-        apiGet(`/api/leaderboard/all-time?${allTimeParams}`),
+        apiGet(`/api/leaderboard?type=weekly&${weeklyParams}`),
+        apiGet(`/api/leaderboard?type=alltime&${allTimeParams}`),
         fetchCurrentUserPosition(),
       ])
 
-      setWeeklyStats(weeklyData?.data || weeklyData)
-      setAllTimeLeaders(allTimeData?.data?.items || allTimeData?.items || [])
-      setAllTimePagination(allTimeData?.data?.pagination || allTimeData?.pagination || null)
-      setAllTimeStats(allTimeData?.data?.stats || allTimeData?.stats || null)
+      setWeeklyStats(
+        weeklyData?.data?.weeklyStats || weeklyData?.weeklyStats || weeklyData
+      )
+      setAllTimeLeaders(
+        allTimeData?.data?.items ||
+        allTimeData?.items ||
+        allTimeData?.data?.allTimeLeaders ||
+        allTimeData?.allTimeLeaders ||
+        []
+      )
+      setAllTimePagination(
+        allTimeData?.data?.pagination ||
+        allTimeData?.pagination ||
+        allTimeData?.data?.allTimePagination ||
+        allTimeData?.allTimePagination ||
+        null
+      )
+      setAllTimeStats(
+        allTimeData?.data?.stats ||
+        allTimeData?.stats ||
+        allTimeData?.data?.allTimeStats ||
+        allTimeData?.allTimeStats ||
+        null
+      )
       setCurrentUserPosition(userPos)
     } catch (e) {
       console.error('Error fetching leaderboard data', e)
