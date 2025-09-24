@@ -117,6 +117,15 @@ export const POST = withAPIOptimization(
       status: 'PROCESSING' as const // New fast flow status
     }
 
+    const debugPayload = {
+      userId: request.user!.id,
+      platform,
+      weekNumber,
+      urlLength: url.length,
+      urlPreview: url.slice(0, 200)
+    }
+    console.log('Submission insert attempt', debugPayload)
+
     const { data: submissionData, error: submissionError } = await supabase
       .from('Submission')
       .insert(insertPayload)
@@ -125,6 +134,16 @@ export const POST = withAPIOptimization(
 
     let submission = submissionData
     let insertError = submissionError
+
+    if (insertError) {
+      console.error('Submission insert error', {
+        message: insertError.message,
+        code: insertError.code,
+        details: (insertError as any)?.details,
+        hint: (insertError as any)?.hint,
+        routine: (insertError as any)?.routine
+      })
+    }
 
     if (
       insertError?.message?.includes('invalid input value for enum "SubmissionStatus"') &&
@@ -140,6 +159,20 @@ export const POST = withAPIOptimization(
         })
         .select()
         .single()
+
+      if (fallbackError) {
+        console.error('Submission fallback insert error', {
+          message: fallbackError.message,
+          code: fallbackError.code,
+          details: (fallbackError as any)?.details,
+          hint: (fallbackError as any)?.hint,
+          routine: (fallbackError as any)?.routine
+        })
+      } else {
+        console.log('Submission fallback insert succeeded', {
+          submissionId: fallbackSubmission?.id
+        })
+      }
 
       submission = fallbackSubmission
       insertError = fallbackError
