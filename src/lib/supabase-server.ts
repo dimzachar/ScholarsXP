@@ -71,13 +71,41 @@ export function createServiceClient() {
  * This client respects RLS policies and uses the user's session
  */
 export function createAuthenticatedClient(accessToken: string, refreshToken?: string) {
-  const client = createAnonClient()
+  const headers: Record<string, string> = {
+    'Cache-Control': 'no-cache'
+  }
 
-  // Set the user session to ensure RLS policies are applied correctly
+  if (accessToken) {
+    headers['Authorization'] = `Bearer ${accessToken}`
+  }
+
+  const client = createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false
+      },
+      global: {
+        headers
+      },
+      db: {
+        schema: 'public'
+      },
+      realtime: {
+        log_level: 'error'
+      }
+    }
+  )
+
   if (accessToken) {
     client.auth.setSession({
       access_token: accessToken,
       refresh_token: refreshToken || null
+    }).catch(error => {
+      console.warn('Failed to set Supabase session for authenticated client', error)
     })
   }
 
