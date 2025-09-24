@@ -8,6 +8,15 @@ export async function middleware(request: NextRequest) {
   // Create response
   const response = NextResponse.next()
 
+  // Always bypass middleware for Next.js internals and favicon
+  // Prevents accidental interception of dev HMR, flight, data, and static assets
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/favicon.ico')
+  ) {
+    return response
+  }
+
   // Disable CSP completely for development and add cache-busting headers
   response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
   response.headers.set('Pragma', 'no-cache')
@@ -162,11 +171,11 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
+     * - api (API routes are handled separately)
+     * - _next (all internal Next.js assets and dev endpoints)
      * - favicon.ico (favicon file)
      */
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    '/((?!api|_next/.*|favicon.ico).*)',
   ],
 }
 
