@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       '@prisma/client':
-        specifier: ^6.16.2
+        specifier: 6.16.2
         version: 6.16.2(prisma@6.16.2(typescript@5.8.3))(typescript@5.8.3)
       '@radix-ui/react-alert-dialog':
         specifier: ^1.1.14
@@ -175,7 +175,7 @@ importers:
         specifier: ^8.5.6
         version: 8.5.6
       prisma:
-        specifier: ^6.16.2
+        specifier: 6.16.2
         version: 6.16.2(typescript@5.8.3)
       supabase:
         specifier: ^2.30.4

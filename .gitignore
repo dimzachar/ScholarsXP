@@ -72,8 +72,6 @@ next-env.d.ts
 
 # Additional logs
 *.log
-logs/
-
 # Jest cache
 .jest/
 
