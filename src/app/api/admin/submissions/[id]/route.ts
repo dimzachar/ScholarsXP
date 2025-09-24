@@ -393,14 +393,20 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
           const legacySubmission = legacySubmissionResult[0] || null
 
           if (legacySubmission) {
-            // Find the actual user associated with this legacy submission (prefer real Discord accounts)
+            const handle = legacySubmission.discordHandle?.trim() || ''
+            const orConditions: any[] = []
+
+            if (handle) {
+              orConditions.push({ discordHandle: { equals: handle, mode: 'insensitive' as const } })
+              if (!handle.includes('#')) {
+                orConditions.push({ discordHandle: { equals: `${handle}#0`, mode: 'insensitive' as const } })
+              }
+              orConditions.push({ username: { equals: handle, mode: 'insensitive' as const } })
+            }
+
             const actualUser = await prisma.user.findFirst({
               where: {
-                OR: [
-                  { discordHandle: legacySubmission.discordHandle },
-                  { discordHandle: legacySubmission.discordHandle + '#0' },
-                  { username: legacySubmission.discordHandle }
-                ],
+                ...(orConditions.length > 0 ? { OR: orConditions } : {}),
                 NOT: {
                   email: { endsWith: '@legacy.import' }
                 }
