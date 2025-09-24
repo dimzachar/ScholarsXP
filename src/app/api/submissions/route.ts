@@ -107,25 +107,49 @@ export const POST = withAPIOptimization(
     }
 
     // 5. Create submission record with PROCESSING status (< 200ms)
-    const { data: submission, error: submissionError } = await supabase
+    const insertPayload = {
+      userId: request.user!.id,
+      url,
+      platform,
+      taskTypes: [], // Will be populated during background processing
+      aiXp: 0,
+      weekNumber,
+      status: 'PROCESSING' as const // New fast flow status
+    }
+
+    const { data: submissionData, error: submissionError } = await supabase
       .from('Submission')
-      .insert({
-        userId: request.user!.id,
-        url,
-        platform,
-        taskTypes: [], // Will be populated during background processing
-        aiXp: 0,
-        weekNumber,
-        status: 'PROCESSING' // New fast flow status
-      })
+      .insert(insertPayload)
       .select()
       .single()
 
-    if (submissionError || !submission) {
-      console.error('❌ Error creating submission:', submissionError)
+    let submission = submissionData
+    let insertError = submissionError
+
+    if (
+      insertError?.message?.includes('invalid input value for enum "SubmissionStatus"') &&
+      insertPayload.status === 'PROCESSING'
+    ) {
+      console.warn('Submission status PROCESSING unsupported - falling back to PENDING')
+
+      const { data: fallbackSubmission, error: fallbackError } = await supabase
+        .from('Submission')
+        .insert({
+          ...insertPayload,
+          status: 'PENDING'
+        })
+        .select()
+        .single()
+
+      submission = fallbackSubmission
+      insertError = fallbackError
+    }
+
+    if (insertError || !submission) {
+      console.error('❌ Error creating submission:', insertError)
       throw new BusinessLogicError('Failed to create submission', {
-        error: submissionError?.message,
-        code: submissionError?.code
+        error: insertError?.message,
+        code: insertError?.code
       })
     }
 
@@ -149,7 +173,7 @@ export const POST = withAPIOptimization(
       return createSuccessResponse({
         message: 'Submission received and is being processed',
         submissionId: submission.id,
-        status: 'PROCESSING',
+        status: submission.status,
         estimatedProcessingTime: '1-3 minutes',
         trackingUrl: `/submissions/${submission.id}/status`,
         responseTime: `${responseTime}ms`
