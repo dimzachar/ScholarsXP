@@ -84,7 +84,7 @@ interface UserData {
 }
 
 export default function AdminUsersPage() {
-  const { user: _user, loading } = useAuth()
+  const { user: _user, loading, session } = useAuth()
   const router = useRouter()
   const [users, setUsers] = useState<UserData[]>([])
   const [loadingUsers, setLoadingUsers] = useState(true)
@@ -150,7 +150,12 @@ export default function AdminUsersPage() {
         }
       })
 
-      const response = await fetch(`/api/admin/users?${params.toString()}`, { credentials: 'include' })
+      const response = await fetch(`/api/admin/users?${params.toString()}`, {
+        credentials: 'include',
+        headers: {
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+      })
       
       if (response.ok) {
         const data = await response.json()
@@ -223,7 +228,10 @@ export default function AdminUsersPage() {
       const response = await fetch('/api/admin/users', {
         method: 'PATCH',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({
           action: 'updateRole',
           userIds: selectedUsers,
@@ -250,7 +258,10 @@ export default function AdminUsersPage() {
       const response = await fetch('/api/admin/users', {
         method: 'PATCH',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({
           action: 'adjustXp',
           userIds: selectedUsers,
@@ -309,7 +320,10 @@ export default function AdminUsersPage() {
       const response = await fetch('/api/admin/users', {
         method: 'PATCH',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({
           action: 'toggleStatus',
           userIds: [userToDeactivate.id],
@@ -380,7 +394,11 @@ export default function AdminUsersPage() {
           }
         })
 
-        const response = await fetch(`/api/admin/users?${params.toString()}`)
+        const response = await fetch(`/api/admin/users?${params.toString()}` , {
+          headers: {
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
+        })
 
         if (!response.ok) {
           throw new Error(`Failed to fetch users page ${currentPage} for export`)

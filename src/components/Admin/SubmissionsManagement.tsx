@@ -83,7 +83,7 @@ interface SubmissionsManagementProps {
 }
 
 export default function SubmissionsManagement({ className }: SubmissionsManagementProps) {
-  const { user, userProfile, loading } = useAuth()
+  const { user, userProfile, loading, session } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [submissions, setSubmissions] = useState<Submission[]>([])
@@ -148,12 +148,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
     try {
       setLoadingSubmissions(true)
 
-      // Safety check to ensure pagination is initialized
-      if (!pagination) {
-        console.warn('Pagination not initialized, skipping fetch')
-        setLoadingSubmissions(false)
-        return
-      }
+      // Pagination is always initialized via state defaults
 
       const params = new URLSearchParams({
         page: pagination.page.toString(),
@@ -180,7 +175,8 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
       const response = await fetch(apiUrl, {
         headers: {
           'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
+          'Pragma': 'no-cache',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         }
       })
 

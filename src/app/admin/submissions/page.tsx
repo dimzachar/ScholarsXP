@@ -79,7 +79,7 @@ interface Submission {
 }
 
 export default function AdminSubmissionsPage() {
-  const { user: _user, userProfile, loading } = useAuth()
+  const { user: _user, userProfile, loading, session } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [submissions, setSubmissions] = useState<Submission[]>([])
@@ -138,12 +138,7 @@ export default function AdminSubmissionsPage() {
     try {
       setLoadingSubmissions(true)
 
-      // Safety check to ensure pagination is initialized
-      if (!pagination) {
-        console.warn('Pagination not initialized, skipping fetch')
-        setLoadingSubmissions(false)
-        return
-      }
+      // Pagination is always initialized via state defaults
 
       const params = new URLSearchParams({
         page: pagination.page.toString(),
@@ -169,7 +164,8 @@ export default function AdminSubmissionsPage() {
         credentials: 'include',
         headers: {
           'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
+          'Pragma': 'no-cache',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         }
       })
 
@@ -254,7 +250,10 @@ export default function AdminSubmissionsPage() {
       const response = await fetch('/api/admin/submissions', {
         method: 'PATCH',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({
           action,
           submissionIds: selectedSubmissions,
