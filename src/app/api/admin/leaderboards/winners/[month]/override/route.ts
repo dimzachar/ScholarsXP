@@ -1,6 +1,6 @@
 import { withPermission } from '@/lib/auth-middleware'
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseClient } from '@/lib/supabase'
+import { createServiceClient } from '@/lib/supabase-server'
 import { invalidateAllLeaderboardCache } from '@/lib/cache/leaderboard-cache-utils'
 
 // Upserts a winner for the month to the specified userId (admin override)
@@ -17,7 +17,8 @@ export const POST = withPermission('admin_access')(async (request: NextRequest, 
   let data: any = null
   let error: any = null
   try {
-    const resp = await supabaseClient
+    const supabaseAdmin = createServiceClient()
+    const resp = await supabaseAdmin
       .from('MonthlyWinner')
       .upsert({ month, userId, rank, xpAwarded }, { onConflict: 'month,rank' })
       .select('id, userId, month, awardedAt, rank, xpAwarded')
@@ -30,7 +31,8 @@ export const POST = withPermission('admin_access')(async (request: NextRequest, 
 
   if (error) {
     // Fallback: legacy schema (no rank/xpAwarded or no unique(month,rank))
-    const legacy = await supabaseClient
+    const supabaseAdmin = createServiceClient()
+    const legacy = await supabaseAdmin
       .from('MonthlyWinner')
       .upsert({ month, userId }, { onConflict: 'month' })
       .select('id, userId, month, awardedAt')
@@ -41,7 +43,8 @@ export const POST = withPermission('admin_access')(async (request: NextRequest, 
 
   // Optionally log to AutomationLog (best-effort)
   try {
-    await supabaseClient.from('AutomationLog').insert({
+    const supabaseAdmin = createServiceClient()
+    await supabaseAdmin.from('AutomationLog').insert({
       jobName: 'monthly_award_override',
       jobType: 'xp_aggregation',
       triggeredBy: 'admin',

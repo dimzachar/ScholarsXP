@@ -155,7 +155,24 @@ export default function AdminUsersPage() {
       if (response.ok) {
         const data = await response.json()
         setUsers(data.users)
-        setPagination(data.pagination)
+        // Only update pagination if values changed to avoid re-render loops
+        const incoming = data.pagination || {
+          page: 1,
+          limit: 20,
+          totalCount: 0,
+          totalPages: 0,
+          hasNextPage: false,
+          hasPrevPage: false
+        }
+        setPagination(prev => {
+          const same = prev.page === incoming.page &&
+                       prev.limit === incoming.limit &&
+                       prev.totalCount === incoming.totalCount &&
+                       prev.totalPages === incoming.totalPages &&
+                       prev.hasNextPage === incoming.hasNextPage &&
+                       prev.hasPrevPage === incoming.hasPrevPage
+          return same ? prev : incoming
+        })
         setStats(data.stats)
       }
     } catch (error) {
@@ -163,7 +180,7 @@ export default function AdminUsersPage() {
     } finally {
       setLoadingUsers(false)
     }
-  }, [pagination, filters, sortBy, sortOrder])
+  }, [pagination.page, pagination.limit, filters, sortBy, sortOrder])
 
   useEffect(() => {
     fetchUsers()
