@@ -495,7 +495,7 @@ export async function bulkUpdateSubmissions(
                     targetId: id,
                     details: {
                       subAction: 'SUBMISSION_STATUS_CHANGE',
-                      newStatus,
+                      newStatus: normalized,
                       reason: data.reason || null,
                     }
                   }
@@ -806,3 +806,4 @@ export class AdminSubmissionsPerformanceMonitor {
     }
   }
 }
+

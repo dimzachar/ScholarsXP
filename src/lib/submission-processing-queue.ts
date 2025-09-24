@@ -240,7 +240,7 @@ export class SubmissionProcessingQueue {
           userId,
           NotificationType.SUBMISSION_PROCESSING,
           '✅ Submission Ready for Review',
-          'Your submission is ready for peer review. AI evaluation is currently disabled.',
+          'Your submission is ready for peer review.',
           { submissionId, platform: submission.platform, skipAI: true }
         )
 
