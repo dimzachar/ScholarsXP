@@ -85,17 +85,6 @@ export default function AdminSubmissionDetailPage() {
   const [loadingSubmission, setLoadingSubmission] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!loading && userProfile?.role !== 'ADMIN') {
-      router.push('/dashboard')
-      return
-    }
-
-    if (submissionId) {
-      fetchSubmissionDetails()
-    }
-  }, [submissionId, userProfile?.role, loading, router, fetchSubmissionDetails])
-
   const fetchSubmissionDetails = useCallback(async () => {
     try {
       setLoadingSubmission(true)
@@ -116,6 +105,17 @@ export default function AdminSubmissionDetailPage() {
       setLoadingSubmission(false)
     }
   }, [submissionId])
+
+  useEffect(() => {
+    if (!loading && userProfile?.role !== 'ADMIN') {
+      router.push('/dashboard')
+      return
+    }
+
+    if (submissionId) {
+      fetchSubmissionDetails()
+    }
+  }, [submissionId, userProfile?.role, loading, router, fetchSubmissionDetails])
 
 
 
