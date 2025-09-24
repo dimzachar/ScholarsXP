@@ -188,13 +188,22 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
         const responseData = await response.json()
         const data = responseData.data || responseData // Handle both nested and flat response structures
         setSubmissions(data.submissions || [])
-        setPagination(data.pagination || {
+        const incoming = data.pagination || {
           page: 1,
           limit: 20,
           totalCount: 0,
           totalPages: 0,
           hasNextPage: false,
           hasPrevPage: false
+        }
+        setPagination(prev => {
+          const same = prev.page === incoming.page &&
+                       prev.limit === incoming.limit &&
+                       prev.totalCount === incoming.totalCount &&
+                       prev.totalPages === incoming.totalPages &&
+                       prev.hasNextPage === incoming.hasNextPage &&
+                       prev.hasPrevPage === incoming.hasPrevPage
+          return same ? prev : incoming
         })
         setStats(data.stats || {
           statusCounts: {},
@@ -206,7 +215,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
     } finally {
       setLoadingSubmissions(false)
     }
-  }, [pagination, filters, sortBy, sortOrder])
+  }, [pagination.page, pagination.limit, filters, sortBy, sortOrder])
 
   useEffect(() => {
     // Only fetch when user is loaded and is admin, and pagination is initialized

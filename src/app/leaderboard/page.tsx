@@ -145,11 +145,9 @@ export default function LeaderboardPage() {
     }
   }, [weeklyPage, allTimePage, pageSize, fetchCurrentUserPosition])
 
+  // Fetch on mount and when dependencies of fetchLeaderboardData change
+  // (includes weeklyPage, allTimePage, pageSize, and user via fetchCurrentUserPosition)
   useEffect(() => { fetchLeaderboardData() }, [fetchLeaderboardData])
-
-  useEffect(() => {
-    if (!loading) fetchLeaderboardData()
-  }, [weeklyPage, allTimePage, loading, fetchLeaderboardData])
 
   // fetchCurrentUserPosition defined above
 
