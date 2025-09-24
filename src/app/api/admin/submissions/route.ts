@@ -23,9 +23,21 @@ const optimizedSubmissionsHandler = withPermission('admin_access')(async (reques
       // Parse pagination parameters
       const pagination = parsePaginationParams(searchParams)
 
-      // Parse filters
+      // Parse filters (normalize status synonyms)
+      const rawStatus = searchParams.get('status')
+      const statusMap: Record<string, string> = {
+        COMPLETED: 'FINALIZED',
+        COMPLETE: 'FINALIZED',
+        DONE: 'FINALIZED',
+        PEER_REVIEW: 'UNDER_PEER_REVIEW',
+        'PEER-REVIEW': 'UNDER_PEER_REVIEW',
+      }
+      const normalizedStatus = rawStatus
+        ? (statusMap[rawStatus.toUpperCase()] || rawStatus.toUpperCase())
+        : null
+
       const filters = {
-        status: searchParams.get('status'),
+        status: normalizedStatus,
         platform: searchParams.get('platform'),
         taskType: searchParams.get('taskType'),
         dateFrom: searchParams.get('dateFrom'),
@@ -389,7 +401,25 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
       const updateData: any = {}
 
       if (status) {
-        updateData.status = status
+        const statusMap: Record<string, string> = {
+          COMPLETED: 'FINALIZED',
+          COMPLETE: 'FINALIZED',
+          DONE: 'FINALIZED',
+          PEER_REVIEW: 'UNDER_PEER_REVIEW',
+          'PEER-REVIEW': 'UNDER_PEER_REVIEW',
+        }
+        const requested = String(status).toUpperCase()
+        const normalized = statusMap[requested] || requested
+        const allowed = new Set([
+          'PROCESSING',
+          'PENDING',
+          'AI_REVIEWED',
+          'UNDER_PEER_REVIEW',
+          'FINALIZED',
+          'FLAGGED',
+          'REJECTED',
+        ])
+        updateData.status = allowed.has(normalized) ? normalized : 'FINALIZED'
       }
 
       if (finalXp !== undefined) {

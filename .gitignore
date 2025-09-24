@@ -60,7 +60,7 @@ next-env.d.ts
 
 # augment
 .augment/
-
+supabase/migrations/*
 # IDE
 .vscode/
 .idea/

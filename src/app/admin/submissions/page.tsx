@@ -270,6 +270,36 @@ export default function AdminSubmissionsPage() {
     }
   }
 
+  // Minimal wiring for bulk XP modification using prompt
+  const handleBulkModifyXp = async () => {
+    if (selectedSubmissions.length === 0) return
+
+    const xpStr = typeof window !== 'undefined'
+      ? window.prompt('Enter XP to set for selected submissions (0-10000):')
+      : null
+    if (xpStr === null) return
+
+    const xp = parseInt(xpStr, 10)
+    if (Number.isNaN(xp) || xp < 0 || xp > 10000) {
+      if (typeof window !== 'undefined') {
+        window.alert('Invalid XP value. Please enter a number between 0 and 10000.')
+      }
+      return
+    }
+
+    const reason = typeof window !== 'undefined'
+      ? window.prompt('Enter reason for XP change (required, min 5 chars):') || ''
+      : ''
+    if (!reason || reason.trim().length < 5) {
+      if (typeof window !== 'undefined') {
+        window.alert('Reason is required and must be at least 5 characters long.')
+      }
+      return
+    }
+
+    await handleBulkAction('updateXp', { xpAwarded: xp, reason: reason.trim() })
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'PENDING': return 'bg-warning/10 text-warning'
@@ -549,6 +579,15 @@ export default function AdminSubmissionsPage() {
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={handleBulkModifyXp}
+                    title="Modify XP for selected submissions"
+                  >
+                    <Award className="h-4 w-4 mr-2" />
+                    Modify XP
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => handleBulkAction('updateStatus', { status: 'REJECTED' })}
                   >
                     Reject
@@ -584,10 +623,7 @@ export default function AdminSubmissionsPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => {
-                      // TODO: Implement bulk XP modification
-                      console.log('Bulk XP modification for:', selectedSubmissions)
-                    }}
+                    onClick={handleBulkModifyXp}
                   >
                     <Award className="h-4 w-4 mr-2" />
                     Modify XP

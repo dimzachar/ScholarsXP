@@ -449,24 +449,35 @@ export async function bulkUpdateSubmissions(
           COMPLETED: 'FINALIZED',
           COMPLETE: 'FINALIZED',
           DONE: 'FINALIZED',
+          PEER_REVIEW: 'UNDER_PEER_REVIEW',
+          'PEER-REVIEW': 'UNDER_PEER_REVIEW',
         }
         const allowedStatuses = new Set([
+          'PROCESSING',
           'PENDING',
           'AI_REVIEWED',
           'UNDER_PEER_REVIEW',
           'FINALIZED',
           'FLAGGED',
           'REJECTED',
-          'LEGACY_IMPORTED',
         ])
         const requested = String(data.status).toUpperCase()
         const normalized = statusMap[requested] || requested
-        const newStatus = allowedStatuses.has(normalized) ? normalized : 'FINALIZED'
+        if (!allowedStatuses.has(normalized)) {
+          throw new Error(`Unsupported status: ${requested}`)
+        }
+
+        // Only update existing regular submissions (ignore legacy-only IDs)
+        const existing = await prisma.submission.findMany({
+          where: { id: { in: submissionIds } },
+          select: { id: true }
+        })
+        const idsToUpdate = existing.map(e => e.id)
 
         result = await prisma.submission.updateMany({
-          where: { id: { in: submissionIds } },
+          where: { id: { in: idsToUpdate } },
           data: {
-            status: newStatus,
+            status: normalized,
             updatedAt: new Date()
           }
         })

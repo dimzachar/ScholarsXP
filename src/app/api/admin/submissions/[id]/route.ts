@@ -306,11 +306,37 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
     let result
 
     switch (action) {
-      case 'updateStatus':
+      case 'updateStatus': {
+        // Normalize status names from UI into DB enum values
+        const statusMap: Record<string, string> = {
+          COMPLETED: 'FINALIZED',
+          COMPLETE: 'FINALIZED',
+          DONE: 'FINALIZED',
+          PEER_REVIEW: 'UNDER_PEER_REVIEW',
+          'PEER-REVIEW': 'UNDER_PEER_REVIEW',
+        }
+        const requested = String(data.status || '').toUpperCase()
+        const normalized = statusMap[requested] || requested
+        const allowed = new Set([
+          'PROCESSING',
+          'PENDING',
+          'AI_REVIEWED',
+          'UNDER_PEER_REVIEW',
+          'FINALIZED',
+          'FLAGGED',
+          'REJECTED',
+        ])
+        if (!allowed.has(normalized)) {
+          return NextResponse.json(
+            { message: `Unsupported status: ${requested}` },
+            { status: 400 }
+          )
+        }
+
         result = await prisma.submission.update({
           where: { id: submissionId },
           data: { 
-            status: data.status,
+            status: normalized,
             updatedAt: new Date()
           }
         })
@@ -324,12 +350,12 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
             targetId: submissionId,
             details: {
               subAction: 'STATUS_CHANGE',
-              newStatus: data.status,
+              newStatus: normalized,
               reason: data.reason
             }
           }
         })
-        break
+        break }
 
       case 'updateXp':
         // First try to find in regular submissions
