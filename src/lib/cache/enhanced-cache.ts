@@ -21,7 +21,7 @@ export class SimplifiedMultiLayerCache {
       maxSize: 50 * 1024 * 1024, // 50MB max size
       sizeCalculation: (value) => JSON.stringify(value).length,
       ttl: 5 * 60 * 1000,     // 5 minutes default TTL
-      allowStale: true,       // Allow stale data while refreshing
+      allowStale: false,      // Respect TTL expiration and force refresh
       updateAgeOnGet: true,   // LRU behavior
       updateAgeOnHas: true
     })

@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { supabaseClient } from '@/lib/supabase'
 import { getWeekNumber } from '@/lib/utils'
+import { QueryCache } from '@/lib/cache/query-cache'
 
 /**
  * XP Propagation Service
@@ -239,15 +240,14 @@ export async function recalculateUserTotals(userId: string): Promise<XpChangeRes
  */
 export async function updateLeaderboardRankings(weekNumber: number): Promise<void> {
   try {
-    // This would typically involve updating cached rankings
-    // For now, we'll just ensure the weekly stats are current
+    await Promise.all([
+      QueryCache.invalidatePattern('leaderboard_simple'),
+      QueryCache.invalidatePattern('leaderboard_detailed'),
+      QueryCache.invalidatePattern('leaderboard')
+    ])
+
+    // Cached leaderboard responses are invalidated above; re-fetch occurs on demand
     console.log(`📊 Updated leaderboard rankings for week ${weekNumber}`)
-    
-    // In a production system, you might:
-    // 1. Recalculate all user rankings for the week
-    // 2. Update cached leaderboard data
-    // 3. Invalidate relevant cache entries
-    
   } catch (error) {
     console.error('Error updating leaderboard rankings:', error)
     throw error

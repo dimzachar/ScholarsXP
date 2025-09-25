@@ -114,28 +114,6 @@ export default function DetailedLeaderboardPage() {
     }
   })
 
-  // Initial load useEffect
-  useEffect(() => {
-    if (!loading && userProfile && !hasInitiallyLoaded.current) {
-      if (!user || (userProfile.role !== 'ADMIN' && userProfile.role !== 'REVIEWER')) {
-        router.push('/leaderboard')
-        return
-      }
-      hasInitiallyLoaded.current = true
-      lastFetchedPage.current = currentPage // Track that we're fetching this page
-      fetchDetailedLeaderboard(false) // Initial load
-    }
-  }, [user?.id, userProfile?.role, loading, router, currentPage, fetchDetailedLeaderboard, user, userProfile])
-
-  // Pagination useEffect - triggers when currentPage changes after initial load
-  useEffect(() => {
-    // Only fetch if we haven't already fetched this page and we have completed initial load
-    if (!loading && userProfile && user && hasInitiallyLoaded.current && currentPage !== lastFetchedPage.current) {
-      lastFetchedPage.current = currentPage
-      fetchDetailedLeaderboard(true) // Pagination
-    }
-  }, [currentPage, loading, userProfile, user, fetchDetailedLeaderboard])
-
   const fetchDetailedLeaderboard = useCallback(async (isPagination = false) => {
     try {
       // Only show full loading for initial load or filter changes, not pagination
@@ -170,6 +148,28 @@ export default function DetailedLeaderboardPage() {
       }
     }
   }, [filters, currentPage, pageSize])
+
+  // Initial load useEffect
+  useEffect(() => {
+    if (!loading && userProfile && !hasInitiallyLoaded.current) {
+      if (!user || (userProfile.role !== 'ADMIN' && userProfile.role !== 'REVIEWER')) {
+        router.push('/leaderboard')
+        return
+      }
+      hasInitiallyLoaded.current = true
+      lastFetchedPage.current = currentPage // Track that we're fetching this page
+      fetchDetailedLeaderboard(false) // Initial load
+    }
+  }, [user?.id, userProfile?.role, loading, router, currentPage, fetchDetailedLeaderboard, user, userProfile])
+
+  // Pagination useEffect - triggers when currentPage changes after initial load
+  useEffect(() => {
+    // Only fetch if we haven't already fetched this page and we have completed initial load
+    if (!loading && userProfile && user && hasInitiallyLoaded.current && currentPage !== lastFetchedPage.current) {
+      lastFetchedPage.current = currentPage
+      fetchDetailedLeaderboard(true) // Pagination
+    }
+  }, [currentPage, loading, userProfile, user, fetchDetailedLeaderboard])
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }))
