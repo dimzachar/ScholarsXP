@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import { QueryCache, CacheTTL, withQueryCache } from '../cache/query-cache'
 import { PaginationParams, PaginationHelper } from '../pagination'
 import { AdminSubmissionsResponseDTO, AdminSubmissionDTO, ResponseTransformer } from '@/types/api-responses'
@@ -11,6 +12,10 @@ import { getWeekNumber } from '@/lib/utils'
 interface LegacySubmissionWithUser {
   id: string
   url: string
+  adminStatus: string | null
+  adminNotes: string | null
+  adminUpdatedAt: Date | null
+  adminUpdatedBy: string | null
   discordHandle: string | null
   submittedAt: Date | null
   role: string | null
@@ -24,6 +29,88 @@ interface LegacySubmissionWithUser {
   email: string | null
   userRole: string | null
   totalXp: number | null
+}
+
+const STATUS_SYNONYMS: Record<string, string> = {
+  COMPLETED: 'FINALIZED',
+  COMPLETE: 'FINALIZED',
+  DONE: 'FINALIZED',
+  PEER_REVIEW: 'UNDER_PEER_REVIEW',
+  'PEER-REVIEW': 'UNDER_PEER_REVIEW',
+}
+
+const REGULAR_ALLOWED_STATUSES = new Set<string>([
+  'PROCESSING',
+  'PENDING',
+  'AI_REVIEWED',
+  'UNDER_PEER_REVIEW',
+  'FINALIZED',
+  'FLAGGED',
+  'REJECTED',
+])
+
+const LEGACY_DEFAULT_STATUS = 'LEGACY_IMPORTED'
+
+function normalizeStatusInput(status?: string | null): string | null {
+  if (!status) return null
+  const normalized = status.toUpperCase()
+  return STATUS_SYNONYMS[normalized] || normalized
+}
+
+function buildLegacyStatusFilter(status?: string | null): Prisma.LegacySubmissionWhereInput | undefined {
+  const normalized = normalizeStatusInput(status)
+  if (!normalized) {
+    return undefined
+  }
+
+  if (normalized === LEGACY_DEFAULT_STATUS) {
+    return {
+      OR: [
+        { adminStatus: null },
+        { adminStatus: LEGACY_DEFAULT_STATUS },
+      ],
+    }
+  }
+
+  return { adminStatus: normalized }
+}
+
+async function createLegacyWhereClause(filters: any = {}): Promise<Prisma.LegacySubmissionWhereInput | null> {
+  const andFilters: Prisma.LegacySubmissionWhereInput[] = []
+
+  if (filters.userId) {
+    const user = await prisma.user.findUnique({
+      where: { id: filters.userId },
+      select: { username: true, discordHandle: true }
+    })
+
+    if (!user) {
+      return null
+    }
+
+    const handleForUser = user.discordHandle || user.username
+    andFilters.push({ discordHandle: handleForUser })
+  }
+
+  const statusFilter = buildLegacyStatusFilter(filters.status)
+  if (statusFilter) {
+    andFilters.push(statusFilter)
+  }
+
+  if (!filters.userId && filters.search) {
+    andFilters.push({
+      OR: [
+        { discordHandle: { contains: filters.search, mode: 'insensitive' } },
+        { url: { contains: filters.search, mode: 'insensitive' } }
+      ]
+    })
+  }
+
+  if (andFilters.length === 0) {
+    return {}
+  }
+
+  return { AND: andFilters }
 }
 
 /**
@@ -159,100 +246,144 @@ async function getOptimizedLegacySubmissions(query: any, filters: any = {}) {
     return []
   }
 
-  // If userId filter is provided, we need to find legacy submissions for that user
-  if (filters.userId) {
-    // For userId filtering, we need to join with User table to find the discordHandle
-    const user = await prisma.user.findUnique({
-      where: { id: filters.userId },
-      select: { username: true, discordHandle: true }
-    })
-
-    if (!user) {
-      return [] // User not found, no legacy submissions
-    }
-
-    // Try both discordHandle and username for legacy submission linking
-    const discordHandle = user.discordHandle || user.username
-    try {
-      const legacySubmissions = await prisma.$queryRaw`
-        SELECT DISTINCT
-          ls.id, ls.url, ls."discordHandle", ls."submittedAt", ls.role, ls.notes, ls."importedAt",
-          ls."aiXp", ls."peerXp", ls."finalXp",
-          u.id as "userId", u.username, u.email, u.role as "userRole", u."totalXp"
-        FROM "LegacySubmission" ls
-        LEFT JOIN "User" u ON (
-          u."discordHandle" = ls."discordHandle" OR
-          u."discordHandle" = ls."discordHandle" || '#0' OR
-          u.username = ls."discordHandle"
-        ) AND u.email NOT LIKE '%@legacy.import'
-        WHERE ls."discordHandle" = ${discordHandle}
-        ORDER BY ls."importedAt" DESC
-        LIMIT ${legacyLimit}
-        OFFSET ${legacyOffset}
-      ` as LegacySubmissionWithUser[]
-
-      return formatLegacySubmissions(legacySubmissions)
-    } catch (error) {
-      console.error('User-specific legacy query failed:', error)
-      return []
-    }
-  }
-
-  // If search filter is provided, filter legacy submissions by discordHandle or URL
-  if (filters.search) {
-    const searchTerm = `%${filters.search}%`
-    try {
-      const legacySubmissions = await prisma.$queryRaw`
-        SELECT DISTINCT
-          ls.id, ls.url, ls."discordHandle", ls."submittedAt", ls.role, ls.notes, ls."importedAt",
-          ls."aiXp", ls."peerXp", ls."finalXp",
-          u.id as "userId", u.username, u.email, u.role as "userRole", u."totalXp"
-        FROM "LegacySubmission" ls
-        LEFT JOIN "User" u ON (
-          u."discordHandle" = ls."discordHandle" OR
-          u."discordHandle" = ls."discordHandle" || '#0' OR
-          u.username = ls."discordHandle"
-        ) AND u.email NOT LIKE '%@legacy.import'
-        WHERE ls."discordHandle" ILIKE ${searchTerm} OR ls.url ILIKE ${searchTerm}
-        ORDER BY ls."importedAt" DESC
-        LIMIT ${legacyLimit}
-        OFFSET ${legacyOffset}
-      ` as LegacySubmissionWithUser[]
-
-      return formatLegacySubmissions(legacySubmissions)
-    } catch (error) {
-      console.error('Search-filtered legacy query failed:', error)
-      return []
-    }
-  }
-
-  try {
-    const legacySubmissions = await prisma.$queryRaw`
-      SELECT DISTINCT
-        ls.id, ls.url, ls."discordHandle", ls."submittedAt", ls.role, ls.notes, ls."importedAt",
-        ls."aiXp", ls."peerXp", ls."finalXp",
-        u.id as "userId", u.username, u.email, u.role as "userRole", u."totalXp"
-      FROM "LegacySubmission" ls
-      LEFT JOIN "User" u ON (
-        u."discordHandle" = ls."discordHandle" OR
-        u."discordHandle" = ls."discordHandle" || '#0' OR
-        u.username = ls."discordHandle"
-      ) AND u.email NOT LIKE '%@legacy.import'
-      ORDER BY ls."importedAt" DESC
-      LIMIT ${legacyLimit}
-      OFFSET ${legacyOffset}
-    ` as LegacySubmissionWithUser[]
-
-    return formatLegacySubmissions(legacySubmissions)
-  } catch (error) {
-    console.error('Primary legacy query failed:', error)
-    // Fallback to empty result
+  const whereClause = await createLegacyWhereClause(filters)
+  if (whereClause === null) {
     return []
   }
+
+  const legacyRecords = await prisma.legacySubmission.findMany({
+    where: whereClause,
+    orderBy: { importedAt: 'desc' },
+    skip: legacyOffset,
+    take: legacyLimit,
+    select: {
+      id: true,
+      url: true,
+      adminStatus: true,
+      adminNotes: true,
+      adminUpdatedAt: true,
+      adminUpdatedBy: true,
+      discordHandle: true,
+      submittedAt: true,
+      role: true,
+      notes: true,
+      importedAt: true,
+      aiXp: true,
+      peerXp: true,
+      finalXp: true
+    }
+  })
+
+  if (legacyRecords.length === 0) {
+    return []
+  }
+
+  const handles = Array.from(new Set(
+    legacyRecords
+      .map(record => record.discordHandle?.trim())
+      .filter((handle): handle is string => !!handle)
+  ))
+
+  type LegacyUserSummary = {
+    id: string
+    username: string
+    email: string | null
+    role: string | null
+    totalXp: number | null
+    discordHandle: string | null
+  }
+
+  const userLookup = new Map<string, LegacyUserSummary>()
+
+  if (handles.length > 0) {
+    const orConditions: Prisma.UserWhereInput['OR'] = []
+    for (const handle of handles) {
+      orConditions?.push({ discordHandle: handle })
+      if (!handle.includes('#')) {
+        orConditions?.push({ discordHandle: `${handle}#0` })
+      }
+      orConditions?.push({ username: handle })
+    }
+
+    if (orConditions && orConditions.length > 0) {
+      const users = await prisma.user.findMany({
+        where: {
+          OR: orConditions,
+          NOT: { email: { endsWith: '@legacy.import' } }
+        },
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          role: true,
+          totalXp: true,
+          discordHandle: true
+        }
+      })
+
+      users.forEach(user => {
+        const summary: LegacyUserSummary = {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          totalXp: user.totalXp,
+          discordHandle: user.discordHandle
+        }
+
+        if (user.discordHandle) {
+          userLookup.set(user.discordHandle, summary)
+          if (!user.discordHandle.includes('#')) {
+            userLookup.set(`${user.discordHandle}#0`, summary)
+          }
+        }
+
+        userLookup.set(user.username, summary)
+      })
+    }
+  }
+
+  const formatted: LegacySubmissionWithUser[] = legacyRecords.map(record => {
+    const handle = record.discordHandle?.trim() || ''
+    let matchedUser = handle ? userLookup.get(handle) : undefined
+
+    if (!matchedUser && handle && !handle.includes('#')) {
+      matchedUser = userLookup.get(`${handle}#0`)
+    }
+
+    if (!matchedUser && handle) {
+      matchedUser = userLookup.get(handle)
+    }
+
+    return {
+      id: record.id,
+      url: record.url,
+      adminStatus: record.adminStatus,
+      adminNotes: record.adminNotes,
+      adminUpdatedAt: record.adminUpdatedAt,
+      adminUpdatedBy: record.adminUpdatedBy,
+      discordHandle: record.discordHandle,
+      submittedAt: record.submittedAt,
+      role: record.role,
+      notes: record.notes,
+      importedAt: record.importedAt,
+      aiXp: record.aiXp,
+      peerXp: record.peerXp,
+      finalXp: record.finalXp,
+      userId: matchedUser?.id ?? null,
+      username: matchedUser?.username ?? null,
+      email: matchedUser?.email ?? null,
+      userRole: matchedUser?.role ?? null,
+      totalXp: matchedUser?.totalXp ?? null,
+    }
+  })
+
+  return formatLegacySubmissions(formatted)
 }
 
 /**
  * Format legacy submissions to match regular submission format
+ to match regular submission format
  * Now includes conditional user data and feedback loop logging
  */
 function formatLegacySubmissions(legacySubmissions: LegacySubmissionWithUser[]) {
@@ -263,6 +394,7 @@ function formatLegacySubmissions(legacySubmissions: LegacySubmissionWithUser[]) 
     // Calculate correct week number from submission timestamp
     const submissionDate = legacy.submittedAt || legacy.importedAt
     const weekNumber = submissionDate ? getWeekNumber(new Date(submissionDate)) : 1
+    const status = normalizeStatusInput(legacy.adminStatus) || LEGACY_DEFAULT_STATUS
 
     // Check if this legacy submission is linked to a real user
     const isLinked = legacy.userId && legacy.email && !legacy.email.includes('@legacy.import')
@@ -280,7 +412,7 @@ function formatLegacySubmissions(legacySubmissions: LegacySubmissionWithUser[]) 
       url: legacy.url,
       platform: 'LEGACY',
       taskTypes: ['LEGACY'],
-      status: 'LEGACY_IMPORTED',
+      status: status,
       aiXp: legacy.aiXp || 0,
       peerXp: legacy.peerXp,
       finalXp: legacy.finalXp,
@@ -319,44 +451,35 @@ function formatLegacySubmissions(legacySubmissions: LegacySubmissionWithUser[]) 
  * Get legacy submission count
  */
 async function getLegacySubmissionCount(filters: any = {}): Promise<number> {
-  // If userId filter is provided, count legacy submissions for that user
-  if (filters.userId) {
-    const user = await prisma.user.findUnique({
-      where: { id: filters.userId },
-      select: { username: true, discordHandle: true }
-    })
-
-    if (!user) {
-      return 0 // User not found, no legacy submissions
-    }
-
-    // Try both discordHandle and username for legacy submission linking
-    const discordHandle = user.discordHandle || user.username
-    const result = await prisma.$queryRaw`
-      SELECT COUNT(*) as count
-      FROM "LegacySubmission"
-      WHERE "discordHandle" = ${discordHandle}
-    ` as any[]
-
-    return parseInt(result[0]?.count || '0')
+  const whereClause = await createLegacyWhereClause(filters)
+  if (whereClause === null) {
+    return 0
   }
 
-  // If search filter is provided, count legacy submissions matching the search
-  if (filters.search) {
-    const searchTerm = `%${filters.search}%`
-    const result = await prisma.$queryRaw`
-      SELECT COUNT(*) as count
-      FROM "LegacySubmission"
-      WHERE "discordHandle" ILIKE ${searchTerm} OR url ILIKE ${searchTerm}
-    ` as any[]
+  return await prisma.legacySubmission.count({ where: whereClause })
+}
 
-    return parseInt(result[0]?.count || '0')
+async function getLegacyStatusCounts(filters: any = {}): Promise<Record<string, number>> {
+  const whereClause = await createLegacyWhereClause(filters)
+  if (whereClause === null) {
+    return {}
   }
 
-  return await prisma.legacySubmission.count()
+  const grouped = await prisma.legacySubmission.groupBy({
+    by: ['adminStatus'],
+    _count: true,
+    where: whereClause
+  })
+
+  return grouped.reduce<Record<string, number>>((acc, entry) => {
+    const status = normalizeStatusInput(entry.adminStatus) || LEGACY_DEFAULT_STATUS
+    acc[status] = (acc[status] || 0) + entry._count
+    return acc
+  }, {})
 }
 
 /**
+
  * Get regular submission count efficiently with caching
  * Note: Legacy submissions are counted separately by getLegacySubmissionCount()
  */
@@ -390,13 +513,13 @@ async function getSubmissionStats(whereClause: any, filters: any = {}) {
     CacheTTL.ANALYTICS,
     async () => {
       // Get status counts using optimized query
-      const [statusCounts, legacyCount] = await Promise.all([
+      const [statusCounts, legacyStatusCounts] = await Promise.all([
         prisma.submission.groupBy({
           by: ['status'],
           _count: true,
           where: whereClause
         }),
-        getLegacySubmissionCount(filters) // Use filtered legacy count instead of total count
+        getLegacyStatusCounts(filters)
       ])
 
       const statusCountsMap = statusCounts.reduce((acc, stat) => {
@@ -404,10 +527,10 @@ async function getSubmissionStats(whereClause: any, filters: any = {}) {
         return acc
       }, {} as Record<string, number>)
 
-      // Add legacy submissions count (now filtered)
-      statusCountsMap['LEGACY_IMPORTED'] = legacyCount
+      for (const [status, count] of Object.entries(legacyStatusCounts)) {
+        statusCountsMap[status] = (statusCountsMap[status] || 0) + count
+      }
 
-      // Ensure all status types are represented
       const allStatuses = ['PENDING', 'AI_REVIEWED', 'UNDER_PEER_REVIEW', 'FINALIZED', 'FLAGGED', 'REJECTED', 'LEGACY_IMPORTED']
       allStatuses.forEach(status => {
         if (!statusCountsMap[status]) {
@@ -440,53 +563,72 @@ export async function bulkUpdateSubmissions(
     let result: any
     
     switch (action) {
-      case 'updateStatus':
+      case 'updateStatus': {
         if (!data?.status) {
           throw new Error('Status is required for updateStatus action')
         }
-        // Normalize incoming status values to enum
-        const statusMap: Record<string, string> = {
-          COMPLETED: 'FINALIZED',
-          COMPLETE: 'FINALIZED',
-          DONE: 'FINALIZED',
-          PEER_REVIEW: 'UNDER_PEER_REVIEW',
-          'PEER-REVIEW': 'UNDER_PEER_REVIEW',
-        }
-        const allowedStatuses = new Set([
-          'PROCESSING',
-          'PENDING',
-          'AI_REVIEWED',
-          'UNDER_PEER_REVIEW',
-          'FINALIZED',
-          'FLAGGED',
-          'REJECTED',
-        ])
-        const requested = String(data.status).toUpperCase()
-        const normalized = statusMap[requested] || requested
-        if (!allowedStatuses.has(normalized)) {
-          throw new Error(`Unsupported status: ${requested}`)
+
+        const requested = String(data.status)
+        const normalized = normalizeStatusInput(requested)
+
+        if (!normalized || (!REGULAR_ALLOWED_STATUSES.has(normalized) && normalized !== LEGACY_DEFAULT_STATUS)) {
+          throw new Error(`Unsupported status: ${requested.toUpperCase()}`)
         }
 
-        // Only update existing regular submissions (ignore legacy-only IDs)
-        const existing = await prisma.submission.findMany({
-          where: { id: { in: submissionIds } },
-          select: { id: true }
-        })
-        const idsToUpdate = existing.map(e => e.id)
+        const trimmedReason = typeof data.reason === 'string' ? data.reason.trim() : ''
+        const timestamp = new Date()
 
-        result = await prisma.submission.updateMany({
-          where: { id: { in: idsToUpdate } },
-          data: {
-            status: normalized,
-            updatedAt: new Date()
+        result = await prisma.$transaction(async (tx) => {
+          const [regularRecords, legacyRecords] = await Promise.all([
+            tx.submission.findMany({
+              where: { id: { in: submissionIds } },
+              select: { id: true }
+            }),
+            tx.legacySubmission.findMany({
+              where: { id: { in: submissionIds } },
+              select: { id: true }
+            })
+          ])
+
+          const regularIds = regularRecords.map(record => record.id)
+          const legacyIds = legacyRecords.map(record => record.id)
+
+          let regularUpdated = 0
+          let legacyUpdated = 0
+
+          if (regularIds.length > 0) {
+            const update = await tx.submission.updateMany({
+              where: { id: { in: regularIds } },
+              data: { status: normalized, updatedAt: timestamp }
+            })
+            regularUpdated = update.count
           }
-        })
 
-        // Best-effort admin action audit per submission
-        if (adminId) {
-          try {
-            await prisma.$transaction(async (tx) => {
-              for (const id of submissionIds) {
+          if (legacyIds.length > 0) {
+            const legacyUpdateData: Prisma.LegacySubmissionUpdateManyMutationInput = {
+              adminStatus: normalized === LEGACY_DEFAULT_STATUS ? null : normalized,
+              adminUpdatedAt: timestamp,
+              adminUpdatedBy: adminId ?? null
+            }
+
+            if (trimmedReason) {
+              legacyUpdateData.adminNotes = trimmedReason
+            }
+
+            if (normalized === 'FINALIZED' || normalized === 'REJECTED') {
+              legacyUpdateData.processed = true
+            }
+
+            const update = await tx.legacySubmission.updateMany({
+              where: { id: { in: legacyIds } },
+              data: legacyUpdateData
+            })
+            legacyUpdated = update.count
+          }
+
+          if (adminId) {
+            if (regularIds.length > 0) {
+              for (const id of regularIds) {
                 await tx.adminAction.create({
                   data: {
                     adminId,
@@ -496,61 +638,116 @@ export async function bulkUpdateSubmissions(
                     details: {
                       subAction: 'SUBMISSION_STATUS_CHANGE',
                       newStatus: normalized,
-                      reason: data.reason || null,
+                      reason: trimmedReason || null,
                     }
                   }
                 })
               }
-            })
-          } catch (e) {
-            console.warn('bulkUpdateSubmissions(updateStatus) audit log failed:', e)
+            }
+
+            if (legacyIds.length > 0) {
+              for (const id of legacyIds) {
+                await tx.adminAction.create({
+                  data: {
+                    adminId,
+                    action: 'SYSTEM_CONFIG',
+                    targetType: 'legacy_submission',
+                    targetId: id,
+                    details: {
+                      subAction: 'SUBMISSION_STATUS_CHANGE',
+                      newStatus: normalized,
+                      reason: trimmedReason || null,
+                    }
+                  }
+                })
+              }
+            }
           }
-        }
+
+          const messageParts: string[] = []
+          if (regularUpdated) {
+            messageParts.push(`${regularUpdated} current`)
+          }
+          if (legacyUpdated) {
+            messageParts.push(`${legacyUpdated} legacy`)
+          }
+
+          return {
+            count: regularUpdated + legacyUpdated,
+            regularUpdated,
+            legacyUpdated,
+            message: messageParts.length
+              ? `Updated status for ${messageParts.join(' and ')} submissions`
+              : 'No submissions updated'
+          }
+        })
+
         break
-        
+      }
       case 'updateXp':
         if (typeof data?.xpAwarded !== 'number') {
           throw new Error('XP amount is required for updateXp action')
         }
-        
-        // Use transaction for XP updates to maintain consistency
-        result = await prisma.$transaction(async (tx) => {
-          const submissions = await tx.submission.findMany({
-            where: { id: { in: submissionIds } },
-            include: { user: true }
-          })
-          
-          for (const submission of submissions) {
-            const xpDifference = data.xpAwarded - (submission.finalXp || 0)
-            
-            await Promise.all([
-              // Update submission XP
-              tx.submission.update({
-                where: { id: submission.id },
-                data: { finalXp: data.xpAwarded, status: 'FINALIZED' }
-              }),
-              // Update user total XP
-              tx.user.update({
-                where: { id: submission.userId },
-                data: { 
-                  totalXp: { increment: xpDifference },
-                  currentWeekXp: { increment: xpDifference }
-                }
-              }),
-              // Create XP transaction record
-              tx.xpTransaction.create({
-                data: {
-                  userId: submission.userId,
-                  amount: xpDifference,
-                  type: 'ADMIN_ADJUSTMENT',
-                  sourceId: submission.id,
-                  description: `Admin XP adjustment: ${data.reason || 'Bulk update'}`,
-                  weekNumber: Math.ceil(new Date().getDate() / 7)
-                }
-              })
-            ])
 
-            // Admin action log per submission (best-effort inside tx)
+        const hasCustomReason = typeof data?.reason === 'string' && data.reason.trim().length > 0
+        const reason = hasCustomReason ? data.reason.trim() : 'Bulk update'
+        const timestamp = new Date()
+
+        // Use transaction for XP updates to maintain consistency across regular and legacy submissions
+        result = await prisma.$transaction(async (tx) => {
+          const [currentSubmissions, legacySubmissions] = await Promise.all([
+            tx.submission.findMany({
+              where: { id: { in: submissionIds } },
+              include: { user: true }
+            }),
+            tx.legacySubmission.findMany({
+              where: { id: { in: submissionIds } },
+              select: {
+                id: true,
+                discordHandle: true,
+                finalXp: true,
+                aiXp: true,
+                peerXp: true
+              }
+            })
+          ])
+
+          let regularUpdated = 0
+          let legacyUpdated = 0
+          const legacyWithoutUser: string[] = []
+
+          for (const submission of currentSubmissions) {
+            const previousXp = submission.finalXp || 0
+            const xpDifference = data.xpAwarded - previousXp
+
+            await tx.submission.update({
+              where: { id: submission.id },
+              data: { finalXp: data.xpAwarded, status: 'FINALIZED', updatedAt: timestamp }
+            })
+
+            if (xpDifference !== 0) {
+              await Promise.all([
+                tx.user.update({
+                  where: { id: submission.userId },
+                  data: {
+                    totalXp: { increment: xpDifference },
+                    currentWeekXp: { increment: xpDifference }
+                  }
+                }),
+                tx.xpTransaction.create({
+                  data: {
+                    userId: submission.userId,
+                    amount: xpDifference,
+                    type: 'ADMIN_ADJUSTMENT',
+                    sourceId: submission.id,
+                    description: `Admin XP adjustment: ${reason}`,
+                    weekNumber: getWeekNumber(timestamp),
+                    adminId: adminId ?? undefined
+                  }
+                })
+              ])
+            }
+
             if (adminId) {
               await tx.adminAction.create({
                 data: {
@@ -559,29 +756,142 @@ export async function bulkUpdateSubmissions(
                   targetType: 'submission',
                   targetId: submission.id,
                   details: {
-                    oldXp: submission.finalXp || 0,
+                    oldXp: previousXp,
                     newXp: data.xpAwarded,
                     difference: xpDifference,
-                    reason: data.reason || 'Bulk update',
+                    reason
                   }
                 }
               })
             }
+
+            regularUpdated++
           }
-          
-          return { count: submissions.length }
+
+          for (const legacy of legacySubmissions) {
+            const previousLegacyXp = legacy.finalXp ?? legacy.aiXp ?? 0
+            const xpDifference = data.xpAwarded - previousLegacyXp
+
+            await tx.legacySubmission.update({
+              where: { id: legacy.id },
+              data: {
+                finalXp: data.xpAwarded,
+                processed: true,
+                adminStatus: 'FINALIZED',
+                adminUpdatedAt: timestamp,
+                adminUpdatedBy: adminId ?? null,
+                ...(hasCustomReason ? { adminNotes: reason } : {})
+              }
+            })
+
+            let linkedUserId: string | null = null
+            if (legacy.discordHandle) {
+              const matched = await tx.user.findFirst({
+                where: {
+                  OR: [
+                    { discordHandle: legacy.discordHandle },
+                    { discordHandle: legacy.discordHandle + '#0' },
+                    { username: legacy.discordHandle }
+                  ],
+                  NOT: { email: { endsWith: '@legacy.import' } }
+                },
+                select: { id: true }
+              })
+              linkedUserId = matched?.id ?? null
+            }
+
+            if (linkedUserId && xpDifference !== 0) {
+              await Promise.all([
+                tx.user.update({
+                  where: { id: linkedUserId },
+                  data: {
+                    totalXp: { increment: xpDifference },
+                    currentWeekXp: { increment: xpDifference }
+                  }
+                }),
+                tx.xpTransaction.create({
+                  data: {
+                    userId: linkedUserId,
+                    amount: xpDifference,
+                    type: 'ADMIN_ADJUSTMENT',
+                    sourceId: legacy.id,
+                    sourceType: 'LEGACY_SUBMISSION',
+                    description: `Legacy XP adjustment: ${reason}`,
+                    weekNumber: getWeekNumber(timestamp),
+                    adminId: adminId ?? undefined
+                  }
+                })
+              ])
+            } else if (!linkedUserId && xpDifference !== 0) {
+              legacyWithoutUser.push(legacy.id)
+            }
+
+            if (adminId) {
+              await tx.adminAction.create({
+                data: {
+                  adminId,
+                  action: 'XP_OVERRIDE',
+                  targetType: 'legacy_submission',
+                  targetId: legacy.id,
+                  details: {
+                    oldXp: previousLegacyXp,
+                    newXp: data.xpAwarded,
+                    difference: xpDifference,
+                    reason
+                  }
+                }
+              })
+            }
+
+            legacyUpdated++
+          }
+
+          return {
+            count: regularUpdated + legacyUpdated,
+            regularCount: regularUpdated,
+            legacyCount: legacyUpdated,
+            legacyWithoutUser
+          }
         })
+
+        if (result.legacyWithoutUser?.length) {
+          console.warn(
+            'Legacy submissions without linked users - XP totals not adjusted:',
+            result.legacyWithoutUser
+          )
+        }
+
+        if (result.legacyCount) {
+          const parts: string[] = []
+          if (result.regularCount) {
+            parts.push(`${result.regularCount} current`)
+          }
+          parts.push(`${result.legacyCount} legacy`)
+          result.message = `Updated XP for ${parts.join(' and ')} submissions`
+        }
         break
         
-      case 'delete':
+      case 'delete': {
         // Deleting submissions: adjust user XP and cleanup transactions
         result = await prisma.$transaction(async (tx) => {
-          const submissions = await tx.submission.findMany({
-            where: { id: { in: submissionIds } },
-            select: { id: true, userId: true, finalXp: true, aiXp: true }
-          })
+          const [submissions, legacySubmissions] = await Promise.all([
+            tx.submission.findMany({
+              where: { id: { in: submissionIds } },
+              select: { id: true, userId: true, finalXp: true, aiXp: true }
+            }),
+            tx.legacySubmission.findMany({
+              where: { id: { in: submissionIds } },
+              select: {
+                id: true,
+                discordHandle: true,
+                finalXp: true,
+                aiXp: true
+              }
+            })
+          ])
 
-          // Adjust user XP totals (subtract awarded XP)
+          const legacyWithoutUser: string[] = []
+
           for (const sub of submissions) {
             const awarded = sub.finalXp || sub.aiXp || 0
             if (awarded !== 0) {
@@ -595,13 +905,45 @@ export async function bulkUpdateSubmissions(
             }
           }
 
-          // Delete related XP transactions
+          for (const legacy of legacySubmissions) {
+            const awarded = legacy.finalXp ?? legacy.aiXp ?? 0
+            let linkedUserId: string | null = null
+
+            if (legacy.discordHandle) {
+              const matched = await tx.user.findFirst({
+                where: {
+                  OR: [
+                    { discordHandle: legacy.discordHandle },
+                    { discordHandle: legacy.discordHandle + '#0' },
+                    { username: legacy.discordHandle }
+                  ],
+                  NOT: { email: { endsWith: '@legacy.import' } }
+                },
+                select: { id: true }
+              })
+              linkedUserId = matched?.id ?? null
+            }
+
+            if (linkedUserId && awarded !== 0) {
+              await tx.user.update({
+                where: { id: linkedUserId },
+                data: {
+                  totalXp: { decrement: awarded },
+                  currentWeekXp: { decrement: awarded }
+                }
+              })
+            } else if (!linkedUserId && awarded !== 0) {
+              legacyWithoutUser.push(legacy.id)
+            }
+          }
+
           await tx.xpTransaction.deleteMany({ where: { sourceId: { in: submissionIds } } })
 
-          // Delete submissions
-          const del = await tx.submission.deleteMany({ where: { id: { in: submissionIds } } })
+          const [deletedRegular, deletedLegacy] = await Promise.all([
+            tx.submission.deleteMany({ where: { id: { in: submissionIds } } }),
+            tx.legacySubmission.deleteMany({ where: { id: { in: submissionIds } } })
+          ])
 
-          // Admin action logs (best-effort)
           if (adminId) {
             for (const sub of submissions) {
               try {
@@ -620,11 +962,54 @@ export async function bulkUpdateSubmissions(
                 })
               } catch {}
             }
+
+            for (const legacy of legacySubmissions) {
+              try {
+                await tx.adminAction.create({
+                  data: {
+                    adminId,
+                    action: 'SYSTEM_CONFIG',
+                    targetType: 'legacy_submission',
+                    targetId: legacy.id,
+                    details: {
+                      subAction: 'SUBMISSION_DELETE',
+                      hadAwardedXp: !!(legacy.finalXp || legacy.aiXp),
+                      awardedXp: legacy.finalXp ?? legacy.aiXp ?? 0,
+                    }
+                  }
+                })
+              } catch {}
+            }
           }
-          return { count: del.count }
+
+          return {
+            count: deletedRegular.count + deletedLegacy.count,
+            regularCount: deletedRegular.count,
+            legacyCount: deletedLegacy.count,
+            legacyWithoutUser
+          }
         })
+
+        if (result.legacyWithoutUser?.length) {
+          console.warn(
+            'Legacy submissions without linked users - XP totals not adjusted:',
+            result.legacyWithoutUser
+          )
+        }
+
+        if (result.legacyCount || result.regularCount) {
+          const parts: string[] = []
+          if (result.regularCount) {
+            parts.push(`${result.regularCount} current`)
+          }
+          if (result.legacyCount) {
+            parts.push(`${result.legacyCount} legacy`)
+          }
+          result.message = `Deleted ${parts.join(' and ')} submissions`
+        }
         break
-        
+      }
+
       default:
         throw new Error(`Unknown action: ${action}`)
     }
@@ -638,7 +1023,7 @@ export async function bulkUpdateSubmissions(
     return {
       success: true,
       count: result.count,
-      message: `Successfully ${action} ${result.count} submissions`
+      message: result.message || `Successfully ${action} ${result.count} submissions`
     }
     
   } catch (error) {
@@ -806,4 +1191,6 @@ export class AdminSubmissionsPerformanceMonitor {
     }
   }
 }
+
+
 
