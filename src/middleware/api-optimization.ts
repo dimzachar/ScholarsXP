@@ -15,7 +15,7 @@ export interface OptimizationConfig {
   caching?: boolean
   rateLimit?: boolean
   performanceMonitoring?: boolean
-  rateLimitType?: 'api' | 'strict' | 'auth' | 'admin' | 'upload' | 'notifications'
+  rateLimitType?: 'api' | 'strict' | 'auth' | 'admin' | 'upload' | 'notifications' | 'merge'
   customCacheConfig?: CacheConfig
 }
 

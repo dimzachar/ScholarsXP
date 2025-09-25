@@ -273,6 +273,6 @@ async function putHandler(request: NextRequest) {
   }
 }
 
-export const POST = withAPIOptimization(postHandler, { rateLimitType: 'strict', caching: false, compression: true, performanceMonitoring: true })
-export const GET = withAPIOptimization(getHandler, { rateLimitType: 'strict', caching: false, compression: true, performanceMonitoring: true })
-export const PUT = withAPIOptimization(putHandler, { rateLimitType: 'strict', caching: false, compression: true, performanceMonitoring: true })
+export const POST = withAPIOptimization(postHandler, { rateLimitType: 'merge', caching: false, compression: true, performanceMonitoring: true })
+export const GET = withAPIOptimization(getHandler, { rateLimitType: 'merge', caching: false, compression: true, performanceMonitoring: true })
+export const PUT = withAPIOptimization(putHandler, { rateLimitType: 'merge', caching: false, compression: true, performanceMonitoring: true })

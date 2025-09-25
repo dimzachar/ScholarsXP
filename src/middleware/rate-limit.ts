@@ -231,6 +231,13 @@ export const RateLimiters = {
     windowMs: 60 * 1000, // 1 minute
     maxRequests: 300,
     keyGenerator: getDefaultKey
+  }),
+
+  // Merge operations (initiations + status polling)
+  merge: createRateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 40,
+    keyGenerator: getDefaultKey
   })
 }
 
