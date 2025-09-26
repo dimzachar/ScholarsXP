@@ -38,6 +38,13 @@ interface SubmissionDetail {
   createdAt: string
   updatedAt: string
   weekNumber: number
+  aiEvaluation?: {
+    status: string | null
+  } | null
+  aiEvaluationSettings?: {
+    globallyEnabled: boolean
+    hasEvaluation: boolean
+  }
   user: {
     id: string
     username: string

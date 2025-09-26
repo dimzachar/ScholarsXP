@@ -8,6 +8,7 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
   try {
     const url = new URL(request.url)
     const submissionId = url.pathname.split('/').slice(-1)[0] // Extract ID from path
+    const aiEvaluationGloballyEnabled = (process.env.ENABLE_AI_EVALUATION ?? 'true').toLowerCase() === 'true'
 
     // Ensure DB has v2 PeerReview audit columns in dev/local
     await patchPeerReviewV2Columns()
@@ -59,6 +60,7 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
             assignedAt: 'desc'
           }
         },
+        aiEvaluation: true,
         contentFlags: {
           include: {
             flagger: {
@@ -178,6 +180,22 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
         } as any
       }
     }
+
+    const attachAiSettings = (submissionData: any) => {
+      if (!submissionData) return submissionData
+      const hasEvaluation = Boolean(
+        submissionData.aiEvaluation && submissionData.aiEvaluation.status === 'COMPLETED'
+      )
+      return {
+        ...submissionData,
+        aiEvaluationSettings: {
+          globallyEnabled: aiEvaluationGloballyEnabled,
+          hasEvaluation
+        }
+      }
+    }
+
+    submission = attachAiSettings(submission)
 
     if (!submission) {
       return NextResponse.json(

@@ -54,9 +54,14 @@ export async function getOptimizedLeaderboardDetailed(
     maxXp?: string
     status?: string
   },
-  pagination: PaginationParams
+  pagination: PaginationParams,
+  options: {
+    skipCache?: boolean
+    refreshCache?: boolean
+  } = {}
 ): Promise<DetailedLeaderboardDTO> {
   const cacheKey = QueryCache.createKey('leaderboard_detailed', { ...filters, ...pagination })
+  const { skipCache = false, refreshCache = false } = options
   
   return await withQueryCache(
     cacheKey,
@@ -90,7 +95,11 @@ export async function getOptimizedLeaderboardDetailed(
         }
       }
     },
-    { logPerformance: true }
+    {
+      logPerformance: true,
+      skipCache,
+      refreshCache
+    }
   )
 }
 
@@ -209,8 +218,8 @@ async function getOptimizedSubmissions(whereClause: any, pagination: PaginationP
   const offset = (page - 1) * limit
 
   try {
-    // Get regular submissions with retry mechanism
-    const regularSubmissions = await withRetry(() => prisma.submission.findMany({
+    // Get regular submissions and their total count with retry mechanism
+    const regularSubmissionsPromise = withRetry(() => prisma.submission.findMany({
     where: whereClause,
     include: {
       user: {
@@ -243,46 +252,51 @@ async function getOptimizedSubmissions(whereClause: any, pagination: PaginationP
     ],
     take: limit,
     skip: offset
-  }))
+    }))
+    const regularTotalCountPromise = withRetry(() => prisma.submission.count({ where: whereClause }))
 
-  // Calculate how many legacy submissions we need
-  const regularCount = regularSubmissions.length
-  const remainingSlots = Math.max(0, limit - regularCount)
+    const [regularSubmissions, regularTotalCount] = await Promise.all([
+      regularSubmissionsPromise,
+      regularTotalCountPromise
+    ])
 
-  // For legacy offset: if we have fewer regular submissions than the offset,
-  // we need to offset into legacy submissions
-  const legacyOffset = regularCount < offset ? offset - regularCount : 0
+    // Calculate how many legacy submissions we need
+    const regularCount = regularSubmissions.length
+    const remainingSlots = Math.max(0, limit - regularCount)
 
-  // Build where clause for legacy submissions
-  const legacyWhereClause = buildLegacyWhereClause(filters)
+    // For legacy offset: account for regular submissions already skipped
+    const legacyOffset = Math.max(0, offset - regularTotalCount)
 
-  // Check if legacy submissions should be excluded based on filters
-  const shouldExcludeLegacy = legacyWhereClause.id === 'never-match'
+    // Build where clause for legacy submissions
+    const legacyWhereClause = buildLegacyWhereClause(filters)
 
-  // Fetch legacy submissions if we have remaining slots and they're not excluded by filters
-  const shouldFetchLegacy = (remainingSlots > 0 || regularCount === 0) && !shouldExcludeLegacy
-  const legacyLimit = shouldFetchLegacy ? (remainingSlots > 0 ? remainingSlots : limit) : 0
+    // Check if legacy submissions should be excluded based on filters
+    const shouldExcludeLegacy = legacyWhereClause.id === 'never-match'
 
-  const legacySubmissions = shouldFetchLegacy ? await withRetry(() => prisma.legacySubmission.findMany({
-    where: legacyWhereClause,
-    take: legacyLimit,
-    skip: legacyOffset,
-    select: {
-      id: true,
-      url: true,
-      discordHandle: true,
-      submittedAt: true,
-      role: true,
-      notes: true,
-      importedAt: true,
-      aiXp: true,
-      peerXp: true,
-      finalXp: true
-    },
-    orderBy: {
-      submittedAt: 'desc'
-    }
-  })) : []
+    // Fetch legacy submissions if we have remaining slots and they're not excluded by filters
+    const shouldFetchLegacy = (remainingSlots > 0 || regularCount === 0) && !shouldExcludeLegacy
+    const legacyLimit = shouldFetchLegacy ? (remainingSlots > 0 ? remainingSlots : limit) : 0
+
+    const legacySubmissions = shouldFetchLegacy ? await withRetry(() => prisma.legacySubmission.findMany({
+      where: legacyWhereClause,
+      take: legacyLimit,
+      skip: legacyOffset,
+      select: {
+        id: true,
+        url: true,
+        discordHandle: true,
+        submittedAt: true,
+        role: true,
+        notes: true,
+        importedAt: true,
+        aiXp: true,
+        peerXp: true,
+        finalXp: true
+      },
+      orderBy: {
+        submittedAt: 'desc'
+      }
+    })) : []
 
 
 

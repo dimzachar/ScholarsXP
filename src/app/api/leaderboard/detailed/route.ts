@@ -41,7 +41,13 @@ const optimizedLeaderboardHandler = withPermission('authenticated')(async (reque
         status: searchParams.get('status')
       }
 
-      const leaderboardData = await getOptimizedLeaderboardDetailed(filters, pagination)
+      const refreshCache = ['true', '1'].includes(searchParams.get('refreshCache') ?? '')
+      const skipCache = ['true', '1'].includes(searchParams.get('skipCache') ?? '')
+
+      const leaderboardData = await getOptimizedLeaderboardDetailed(filters, pagination, {
+        refreshCache,
+        skipCache
+      })
 
       const executionTime = Date.now() - startTime
       console.log(`⚡ Optimized leaderboard detailed completed in ${executionTime}ms`)

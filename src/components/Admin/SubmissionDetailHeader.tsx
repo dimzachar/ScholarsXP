@@ -27,25 +27,42 @@ interface SubmissionDetailHeaderProps {
     aiXp: number
     peerXp: number | null
     finalXp: number | null
-    originalityScore: number | null
-    consensusScore: number | null
-    reviewCount: number
-    flagCount: number
-    createdAt: string
-    updatedAt: string
-    weekNumber: number
-    user: {
-      id: string
-      username: string
-      email: string
-      role: string
+  originalityScore: number | null
+  consensusScore: number | null
+  reviewCount: number
+  flagCount: number
+  createdAt: string
+  updatedAt: string
+  weekNumber: number
+  aiEvaluation?: {
+    status: string | null
+  } | null
+  aiEvaluationSettings?: {
+    globallyEnabled: boolean
+    hasEvaluation: boolean
+  }
+  user: {
+    id: string
+    username: string
+    email: string
+    role: string
       totalXp: number
     }
   }
 }
 
 export default function SubmissionDetailHeader({ submission }: SubmissionDetailHeaderProps) {
-  const AI_DISABLED = (process.env.NEXT_PUBLIC_AI_DISABLED || 'false') === 'true'
+  const envAiDisabled = (process.env.NEXT_PUBLIC_AI_DISABLED || 'false') === 'true'
+  const isLegacy = Boolean(
+    submission.platform?.toUpperCase().includes('LEGACY') ||
+    submission.taskTypes.some(task => task.toUpperCase() === 'LEGACY')
+  )
+  const aiGloballyEnabled = submission.aiEvaluationSettings?.globallyEnabled ?? !envAiDisabled
+  const hasAiEvaluationData = submission.aiEvaluationSettings?.hasEvaluation ?? Boolean(
+    submission.aiEvaluation && submission.aiEvaluation.status === 'COMPLETED'
+  )
+  const showAiMetric = hasAiEvaluationData && !isLegacy
+  const aiEvaluationEnabled = showAiMetric && aiGloballyEnabled
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'FINALIZED': return 'bg-green-100 text-green-800 border-green-200'
@@ -64,20 +81,37 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
 
   const getXpStatusColor = (xp: number | null) => {
     if (xp === null) return 'text-muted-foreground'
-    if (xp >= 80) return 'text-green-600'
-    if (xp >= 60) return 'text-blue-600'
-    if (xp >= 40) return 'text-yellow-600'
-    return 'text-red-600'
+    if (xp >= 80) return 'text-green-600 dark:text-green-300'
+    if (xp >= 60) return 'text-blue-600 dark:text-blue-300'
+    if (xp >= 40) return 'text-yellow-600 dark:text-yellow-300'
+    return 'text-red-600 dark:text-red-300'
   }
 
   const calculateProgress = () => {
     if (submission.status === 'FINALIZED') return 100
     let progress = 0
-    if (!AI_DISABLED && submission.aiXp > 0) progress += 33
-    if (submission.peerXp !== null) progress += AI_DISABLED ? 50 : 33
-    if (submission.finalXp !== null) progress += AI_DISABLED ? 50 : 34
+    if (showAiMetric) {
+      if (submission.aiXp > 0) progress += 33
+      if (submission.peerXp !== null) progress += 33
+      if (submission.finalXp !== null) progress += 34
+    } else {
+      if (submission.peerXp !== null) progress += 50
+      if (submission.finalXp !== null) progress += 50
+    }
     return Math.min(100, progress)
   }
+
+  const reviewSummaryIntro = showAiMetric
+    ? (aiEvaluationEnabled ? 'AI evaluation' : 'archived AI evaluation')
+    : (aiGloballyEnabled ? 'initial review' : 'initial review (AI disabled)')
+  const peerSummary = submission.peerXp !== null
+    ? `and peer review (${submission.reviewCount} reviews)`
+    : 'but is pending peer review'
+  const finalSummary = submission.finalXp !== null
+    ? `Final XP of ${submission.finalXp} has been awarded.`
+    : 'Final XP calculation is pending.'
+  const legacySummary = `This legacy submission reflects imported peer XP that already matches the final award. ${finalSummary}`
+  const nonLegacySummary = `This submission has been processed through ${reviewSummaryIntro} ${peerSummary}. ${finalSummary}`
 
   return (
     <Card className="mb-8">
@@ -114,53 +148,55 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
       
       <CardContent>
         {/* XP Metrics */}
-        <div className={`grid ${AI_DISABLED ? 'grid-cols-3' : 'grid-cols-2 md:grid-cols-4'} gap-4 mb-6`}>
-          {!AI_DISABLED && (
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <div className={`text-2xl font-bold ${getXpStatusColor(submission.aiXp)}`}>
+        <div className={`grid ${showAiMetric ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3'} gap-4 mb-6`}>
+          {showAiMetric && (
+            <div className="text-center p-4 rounded-lg border border-blue-200/60 bg-blue-50 dark:bg-slate-900/60 dark:border-blue-500/30">
+              <div className={`text-2xl font-bold ${getXpStatusColor(submission.aiXp)} dark:text-blue-200`}>
                 {submission.aiXp}
               </div>
-              <div className="text-sm text-muted-foreground">AI XP (disabled)</div>
+              <div className="text-sm text-muted-foreground">
+                {aiEvaluationEnabled ? 'AI XP' : 'AI XP (archived)'}
+              </div>
               {submission.originalityScore && (
-                <div className="text-xs text-blue-600 mt-1">
+                <div className="text-xs text-blue-600 dark:text-blue-300 mt-1">
                   {(submission.originalityScore * 100).toFixed(0)}% original
                 </div>
               )}
             </div>
           )}
           
-          <div className="text-center p-4 bg-green-50 rounded-lg">
-            <div className={`text-2xl font-bold ${getXpStatusColor(submission.peerXp)}`}>
-              {submission.peerXp || 'N/A'}
+          <div className="text-center p-4 rounded-lg border border-green-200/60 bg-green-50 dark:bg-emerald-900/40 dark:border-emerald-500/30">
+            <div className={`text-2xl font-bold ${getXpStatusColor(submission.peerXp)} dark:text-emerald-200`}>
+              {submission.peerXp ?? 'N/A'}
             </div>
             <div className="text-sm text-muted-foreground">Peer XP</div>
             {submission.consensusScore && (
-              <div className="text-xs text-green-600 mt-1">
+              <div className="text-xs text-green-600 dark:text-green-300 mt-1">
                 {(submission.consensusScore * 100).toFixed(0)}% consensus
               </div>
             )}
           </div>
           
-          <div className="text-center p-4 bg-purple-50 rounded-lg">
-            <div className={`text-2xl font-bold ${getXpStatusColor(submission.finalXp)}`}>
-              {submission.finalXp || 'Pending'}
+          <div className="text-center p-4 rounded-lg border border-emerald-200/70 bg-gradient-to-br from-emerald-50 via-emerald-100/80 to-white dark:from-emerald-950 dark:via-emerald-900/70 dark:to-slate-950/80 dark:border-emerald-500/40 shadow-sm">
+            <div className={`text-2xl font-bold ${getXpStatusColor(submission.finalXp)} dark:text-emerald-200`}>
+              {submission.finalXp ?? 'Pending'}
             </div>
             <div className="text-sm text-muted-foreground">Final XP</div>
-            {!AI_DISABLED && submission.finalXp && submission.aiXp && (
-              <div className="text-xs text-purple-600 mt-1">
+            {aiEvaluationEnabled && submission.finalXp !== null && submission.aiXp !== null && (
+              <div className="text-xs text-emerald-600 dark:text-emerald-300 mt-1">
                 {submission.finalXp > submission.aiXp ? '+' : ''}
                 {submission.finalXp - submission.aiXp} vs AI
               </div>
             )}
           </div>
           
-          <div className="text-center p-4 bg-orange-50 rounded-lg">
-            <div className="text-2xl font-bold text-orange-600">
+          <div className="text-center p-4 rounded-lg border border-orange-200/60 bg-orange-50 dark:bg-amber-900/40 dark:border-amber-500/30">
+            <div className="text-2xl font-bold text-orange-600 dark:text-amber-200">
               {submission.reviewCount}
             </div>
             <div className="text-sm text-muted-foreground">Reviews</div>
-            <div className="text-xs text-orange-600 mt-1">
-              {submission.reviewCount >= 3 ? 'Complete' : `${3 - submission.reviewCount} needed`}
+            <div className="text-xs text-orange-600 dark:text-amber-300 mt-1">
+              {submission.reviewCount >= 3 ? 'Complete' : `${Math.max(0, 3 - submission.reviewCount)} needed`}
             </div>
           </div>
         </div>
@@ -178,14 +214,14 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
             />
           </div>
           <div className="flex justify-between text-xs text-muted-foreground mt-1">
-            {AI_DISABLED ? (
+            {showAiMetric ? (
               <>
+                <span>AI Review</span>
                 <span>Peer Review</span>
                 <span>Finalized</span>
               </>
             ) : (
               <>
-                <span>AI Review</span>
                 <span>Peer Review</span>
                 <span>Finalized</span>
               </>
@@ -248,13 +284,8 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
         {/* Quick Stats Summary */}
         <div className="mt-4 p-3 bg-muted/50 rounded-lg">
           <div className="text-sm text-muted-foreground">
-            <strong>Summary:</strong> This submission has been processed through{' '}
-            {AI_DISABLED ? 'initial review (AI disabled)' : (submission.aiXp > 0 ? 'AI evaluation' : 'initial review')}{' '}
-            {submission.peerXp ? `and peer review (${submission.reviewCount} reviews)` : 'but is pending peer review'}.{' '}
-            {submission.finalXp ? 
-              `Final XP of ${submission.finalXp} has been awarded.` : 
-              'Final XP calculation is pending.'
-            }
+            <strong>Summary:</strong>{' '}
+            {isLegacy ? legacySummary : nonLegacySummary}
           </div>
         </div>
       </CardContent>

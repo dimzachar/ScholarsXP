@@ -88,6 +88,7 @@ export default function DetailedLeaderboardPage() {
     return 1
   })
   const [pageSize] = useState(20)
+  const [exporting, setExporting] = useState(false)
   const hasInitiallyLoaded = useRef(false)
   const lastFetchedPage = useRef(0) // Track the last page we fetched
 
@@ -130,8 +131,11 @@ export default function DetailedLeaderboardPage() {
       // Add pagination parameters
       params.append('page', currentPage.toString())
       params.append('limit', pageSize.toString())
+      params.append('refreshCache', 'true')
 
-      const response = await fetch(`/api/leaderboard/detailed?${params.toString()}`)
+      const response = await fetch(`/api/leaderboard/detailed?${params.toString()}`, {
+        cache: 'no-store'
+      })
 
       if (!response.ok) {
         throw new Error(`Failed to fetch detailed leaderboard: ${response.status}`)
@@ -225,35 +229,118 @@ export default function DetailedLeaderboardPage() {
     fetchDetailedLeaderboard(false) // Trigger new API request to reload data
   }
 
-  const exportData = () => {
-    if (!data) return
-    
-    // Create CSV content
-    const headers = ['Username', 'Title', 'Platform', 'Task Types', 'AI XP', 'Peer XP', 'Final XP', 'Reviews', 'Week', 'Status']
-    const csvContent = [
-      headers.join(','),
-      ...data.submissions.map(sub => [
-        sub.user.username,
-        `"${sub.title}"`,
-        sub.platform,
-        sub.taskTypes.join(';'),
-        sub.aiXp,
-        sub.peerXp || 'N/A',
-        sub.finalXp || 'Pending',
-        sub.reviewCount,
-        sub.weekNumber,
-        sub.status
-      ].join(','))
-    ].join('\n')
+  const exportData = async () => {
+    if (!data || exporting) return
 
-    // Download CSV
-    const blob = new Blob([csvContent], { type: 'text/csv' })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `detailed-leaderboard-${new Date().toISOString().split('T')[0]}.csv`
-    a.click()
-    window.URL.revokeObjectURL(url)
+    try {
+      setExporting(true)
+
+      const baseParams = new URLSearchParams()
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value && value !== 'all') baseParams.append(key, value)
+      })
+      baseParams.append('refreshCache', 'true')
+
+      const totalPages = data.pagination?.totalPages ?? 1
+      const limit = data.pagination?.limit ?? pageSize
+      const currentDataPage = data.pagination?.page ?? currentPage
+      const pageSubmissions = new Map<number, DetailedSubmission[]>()
+
+      pageSubmissions.set(currentDataPage, data.submissions)
+
+      if (totalPages > 1) {
+        const pageNumbers: number[] = []
+        for (let page = 1; page <= totalPages; page++) {
+          if (page !== currentDataPage) {
+            pageNumbers.push(page)
+          }
+        }
+
+        if (pageNumbers.length > 0) {
+          const maxConcurrentRequests = Math.min(
+            pageNumbers.length,
+            typeof navigator !== 'undefined' && navigator.hardwareConcurrency
+              ? Math.max(2, Math.floor(navigator.hardwareConcurrency / 2))
+              : 8
+          )
+
+          const queue = [...pageNumbers]
+
+          const fetchPage = async (page: number) => {
+            const pageParams = new URLSearchParams(baseParams)
+            pageParams.set('page', page.toString())
+            pageParams.set('limit', limit.toString())
+
+            pageParams.set('refreshCache', 'true')
+
+            const response = await fetch(`/api/leaderboard/detailed?${pageParams.toString()}`,
+              { cache: 'no-store' }
+            )
+            if (!response.ok) {
+              throw new Error(`Failed to fetch page ${page} for export`)
+            }
+
+            const pageData: DetailedLeaderboardData = await response.json()
+            pageSubmissions.set(page, pageData.submissions)
+          }
+
+          const workers = Array.from({ length: maxConcurrentRequests }, async () => {
+            while (queue.length > 0) {
+              const nextPage = queue.shift()
+              if (typeof nextPage === 'number') {
+                await fetchPage(nextPage)
+              }
+            }
+          })
+
+          await Promise.all(workers)
+        }
+      }
+
+      const sortedPages = Array.from(pageSubmissions.keys()).sort((a, b) => a - b)
+      const seenSubmissionIds = new Set<string>()
+      const orderedSubmissions: DetailedSubmission[] = []
+
+      sortedPages.forEach((page) => {
+        const items = pageSubmissions.get(page) ?? []
+        items.forEach((submission) => {
+          if (!seenSubmissionIds.has(submission.id)) {
+            seenSubmissionIds.add(submission.id)
+            orderedSubmissions.push(submission)
+          }
+        })
+      })
+
+      const headers = ['Username', 'Title', 'Platform', 'Task Types', 'AI XP', 'Peer XP', 'Final XP', 'Reviews', 'Week', 'Status']
+      const csvContent = [
+        headers.join(','),
+        ...orderedSubmissions.map(sub => [
+          sub.user.username,
+          `"${sub.title}"`,
+          sub.platform,
+          sub.taskTypes.join(';'),
+          sub.aiXp,
+          sub.peerXp || 'N/A',
+          sub.finalXp || 'Pending',
+          sub.reviewCount,
+          sub.weekNumber,
+          sub.status
+        ].join(','))
+      ].join('\n')
+
+      const blob = new Blob([csvContent], { type: 'text/csv' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `detailed-leaderboard-${new Date().toISOString().split('T')[0]}.csv`
+      a.click()
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error exporting detailed leaderboard:', error)
+      window.alert('Failed to export detailed leaderboard. Please try again.')
+    } finally {
+      setExporting(false)
+    }
   }
 
   const getStatusColor = (status: string) => {
@@ -274,6 +361,8 @@ export default function DetailedLeaderboardPage() {
     if (xp >= 40) return 'text-yellow-600'
     return 'text-red-600'
   }
+
+  const totalSubmissionsDisplay = data?.totalCount ?? data?.weeklyStats?.totalSubmissions ?? 0
 
   if (loading || loadingData) {
     return (
@@ -342,9 +431,15 @@ export default function DetailedLeaderboardPage() {
               size="sm"
               onClick={exportData}
               className="w-full sm:w-auto"
+              disabled={!data || exporting}
+              aria-busy={exporting}
             >
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
+              {exporting ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4 mr-2" />
+              )}
+              {exporting ? 'Exporting...' : 'Export CSV'}
             </Button>
           </div>
         </div>
@@ -355,7 +450,7 @@ export default function DetailedLeaderboardPage() {
             <Card>
               <CardContent className="p-4 sm:p-6 text-center">
                 <div className="text-2xl sm:text-3xl font-bold text-blue-600 mb-1">
-                  {data.weeklyStats.totalSubmissions}
+                  {totalSubmissionsDisplay}
                 </div>
                 <div className="text-xs sm:text-sm text-muted-foreground">
                   {data.filters?.applied > 0 ? 'Filtered Submissions' : 'Total Submissions'}

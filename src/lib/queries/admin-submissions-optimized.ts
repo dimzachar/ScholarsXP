@@ -12,10 +12,10 @@ import { getWeekNumber } from '@/lib/utils'
 interface LegacySubmissionWithUser {
   id: string
   url: string
-  adminStatus: string | null
-  adminNotes: string | null
-  adminUpdatedAt: Date | null
-  adminUpdatedBy: string | null
+  adminStatus?: string | null
+  adminNotes?: string | null
+  adminUpdatedAt?: Date | null
+  adminUpdatedBy?: string | null
   discordHandle: string | null
   submittedAt: Date | null
   role: string | null
@@ -29,6 +29,35 @@ interface LegacySubmissionWithUser {
   email: string | null
   userRole: string | null
   totalXp: number | null
+}
+
+let legacyAdminFieldsSupported: boolean | null = null
+
+async function supportsLegacyAdminFields(): Promise<boolean> {
+  if (legacyAdminFieldsSupported !== null) {
+    return legacyAdminFieldsSupported
+  }
+
+  try {
+    const legacyModel = (Prisma as any)?.dmmf?.datamodel?.models?.find(
+      (model: { name: string }) => model.name === 'LegacySubmission'
+    )
+
+    if (!legacyModel?.fields) {
+      legacyAdminFieldsSupported = false
+      return legacyAdminFieldsSupported
+    }
+
+    const fieldNames = new Set(legacyModel.fields.map((field: { name: string }) => field.name))
+    legacyAdminFieldsSupported = ['adminStatus', 'adminNotes', 'adminUpdatedAt', 'adminUpdatedBy'].every(field =>
+      fieldNames.has(field)
+    )
+  } catch (error) {
+    console.warn('Failed to inspect Prisma DMMF for legacy admin fields; defaulting to false', error)
+    legacyAdminFieldsSupported = false
+  }
+
+  return legacyAdminFieldsSupported
 }
 
 const STATUS_SYNONYMS: Record<string, string> = {
@@ -57,9 +86,13 @@ function normalizeStatusInput(status?: string | null): string | null {
   return STATUS_SYNONYMS[normalized] || normalized
 }
 
-function buildLegacyStatusFilter(status?: string | null): Prisma.LegacySubmissionWhereInput | undefined {
+async function buildLegacyStatusFilter(status?: string | null): Promise<Prisma.LegacySubmissionWhereInput | undefined> {
   const normalized = normalizeStatusInput(status)
   if (!normalized) {
+    return undefined
+  }
+
+  if (!(await supportsLegacyAdminFields())) {
     return undefined
   }
 
@@ -92,7 +125,7 @@ async function createLegacyWhereClause(filters: any = {}): Promise<Prisma.Legacy
     andFilters.push({ discordHandle: handleForUser })
   }
 
-  const statusFilter = buildLegacyStatusFilter(filters.status)
+  const statusFilter = await buildLegacyStatusFilter(filters.status)
   if (statusFilter) {
     andFilters.push(statusFilter)
   }
@@ -251,28 +284,55 @@ async function getOptimizedLegacySubmissions(query: any, filters: any = {}) {
     return []
   }
 
+  const supportsAdminFields = await supportsLegacyAdminFields()
+
+  const baseSelect = {
+    id: true,
+    url: true,
+    discordHandle: true,
+    submittedAt: true,
+    role: true,
+    notes: true,
+    importedAt: true,
+    aiXp: true,
+    peerXp: true,
+    finalXp: true
+  } as const
+
+  const select = supportsAdminFields
+    ? {
+        ...baseSelect,
+        adminStatus: true,
+        adminNotes: true,
+        adminUpdatedAt: true,
+        adminUpdatedBy: true
+      }
+    : baseSelect
+
+  type LegacyRecord = {
+    id: string
+    url: string
+    discordHandle: string | null
+    submittedAt: Date | null
+    role: string | null
+    notes: string | null
+    importedAt: Date
+    aiXp: number | null
+    peerXp: number | null
+    finalXp: number | null
+    adminStatus?: string | null
+    adminNotes?: string | null
+    adminUpdatedAt?: Date | null
+    adminUpdatedBy?: string | null
+  }
+
   const legacyRecords = await prisma.legacySubmission.findMany({
     where: whereClause,
     orderBy: { importedAt: 'desc' },
     skip: legacyOffset,
     take: legacyLimit,
-    select: {
-      id: true,
-      url: true,
-      adminStatus: true,
-      adminNotes: true,
-      adminUpdatedAt: true,
-      adminUpdatedBy: true,
-      discordHandle: true,
-      submittedAt: true,
-      role: true,
-      notes: true,
-      importedAt: true,
-      aiXp: true,
-      peerXp: true,
-      finalXp: true
-    }
-  })
+    select: select as Prisma.LegacySubmissionSelect
+  }) as LegacyRecord[]
 
   if (legacyRecords.length === 0) {
     return []
@@ -358,10 +418,10 @@ async function getOptimizedLegacySubmissions(query: any, filters: any = {}) {
     return {
       id: record.id,
       url: record.url,
-      adminStatus: record.adminStatus,
-      adminNotes: record.adminNotes,
-      adminUpdatedAt: record.adminUpdatedAt,
-      adminUpdatedBy: record.adminUpdatedBy,
+      adminStatus: supportsAdminFields ? record.adminStatus ?? null : null,
+      adminNotes: supportsAdminFields ? record.adminNotes ?? null : null,
+      adminUpdatedAt: supportsAdminFields ? record.adminUpdatedAt ?? null : null,
+      adminUpdatedBy: supportsAdminFields ? record.adminUpdatedBy ?? null : null,
       discordHandle: record.discordHandle,
       submittedAt: record.submittedAt,
       role: record.role,
@@ -463,6 +523,14 @@ async function getLegacyStatusCounts(filters: any = {}): Promise<Record<string, 
   const whereClause = await createLegacyWhereClause(filters)
   if (whereClause === null) {
     return {}
+  }
+
+  if (!(await supportsLegacyAdminFields())) {
+    const total = await prisma.legacySubmission.count({ where: whereClause })
+    if (!total) {
+      return {}
+    }
+    return { [LEGACY_DEFAULT_STATUS]: total }
   }
 
   const grouped = await prisma.legacySubmission.groupBy({
@@ -578,6 +646,8 @@ export async function bulkUpdateSubmissions(
         const trimmedReason = typeof data.reason === 'string' ? data.reason.trim() : ''
         const timestamp = new Date()
 
+        const supportsAdminFields = await supportsLegacyAdminFields()
+
         result = await prisma.$transaction(async (tx) => {
           const [regularRecords, legacyRecords] = await Promise.all([
             tx.submission.findMany({
@@ -605,25 +675,31 @@ export async function bulkUpdateSubmissions(
           }
 
           if (legacyIds.length > 0) {
-            const legacyUpdateData: Prisma.LegacySubmissionUpdateManyMutationInput = {
-              adminStatus: normalized === LEGACY_DEFAULT_STATUS ? null : normalized,
-              adminUpdatedAt: timestamp,
-              adminUpdatedBy: adminId ?? null
-            }
+            const legacyUpdateData: Prisma.LegacySubmissionUpdateManyMutationInput = {}
 
-            if (trimmedReason) {
-              legacyUpdateData.adminNotes = trimmedReason
+            if (supportsAdminFields) {
+              legacyUpdateData.adminStatus = normalized === LEGACY_DEFAULT_STATUS ? null : normalized
+              legacyUpdateData.adminUpdatedAt = timestamp
+              legacyUpdateData.adminUpdatedBy = adminId ?? null
+
+              if (trimmedReason) {
+                legacyUpdateData.adminNotes = trimmedReason
+              }
+            } else if (trimmedReason) {
+              console.warn('Legacy admin notes unsupported; skipping note update for legacy submissions')
             }
 
             if (normalized === 'FINALIZED' || normalized === 'REJECTED') {
               legacyUpdateData.processed = true
             }
 
-            const update = await tx.legacySubmission.updateMany({
-              where: { id: { in: legacyIds } },
-              data: legacyUpdateData
-            })
-            legacyUpdated = update.count
+            if (Object.keys(legacyUpdateData).length > 0) {
+              const update = await tx.legacySubmission.updateMany({
+                where: { id: { in: legacyIds } },
+                data: legacyUpdateData
+              })
+              legacyUpdated = update.count
+            }
           }
 
           if (adminId) {
@@ -692,6 +768,7 @@ export async function bulkUpdateSubmissions(
         const hasCustomReason = typeof data?.reason === 'string' && data.reason.trim().length > 0
         const reason = hasCustomReason ? data.reason.trim() : 'Bulk update'
         const timestamp = new Date()
+        const supportsAdminFields = await supportsLegacyAdminFields()
 
         // Use transaction for XP updates to maintain consistency across regular and legacy submissions
         result = await prisma.$transaction(async (tx) => {
@@ -772,16 +849,26 @@ export async function bulkUpdateSubmissions(
             const previousLegacyXp = legacy.finalXp ?? legacy.aiXp ?? 0
             const xpDifference = data.xpAwarded - previousLegacyXp
 
+            const legacyUpdateData: Prisma.LegacySubmissionUpdateInput = {
+              finalXp: data.xpAwarded,
+              processed: true
+            }
+
+            if (supportsAdminFields) {
+              legacyUpdateData.adminStatus = 'FINALIZED'
+              legacyUpdateData.adminUpdatedAt = timestamp
+              legacyUpdateData.adminUpdatedBy = adminId ?? null
+
+              if (hasCustomReason) {
+                legacyUpdateData.adminNotes = reason
+              }
+            } else if (hasCustomReason) {
+              console.warn('Legacy admin notes unsupported; skipping note update for legacy submission XP adjustment')
+            }
+
             await tx.legacySubmission.update({
               where: { id: legacy.id },
-              data: {
-                finalXp: data.xpAwarded,
-                processed: true,
-                adminStatus: 'FINALIZED',
-                adminUpdatedAt: timestamp,
-                adminUpdatedBy: adminId ?? null,
-                ...(hasCustomReason ? { adminNotes: reason } : {})
-              }
+              data: legacyUpdateData
             })
 
             let linkedUserId: string | null = null
