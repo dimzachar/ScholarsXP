@@ -172,8 +172,15 @@ export default function NotificationCenter() {
     try {
       const response = await fetch('/api/notifications?limit=20')
       if (response.ok) {
-        const data = await response.json()
-        setNotifications(data.notifications || [])
+        const body = await response.json()
+        const payload = body?.data
+
+        if (payload?.notifications) {
+          setNotifications(payload.notifications)
+        } else {
+          setNotifications([])
+        }
+
         setLastFetchTime(now)
       } else if (response.status === 401) {
         console.log('User not authenticated')
