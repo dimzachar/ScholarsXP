@@ -51,7 +51,6 @@ export default function NotificationCenter() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [lastFetchTime, setLastFetchTime] = useState<number>(0)
   const [subscriptionStatus, setSubscriptionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected')
   const [retryCount, setRetryCount] = useState(0)
   const channelRef = useRef<RealtimeChannel | null>(null)
@@ -81,93 +80,6 @@ export default function NotificationCenter() {
     hookResult: responsiveLayout
   })
 
-  useEffect(() => {
-    let channel: any = null
-
-    const setupSubscription = async () => {
-      if (!user) return
-      return
-
-      /*
-      if (notifications.length === 0) {
-        await fetchNotifications()
-      }
-
-      console.log('🔗 Setting up notification subscription for user:', user.id)
-
-      channel = supabase
-        .channel('realtime-notifications')
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'notifications',
-            filter: `userId=eq.${user.id}`,
-          },
-          (payload) => {
-            console.log('📨 New notification received!', payload.new)
-            const newNotification = payload.new as Notification
-            setNotifications((prev) => {
-              // Check if notification already exists to prevent duplicates
-              const exists = prev.some(n => n.id === newNotification.id)
-              if (exists) return prev
-              return [newNotification, ...prev]
-            })
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'notifications',
-            filter: `userId=eq.${user.id}`,
-          },
-          (payload) => {
-            console.log('📝 Notification updated!', payload.new)
-            const updatedNotification = payload.new as Notification
-            setNotifications((prev) => {
-              const updated = prev.map((notif) =>
-                notif.id === updatedNotification.id ? updatedNotification : notif
-              )
-              // Only update state if something actually changed
-              const hasChanges = updated.some((notif, index) =>
-                notif.id === updatedNotification.id &&
-                (notif.read !== prev[index]?.read || notif.message !== prev[index]?.message)
-              )
-              return hasChanges ? updated : prev
-            })
-          }
-        )
-        .subscribe((status) => {
-          console.log('📡 Notification subscription status:', status)
-          setSubscriptionStatus(
-            status === 'SUBSCRIBED' ? 'connected' :
-            status === 'CHANNEL_ERROR' ? 'disconnected' : 'connecting'
-          )
-
-          // Reset retry count on successful connection
-          if (status === 'SUBSCRIBED') {
-            setRetryCount(0)
-          }
-        })
-    }
-
-    */
-
-    if (user) {
-      setupSubscription()
-    }
-
-    return () => {
-      if (channel) {
-        console.log('🧹 Cleaning up notification subscription for user:', user?.id)
-        supabase.removeChannel(channel)
-        channel = null
-      }
-    }
-  }, [user])
 
   useEffect(() => {
     if (!user) {
@@ -322,7 +234,6 @@ export default function NotificationCenter() {
           : []
 
         setNotifications(items)
-        setLastFetchTime(now)
         lastFetchTimeRef.current = now
       } else if (response.status === 401) {
         console.log('User not authenticated')
