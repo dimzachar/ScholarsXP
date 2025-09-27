@@ -80,6 +80,38 @@ export default function NotificationCenter() {
     hookResult: responsiveLayout
   })
 
+  const fetchNotifications = useCallback(async (force: boolean = false) => {
+    if (!user) return
+
+    const now = Date.now()
+    if (!force && now - lastFetchTimeRef.current < 5000) {
+      return
+    }
+
+    setLoading(true)
+    try {
+      const response = await fetch('/api/notifications?limit=20', {
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        const body = await response.json()
+        const payload = body?.data
+        const items = Array.isArray(payload?.notifications)
+          ? payload.notifications.map((item: any) => normalizeNotification(item))
+          : []
+
+        setNotifications(items)
+        lastFetchTimeRef.current = now
+      } else if (response.status === 401) {
+        console.log('User not authenticated')
+      }
+    } catch (error) {
+      console.error('Error fetching notifications:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [user?.id, normalizeNotification])
 
   useEffect(() => {
     if (!user) {
@@ -211,39 +243,6 @@ export default function NotificationCenter() {
       return () => clearTimeout(retryTimer)
     }
   }, [subscriptionStatus, retryCount, user])
-
-  const fetchNotifications = useCallback(async (force: boolean = false) => {
-    if (!user) return
-
-    const now = Date.now()
-    if (!force && now - lastFetchTimeRef.current < 5000) {
-      return
-    }
-
-    setLoading(true)
-    try {
-      const response = await fetch('/api/notifications?limit=20', {
-        credentials: 'include'
-      })
-
-      if (response.ok) {
-        const body = await response.json()
-        const payload = body?.data
-        const items = Array.isArray(payload?.notifications)
-          ? payload.notifications.map((item: any) => normalizeNotification(item))
-          : []
-
-        setNotifications(items)
-        lastFetchTimeRef.current = now
-      } else if (response.status === 401) {
-        console.log('User not authenticated')
-      }
-    } catch (error) {
-      console.error('Error fetching notifications:', error)
-    } finally {
-      setLoading(false)
-    }
-  }, [user?.id, normalizeNotification])
 
   const markAsRead = async (notificationId: string) => {
     try {
