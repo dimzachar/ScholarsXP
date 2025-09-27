@@ -327,6 +327,23 @@ export default function NotificationCenter() {
     }
   }
 
+  const deleteAll = async () => {
+    try {
+      const response = await fetch('/api/notifications/delete-all', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (response.ok) {
+        setNotifications([])
+      }
+    } catch (error) {
+      console.error('Error deleting all notifications:', error)
+    }
+  }
+
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case 'XP_AWARDED':
@@ -448,6 +465,21 @@ export default function NotificationCenter() {
                       className={`${isMobile ? 'text-xs h-7 px-2' : 'text-xs'}`}
                     >
                       Mark all read
+                    </Button>
+                  </div>
+                )}
+                {notifications.length > 0 && (
+                  <div className={`flex items-center justify-between ${isMobile ? 'mt-1' : 'mt-2'}`}>
+                    <CardDescription className={isMobile ? 'text-xs' : 'text-xs'}>
+                      {notifications.length} total notification{notifications.length > 1 ? 's' : ''}
+                    </CardDescription>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={deleteAll}
+                      className={`${isMobile ? 'text-xs h-7 px-2 text-destructive' : 'text-xs text-destructive'}`}
+                    >
+                      Delete all
                     </Button>
                   </div>
                 )}

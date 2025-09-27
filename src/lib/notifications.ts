@@ -176,6 +176,26 @@ export async function markAllNotificationsAsRead(userId: string, accessToken?: s
   }
 }
 
+export async function deleteAllNotifications(userId: string, accessToken?: string): Promise<number> {
+  try {
+    const service = createServiceClient()
+    const { error, count } = await service
+      .from('notifications')
+      .delete({ count: 'exact' })
+      .eq('userId', userId)
+
+    if (error) {
+      console.error('Error deleting notifications:', error)
+      return 0
+    }
+
+    return count || 0
+  } catch (error) {
+    console.error('Error deleting notifications:', error)
+    return 0
+  }
+}
+
 export async function getUnreadCount(userId: string, accessToken?: string): Promise<number> {
   try {
     const client = getNotificationClient(accessToken)
@@ -199,20 +219,19 @@ export async function getUnreadCount(userId: string, accessToken?: string): Prom
 
 export async function deleteNotification(userId: string, notificationId: string, accessToken?: string): Promise<boolean> {
   try {
-    const client = getNotificationClient(accessToken)
-    const { error, data } = await client
+    const service = createServiceClient()
+    const { error, count } = await service
       .from('notifications')
-      .delete()
+      .delete({ count: 'exact' })
       .eq('id', notificationId)
       .eq('userId', userId)
-      .select('id')
 
     if (error) {
       console.error('Error deleting notification:', error)
       return false
     }
 
-    return Array.isArray(data) && data.length > 0
+    return (count || 0) > 0
   } catch (error) {
     console.error('Error deleting notification:', error)
     return false
