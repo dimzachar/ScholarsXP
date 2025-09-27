@@ -1,5 +1,5 @@
 import { supabaseClient } from '@/lib/supabase'
-import { createServiceClient } from '@/lib/supabase-server'
+import { createServiceClient, createAuthenticatedClient } from '@/lib/supabase-server'
 
 export interface Notification {
   id: string
@@ -72,15 +72,24 @@ export async function createNotification(
   }
 }
 
+function getNotificationClient(accessToken?: string) {
+  if (accessToken) {
+    return createAuthenticatedClient(accessToken)
+  }
+  return supabaseClient
+}
+
 export async function getUserNotifications(
   userId: string,
   page: number = 1,
   limit: number = 20,
-  unreadOnly: boolean = false
+  unreadOnly: boolean = false,
+  accessToken?: string
 ): Promise<{ notifications: Notification[], total: number }> {
   try {
+    const client = getNotificationClient(accessToken)
     // Build the query
-    let query = supabaseClient
+    let query = client
       .from('notifications')
       .select('*', { count: 'exact' })
       .eq('userId', userId)
@@ -117,9 +126,10 @@ export async function getUserNotifications(
   }
 }
 
-export async function markNotificationAsRead(userId: string, notificationId: string): Promise<boolean> {
+export async function markNotificationAsRead(userId: string, notificationId: string, accessToken?: string): Promise<boolean> {
   try {
-    const { error, count } = await supabaseClient
+    const client = getNotificationClient(accessToken)
+    const { error, data } = await client
       .from('notifications')
       .update({
         read: true,
@@ -127,23 +137,25 @@ export async function markNotificationAsRead(userId: string, notificationId: str
       })
       .eq('id', notificationId)
       .eq('userId', userId)
-      .eq('read', false) // Only update if not already read
+      .eq('read', false)
+      .select('id')
 
     if (error) {
       console.error('Error marking notification as read:', error)
       return false
     }
 
-    return (count || 0) > 0
+    return Array.isArray(data) && data.length > 0
   } catch (error) {
     console.error('Error marking notification as read:', error)
     return false
   }
 }
 
-export async function markAllNotificationsAsRead(userId: string): Promise<number> {
+export async function markAllNotificationsAsRead(userId: string, accessToken?: string): Promise<number> {
   try {
-    const { error, count } = await supabaseClient
+    const client = getNotificationClient(accessToken)
+    const { error, count } = await client
       .from('notifications')
       .update({
         read: true,
@@ -164,9 +176,10 @@ export async function markAllNotificationsAsRead(userId: string): Promise<number
   }
 }
 
-export async function getUnreadCount(userId: string): Promise<number> {
+export async function getUnreadCount(userId: string, accessToken?: string): Promise<number> {
   try {
-    const { count, error } = await supabaseClient
+    const client = getNotificationClient(accessToken)
+    const { count, error } = await client
       .from('notifications')
       .select('*', { count: 'exact', head: true })
       .eq('userId', userId)
@@ -184,20 +197,22 @@ export async function getUnreadCount(userId: string): Promise<number> {
   }
 }
 
-export async function deleteNotification(userId: string, notificationId: string): Promise<boolean> {
+export async function deleteNotification(userId: string, notificationId: string, accessToken?: string): Promise<boolean> {
   try {
-    const { error, count } = await supabaseClient
+    const client = getNotificationClient(accessToken)
+    const { error, data } = await client
       .from('notifications')
       .delete()
       .eq('id', notificationId)
-      .eq('userId', userId) // Ensure user can only delete their own notifications
+      .eq('userId', userId)
+      .select('id')
 
     if (error) {
       console.error('Error deleting notification:', error)
       return false
     }
 
-    return (count || 0) > 0
+    return Array.isArray(data) && data.length > 0
   } catch (error) {
     console.error('Error deleting notification:', error)
     return false

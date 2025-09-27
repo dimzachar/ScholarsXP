@@ -13,7 +13,7 @@ export const PATCH = withPermission('authenticated')(async (request: Authenticat
       )
     }
 
-    const success = await markNotificationAsRead(request.user.id, notificationId)
+    const success = await markNotificationAsRead(request.user.id, notificationId, request.user.access_token)
 
     if (success) {
       return NextResponse.json({
@@ -47,7 +47,7 @@ export const DELETE = withPermission('authenticated')(async (request: Authentica
       )
     }
 
-    const success = await deleteNotification(request.user.id, notificationId)
+    const success = await deleteNotification(request.user.id, notificationId, request.user.access_token)
 
     if (success) {
       return NextResponse.json({

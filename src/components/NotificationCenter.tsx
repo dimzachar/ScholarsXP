@@ -55,18 +55,26 @@ export default function NotificationCenter() {
   const [retryCount, setRetryCount] = useState(0)
   const channelRef = useRef<RealtimeChannel | null>(null)
   const lastFetchTimeRef = useRef<number>(0)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const normalizeNotification = useCallback((raw: any): Notification => ({
-    id: raw.id,
-    userId: raw.userId ?? raw.user_id,
-    type: raw.type,
-    title: raw.title,
-    message: raw.message,
-    data: raw.data ?? raw.metadata,
-    metadata: raw.data ?? raw.metadata,
-    read: Boolean(raw.read),
-    createdAt: raw.createdAt ?? raw.created_at ?? new Date().toISOString()
-  }), [])
+  const normalizeNotification = useCallback((raw: any): Notification => {
+    const readValue = raw.read
+    const normalizedRead = typeof readValue === 'boolean'
+      ? readValue
+      : readValue === 'true' || readValue === 't' || readValue === 1
+
+    return {
+      id: raw.id,
+      userId: raw.userId ?? raw.user_id,
+      type: raw.type,
+      title: raw.title,
+      message: raw.message,
+      data: raw.data ?? raw.metadata,
+      metadata: raw.data ?? raw.metadata,
+      read: normalizedRead,
+      createdAt: raw.createdAt ?? raw.created_at ?? new Date().toISOString()
+    }
+  }, [])
 
   // Fallback mobile detection if hook fails
   const isMobile = responsiveLayout?.isMobile ?? (typeof window !== 'undefined' && window.innerWidth < 768)
@@ -91,7 +99,8 @@ export default function NotificationCenter() {
     setLoading(true)
     try {
       const response = await fetch('/api/notifications?limit=20', {
-        credentials: 'include'
+        credentials: 'include',
+        cache: 'no-store'
       })
 
       if (response.ok) {
@@ -116,13 +125,18 @@ export default function NotificationCenter() {
   useEffect(() => {
     if (!user) {
       if (channelRef.current) {
-        console.log('🧹 Cleaning up notification subscription for user: none (signed out)')
+        console.log('?? Cleaning up notification subscription for user: none (signed out)')
         supabase.removeChannel(channelRef.current)
         channelRef.current = null
+      }
+      if (pollRef.current) {
+        clearInterval(pollRef.current)
+        pollRef.current = null
       }
       setSubscriptionStatus('disconnected')
       setNotifications([])
       setRetryCount(0)
+      lastFetchTimeRef.current = 0
       return
     }
 
@@ -132,14 +146,14 @@ export default function NotificationCenter() {
       if (!isActive) return
 
       if (channelRef.current) {
-        console.log('🧹 Cleaning up notification subscription for user:', user.id)
+        console.log('?? Cleaning up notification subscription for user:', user.id)
         supabase.removeChannel(channelRef.current)
         channelRef.current = null
       }
 
       await fetchNotifications(true)
 
-      console.log('🔗 Setting up notification subscription for user:', user.id)
+      console.log('?? Setting up notification subscription for user:', user.id)
 
       const channelName = `realtime-notifications-${user.id}-${retryCount}`
       const channel = supabase
@@ -153,7 +167,7 @@ export default function NotificationCenter() {
             filter: `userId=eq.${user.id}`,
           },
           (payload) => {
-            console.log('🔔 New notification received!', payload.new)
+            console.log('?? New notification received!', payload.new)
             const newNotification = normalizeNotification(payload.new)
             setNotifications((prev) => {
               const exists = prev.some((n) => n.id === newNotification.id)
@@ -171,7 +185,7 @@ export default function NotificationCenter() {
             filter: `userId=eq.${user.id}`,
           },
           (payload) => {
-            console.log('🔔 Notification updated!', payload.new)
+            console.log('?? Notification updated!', payload.new)
             const updatedNotification = normalizeNotification(payload.new)
             setNotifications((prev) => {
               let hasChanges = false
@@ -192,7 +206,7 @@ export default function NotificationCenter() {
       setSubscriptionStatus('connecting')
 
       channel.subscribe((status) => {
-        console.log('📡 Notification subscription status:', status)
+        console.log('?? Notification subscription status:', status)
         setSubscriptionStatus(
           status === 'SUBSCRIBED'
             ? 'connected'
@@ -216,12 +230,22 @@ export default function NotificationCenter() {
 
     setupSubscription()
 
+    if (!pollRef.current) {
+      pollRef.current = setInterval(() => {
+        fetchNotifications(true)
+      }, 15000)
+    }
+
     return () => {
       isActive = false
       if (channelRef.current) {
-        console.log('🧹 Cleaning up notification subscription for user:', user.id)
+        console.log('?? Cleaning up notification subscription for user:', user.id)
         supabase.removeChannel(channelRef.current)
         channelRef.current = null
+      }
+      if (pollRef.current) {
+        clearInterval(pollRef.current)
+        pollRef.current = null
       }
     }
   }, [user?.id, retryCount, fetchNotifications, normalizeNotification])
@@ -336,7 +360,13 @@ export default function NotificationCenter() {
       <Button
         variant="ghost"
         size="sm"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          const next = !isOpen
+          setIsOpen(next)
+          if (!isOpen) {
+            fetchNotifications(true)
+          }
+        }}
         className={`relative ${isMobile ? 'p-2 h-10 w-10' : 'p-2'} touch-manipulation`}
         aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ''} ${isMobile ? '(Mobile)' : ''} - ${subscriptionStatus}`}
         title={`${isMobile ? 'Mobile ' : ''}Notification Center - ${subscriptionStatus === 'connected' ? 'Real-time updates active' : subscriptionStatus === 'connecting' ? 'Connecting...' : 'Offline'}`}

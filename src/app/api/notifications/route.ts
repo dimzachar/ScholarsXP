@@ -16,22 +16,28 @@ export const GET = withAPIOptimization(
       const unreadOnly = searchParams.get('unreadOnly') === 'true'
 
       if (action === 'unread_count') {
-        const unreadCount = await getUnreadCount(request.user.id)
+        const unreadCount = await getUnreadCount(request.user.id, request.user.access_token)
         return createSuccessResponse({ unreadCount })
       }
 
-      const result = await getUserNotifications(request.user.id, page, limit, unreadOnly)
+      const result = await getUserNotifications(
+        request.user.id,
+        page,
+        limit,
+        unreadOnly,
+        request.user.access_token
+      )
 
       return createSuccessResponse({
         notifications: result.notifications,
         total: result.total,
         page,
         limit,
-        unreadCount: await getUnreadCount(request.user.id)
+        unreadCount: await getUnreadCount(request.user.id, request.user.access_token)
       })
     })
   ),
-  { rateLimitType: 'notifications', caching: true, compression: true, performanceMonitoring: true, rateLimit: true }
+  { rateLimitType: 'notifications', caching: false, compression: true, performanceMonitoring: true, rateLimit: true }
 )
 
 
