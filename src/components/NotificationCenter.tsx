@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { supabase } from '@/lib/supabase-client'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import { useAuth } from '@/contexts/AuthContext'
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout'
 import {
@@ -24,10 +25,22 @@ import {
 interface Notification {
   id: string
   userId: string
-  type: 'XP_AWARDED' | 'REVIEW_ASSIGNED' | 'REVIEW_COMPLETED' | 'SUBMISSION_PROCESSED' | 'WEEKLY_SUMMARY' | 'STREAK_ACHIEVED' | 'PENALTY_APPLIED' | 'ADMIN_MESSAGE'
+  type:
+    | 'XP_AWARDED'
+    | 'REVIEW_ASSIGNED'
+    | 'REVIEW_COMPLETED'
+    | 'SUBMISSION_PROCESSED'
+    | 'SUBMISSION_PROCESSING'
+    | 'SUBMISSION_APPROVED'
+    | 'SUBMISSION_REJECTED'
+    | 'WEEKLY_SUMMARY'
+    | 'STREAK_ACHIEVED'
+    | 'PENALTY_APPLIED'
+    | 'ADMIN_MESSAGE'
   title: string
   message: string
   data?: any
+  metadata?: any
   read: boolean
   createdAt: Date | string
 }
@@ -41,6 +54,20 @@ export default function NotificationCenter() {
   const [lastFetchTime, setLastFetchTime] = useState<number>(0)
   const [subscriptionStatus, setSubscriptionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected')
   const [retryCount, setRetryCount] = useState(0)
+  const channelRef = useRef<RealtimeChannel | null>(null)
+  const lastFetchTimeRef = useRef<number>(0)
+
+  const normalizeNotification = useCallback((raw: any): Notification => ({
+    id: raw.id,
+    userId: raw.userId ?? raw.user_id,
+    type: raw.type,
+    title: raw.title,
+    message: raw.message,
+    data: raw.data ?? raw.metadata,
+    metadata: raw.data ?? raw.metadata,
+    read: Boolean(raw.read),
+    createdAt: raw.createdAt ?? raw.created_at ?? new Date().toISOString()
+  }), [])
 
   // Fallback mobile detection if hook fails
   const isMobile = responsiveLayout?.isMobile ?? (typeof window !== 'undefined' && window.innerWidth < 768)
@@ -59,7 +86,9 @@ export default function NotificationCenter() {
 
     const setupSubscription = async () => {
       if (!user) return
+      return
 
+      /*
       if (notifications.length === 0) {
         await fetchNotifications()
       }
@@ -125,6 +154,8 @@ export default function NotificationCenter() {
         })
     }
 
+    */
+
     if (user) {
       setupSubscription()
     }
@@ -138,6 +169,119 @@ export default function NotificationCenter() {
     }
   }, [user])
 
+  useEffect(() => {
+    if (!user) {
+      if (channelRef.current) {
+        console.log('🧹 Cleaning up notification subscription for user: none (signed out)')
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
+      }
+      setSubscriptionStatus('disconnected')
+      setNotifications([])
+      setRetryCount(0)
+      return
+    }
+
+    let isActive = true
+
+    const setupSubscription = async () => {
+      if (!isActive) return
+
+      if (channelRef.current) {
+        console.log('🧹 Cleaning up notification subscription for user:', user.id)
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
+      }
+
+      await fetchNotifications(true)
+
+      console.log('🔗 Setting up notification subscription for user:', user.id)
+
+      const channelName = `realtime-notifications-${user.id}-${retryCount}`
+      const channel = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `userId=eq.${user.id}`,
+          },
+          (payload) => {
+            console.log('🔔 New notification received!', payload.new)
+            const newNotification = normalizeNotification(payload.new)
+            setNotifications((prev) => {
+              const exists = prev.some((n) => n.id === newNotification.id)
+              if (exists) return prev
+              return [newNotification, ...prev]
+            })
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'notifications',
+            filter: `userId=eq.${user.id}`,
+          },
+          (payload) => {
+            console.log('🔔 Notification updated!', payload.new)
+            const updatedNotification = normalizeNotification(payload.new)
+            setNotifications((prev) => {
+              let hasChanges = false
+              const updated = prev.map((notif) => {
+                if (notif.id === updatedNotification.id) {
+                  hasChanges =
+                    notif.read !== updatedNotification.read ||
+                    notif.message !== updatedNotification.message
+                  return updatedNotification
+                }
+                return notif
+              })
+              return hasChanges ? updated : prev
+            })
+          }
+        )
+
+      setSubscriptionStatus('connecting')
+
+      channel.subscribe((status) => {
+        console.log('📡 Notification subscription status:', status)
+        setSubscriptionStatus(
+          status === 'SUBSCRIBED'
+            ? 'connected'
+            : status === 'CHANNEL_ERROR'
+              ? 'disconnected'
+              : 'connecting'
+        )
+
+        if (status === 'SUBSCRIBED') {
+          setRetryCount(0)
+        }
+
+        if (status === 'CHANNEL_ERROR') {
+          supabase.removeChannel(channel)
+          channelRef.current = null
+        }
+      })
+
+      channelRef.current = channel
+    }
+
+    setupSubscription()
+
+    return () => {
+      isActive = false
+      if (channelRef.current) {
+        console.log('🧹 Cleaning up notification subscription for user:', user.id)
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
+      }
+    }
+  }, [user?.id, retryCount, fetchNotifications, normalizeNotification])
+
   // Retry logic for failed connections
   useEffect(() => {
     const maxRetries = 3
@@ -150,38 +294,36 @@ export default function NotificationCenter() {
       const retryTimer = setTimeout(() => {
         console.log(`🔄 Retrying notification subscription (attempt ${retryCount + 1}/${maxRetries})`)
         setRetryCount(prev => prev + 1)
-        // Force re-subscription by updating a state that triggers the main useEffect
-        setLastFetchTime(Date.now())
       }, retryDelay)
 
       return () => clearTimeout(retryTimer)
     }
   }, [subscriptionStatus, retryCount, user])
 
-  const fetchNotifications = async (force: boolean = false) => {
+  const fetchNotifications = useCallback(async (force: boolean = false) => {
     if (!user) return
 
-    // Debounce: Don't fetch if we fetched recently (unless forced)
     const now = Date.now()
-    const timeSinceLastFetch = now - lastFetchTime
-    if (!force && timeSinceLastFetch < 5000) { // 5 second debounce
+    if (!force && now - lastFetchTimeRef.current < 5000) {
       return
     }
 
     setLoading(true)
     try {
-      const response = await fetch('/api/notifications?limit=20')
+      const response = await fetch('/api/notifications?limit=20', {
+        credentials: 'include'
+      })
+
       if (response.ok) {
         const body = await response.json()
         const payload = body?.data
+        const items = Array.isArray(payload?.notifications)
+          ? payload.notifications.map((item: any) => normalizeNotification(item))
+          : []
 
-        if (payload?.notifications) {
-          setNotifications(payload.notifications)
-        } else {
-          setNotifications([])
-        }
-
+        setNotifications(items)
         setLastFetchTime(now)
+        lastFetchTimeRef.current = now
       } else if (response.status === 401) {
         console.log('User not authenticated')
       }
@@ -190,7 +332,7 @@ export default function NotificationCenter() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user?.id, normalizeNotification])
 
   const markAsRead = async (notificationId: string) => {
     try {
@@ -253,14 +395,23 @@ export default function NotificationCenter() {
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'xp_awarded':
+      case 'XP_AWARDED':
         return <Zap className="h-4 w-4 text-primary" />
-      case 'review_assigned':
+      case 'REVIEW_ASSIGNED':
         return <Users className="h-4 w-4 text-secondary-foreground" />
-      case 'review_completed':
+      case 'REVIEW_COMPLETED':
+      case 'SUBMISSION_APPROVED':
         return <CheckCircle className="h-4 w-4 text-primary" />
-      case 'system_alert':
+      case 'SUBMISSION_PROCESSING':
+      case 'SUBMISSION_PROCESSED':
+        return <Clock className="h-4 w-4 text-muted-foreground" />
+      case 'SUBMISSION_REJECTED':
+      case 'PENALTY_APPLIED':
         return <AlertCircle className="h-4 w-4 text-destructive" />
+      case 'STREAK_ACHIEVED':
+        return <Zap className="h-4 w-4 text-secondary-foreground" />
+      case 'ADMIN_MESSAGE':
+        return <Bell className="h-4 w-4 text-secondary-foreground" />
       default:
         return <Bell className="h-4 w-4 text-muted-foreground" />
     }
@@ -415,9 +566,9 @@ export default function NotificationCenter() {
                                   }
                                 </p>
 
-                                {notification.metadata?.xpAmount && (
+                                {(notification.metadata ?? notification.data)?.xpAmount && (
                                   <Badge variant="outline" className={`${isMobile ? 'text-xs px-1.5 py-0.5' : 'text-xs'}`}>
-                                    +{notification.metadata.xpAmount} XP
+                                    +{(notification.metadata ?? notification.data)?.xpAmount} XP
                                   </Badge>
                                 )}
                               </div>
