@@ -22,6 +22,8 @@ interface StatusConfig {
   textColor: string
 }
 
+const aiDisabled = (process.env.NEXT_PUBLIC_AI_DISABLED || 'false').toLowerCase() === 'true'
+
 const statusConfig: Record<SubmissionStatus, StatusConfig> = {
   PROCESSING: {
     icon: Loader2,
@@ -33,16 +35,20 @@ const statusConfig: Record<SubmissionStatus, StatusConfig> = {
   },
   PENDING: {
     icon: Clock,
-    label: 'AI Evaluation',
-    description: 'Content validated, evaluating with AI...',
+    label: aiDisabled ? 'Awaiting Review' : 'AI Evaluation',
+    description: aiDisabled
+      ? 'Content validated and waiting for peer reviewers. Automated scoring is currently disabled.'
+      : 'Content validated, evaluating with AI...',
     color: 'border-yellow-200',
     bgColor: 'bg-yellow-50',
     textColor: 'text-yellow-700'
   },
   AI_REVIEWED: {
     icon: CheckCircle,
-    label: 'AI Complete',
-    description: 'AI evaluation complete! Queued for peer review to determine final XP.',
+    label: aiDisabled ? 'Queued for Peer Review' : 'AI Complete',
+    description: aiDisabled
+      ? 'Submission is ready for peer review. Final XP will be determined 100% by the community.'
+      : 'AI evaluation complete! Queued for peer review to determine final XP.',
     color: 'border-purple-200',
     bgColor: 'bg-purple-50',
     textColor: 'text-purple-700'
@@ -58,7 +64,9 @@ const statusConfig: Record<SubmissionStatus, StatusConfig> = {
   FINALIZED: {
     icon: CheckCircle,
     label: 'Complete',
-    description: 'Congratulations! Your submission is complete and final XP has been awarded.',
+    description: aiDisabled
+      ? 'Congratulations! Peer reviewers finalized your submission and awarded XP.'
+      : 'Congratulations! Your submission is complete and final XP has been awarded.',
     color: 'border-green-200',
     bgColor: 'bg-green-50',
     textColor: 'text-green-700'
@@ -176,12 +184,16 @@ export function SubmissionStatus({ submissionId, initialStatus, className }: Sub
               {xpAwarded && (
                 <div className="flex items-center space-x-2">
                   <span className="text-sm font-medium text-green-700">
-                    {status === 'FINALIZED' ? 'Final XP:' : 'AI XP:'}
+                    {status === 'FINALIZED'
+                      ? 'Final XP:'
+                      : aiDisabled
+                        ? 'Initial XP (legacy):'
+                        : 'AI XP:'}
                   </span>
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                     +{xpAwarded} XP
                   </span>
-                  {status === 'AI_REVIEWED' && (
+                  {status === 'AI_REVIEWED' && !aiDisabled && (
                     <span className="text-xs text-gray-500">(pending peer review)</span>
                   )}
                 </div>
@@ -221,8 +233,8 @@ export function SubmissionStatus({ submissionId, initialStatus, className }: Sub
               <div className="text-xs text-red-600">
                 <p className="font-medium">Common issues:</p>
                 <ul className="mt-1 space-y-1 list-disc list-inside">
-                  <li>Missing @ScholarsOfMove mention</li>
-                  <li>Missing #ScholarsOfMove hashtag</li>
+                  {/* <li>Missing @ScholarsOfMove mention</li> */}
+                  {/* <li>Missing #ScholarsOfMove hashtag</li> */}
                   <li>Content too short or not Movement-related</li>
                   <li>Duplicate content</li>
                 </ul>

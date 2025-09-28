@@ -12,6 +12,8 @@ interface SubmissionStatusPageProps {
   }
 }
 
+const aiDisabled = (process.env.NEXT_PUBLIC_AI_DISABLED || 'false').toLowerCase() === 'true'
+
 export default async function SubmissionStatusPage({ params }: SubmissionStatusPageProps) {
   const cookieStore = cookies()
   const accessToken = cookieStore.get('sb-access-token')?.value
@@ -172,20 +174,33 @@ export default async function SubmissionStatusPage({ params }: SubmissionStatusP
 
             <div className="flex items-center space-x-3">
               <div className={`flex-shrink-0 w-2 h-2 rounded-full ${
-                ['AI_REVIEWED', 'UNDER_PEER_REVIEW', 'FINALIZED'].includes(submission.status)
+                (aiDisabled
+                  ? ['UNDER_PEER_REVIEW', 'FINALIZED']
+                  : ['AI_REVIEWED', 'UNDER_PEER_REVIEW', 'FINALIZED']
+                ).includes(submission.status)
                   ? 'bg-green-500'
                   : submission.status === 'PENDING'
                   ? 'bg-yellow-500'
                   : 'bg-gray-300'
               }`}></div>
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900">AI Evaluation</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {aiDisabled ? 'Review Queue (AI disabled)' : 'AI Evaluation'}
+                </p>
                 <p className="text-xs text-gray-500">
-                  {['AI_REVIEWED', 'UNDER_PEER_REVIEW', 'FINALIZED'].includes(submission.status)
-                    ? 'Completed'
-                    : submission.status === 'PENDING'
-                    ? 'In Progress'
-                    : 'Pending'
+                  {aiDisabled
+                    ? ((['UNDER_PEER_REVIEW', 'FINALIZED'].includes(submission.status)
+                        ? 'Completed'
+                        : submission.status === 'PENDING'
+                        ? 'Queued for peer reviewers'
+                        : 'Pending')
+                      )
+                    : ((['AI_REVIEWED', 'UNDER_PEER_REVIEW', 'FINALIZED'].includes(submission.status)
+                        ? 'Completed'
+                        : submission.status === 'PENDING'
+                        ? 'In Progress'
+                        : 'Pending')
+                      )
                   }
                 </p>
               </div>
@@ -244,7 +259,7 @@ export default async function SubmissionStatusPage({ params }: SubmissionStatusP
             If your submission is taking longer than expected or you have questions about the process:
           </p>
           <div className="space-y-2 text-sm text-blue-700">
-            <p>- Check that your content includes @ScholarsOfMove mention and #ScholarsOfMove hashtag</p>
+            {/* <p>- Check that your content includes @ScholarsOfMove mention and #ScholarsOfMove hashtag</p> */}
             <p>- Ensure your content is Movement ecosystem related and original</p>
             <p>- Processing typically takes 1-5 minutes during normal hours</p>
             <p>- Contact support if your submission has been processing for more than 10 minutes</p>

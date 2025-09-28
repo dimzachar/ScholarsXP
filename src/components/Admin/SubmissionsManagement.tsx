@@ -363,7 +363,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
         'Username',
         'User Email',
         'User Role',
-        'AI XP (disabled)',
+        'Legacy XP (read-only)',
         'Peer XP',
         'Final XP',
         'Review Count',

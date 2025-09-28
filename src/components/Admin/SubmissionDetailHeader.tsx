@@ -103,7 +103,7 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
 
   const reviewSummaryIntro = showAiMetric
     ? (aiEvaluationEnabled ? 'AI evaluation' : 'archived AI evaluation')
-    : (aiGloballyEnabled ? 'initial review' : 'initial review (AI disabled)')
+    : (aiGloballyEnabled ? 'initial review' : 'peer-only initial review')
   const peerSummary = submission.peerXp !== null
     ? `and peer review (${submission.reviewCount} reviews)`
     : 'but is pending peer review'
@@ -111,7 +111,14 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
     ? `Final XP of ${submission.finalXp} has been awarded.`
     : 'Final XP calculation is pending.'
   const legacySummary = `This legacy submission reflects imported peer XP that already matches the final award. ${finalSummary}`
-  const nonLegacySummary = `This submission has been processed through ${reviewSummaryIntro} ${peerSummary}. ${finalSummary}`
+  const nonLegacySummary = aiGloballyEnabled
+    ? `This submission has been processed through ${reviewSummaryIntro} ${peerSummary}. ${finalSummary}`
+    : `This submission is running through the peer-only workflow while AI scoring is disabled. ${peerSummary}. ${finalSummary}`
+  const aiMetricLabel = aiEvaluationEnabled
+    ? 'AI XP'
+    : aiGloballyEnabled
+      ? 'AI XP (archived)'
+      : 'Legacy XP (read-only)'
 
   return (
     <Card className="mb-8">
@@ -154,9 +161,7 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
               <div className={`text-2xl font-bold ${getXpStatusColor(submission.aiXp)} dark:text-blue-200`}>
                 {submission.aiXp}
               </div>
-              <div className="text-sm text-muted-foreground">
-                {aiEvaluationEnabled ? 'AI XP' : 'AI XP (archived)'}
-              </div>
+              <div className="text-sm text-muted-foreground">{aiMetricLabel}</div>
               {submission.originalityScore && (
                 <div className="text-xs text-blue-600 dark:text-blue-300 mt-1">
                   {(submission.originalityScore * 100).toFixed(0)}% original

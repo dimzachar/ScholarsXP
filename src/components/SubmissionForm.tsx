@@ -171,10 +171,10 @@ export default function SubmissionForm() {
           Quick Tips
         </h4>
         <ul className={`${isMobile ? 'text-sm' : 'text-base'} text-foreground ${isMobile ? 'space-y-2' : 'space-y-3'}`}>
-          <li className="flex items-center gap-3">
+          {/* <li className="flex items-center gap-3">
             <div className="w-2 h-2 bg-primary rounded-full shrink-0"></div>
             <span>Include the <code className="bg-muted px-2 py-1 rounded font-mono text-sm">#ScholarXP</code> hashtag in your content</span>
-          </li>
+          </li> */}
           <li className="flex items-center gap-3">
             <div className="w-2 h-2 bg-primary rounded-full shrink-0"></div>
             <span>Ensure your content is original and educational</span>

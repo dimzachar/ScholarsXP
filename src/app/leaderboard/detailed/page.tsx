@@ -34,6 +34,8 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 
+const aiDisabled = (process.env.NEXT_PUBLIC_AI_DISABLED || 'false').toLowerCase() === 'true'
+
 interface DetailedSubmission {
   id: string
   title: string
@@ -91,6 +93,7 @@ export default function DetailedLeaderboardPage() {
   const [exporting, setExporting] = useState(false)
   const hasInitiallyLoaded = useRef(false)
   const lastFetchedPage = useRef(0) // Track the last page we fetched
+  const aiXpColumnLabel = aiDisabled ? 'Initial XP (legacy)' : 'AI XP'
 
   // Filters - Initialize from URL parameters
   const [filters, setFilters] = useState(() => {
@@ -311,7 +314,7 @@ export default function DetailedLeaderboardPage() {
         })
       })
 
-      const headers = ['Username', 'Title', 'Platform', 'Task Types', 'AI XP', 'Peer XP', 'Final XP', 'Reviews', 'Week', 'Status']
+      const headers = ['Username', 'Title', 'Platform', 'Task Types', aiXpColumnLabel, 'Peer XP', 'Final XP', 'Reviews', 'Week', 'Status']
       const csvContent = [
         headers.join(','),
         ...orderedSubmissions.map(sub => [
@@ -637,7 +640,7 @@ export default function DetailedLeaderboardPage() {
                       <TableHead className="text-center">
                         <div className="flex items-center justify-center gap-1">
                           <Bot className="h-4 w-4 text-blue-600" />
-                          AI XP
+                          {aiXpColumnLabel}
                         </div>
                       </TableHead>
                       <TableHead className="text-center">

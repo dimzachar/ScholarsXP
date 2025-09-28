@@ -108,7 +108,7 @@ export default function XpBreakdownSection({ submission, onUpdate }: XpBreakdown
     ? 'Legacy submissions rely on imported peer XP only.'
     : aiGloballyEnabled
       ? 'This submission has no AI evaluation recorded yet.'
-      : 'AI scoring is currently turned off. Final XP is determined solely by peer reviews.'
+      : 'AI scoring is currently turned off. Final XP is determined 100% by peer reviews.'
 
   return (
     <>
@@ -179,7 +179,9 @@ export default function XpBreakdownSection({ submission, onUpdate }: XpBreakdown
               </div>
               
               <div className="mt-3 text-sm text-muted-foreground">
-                Automated evaluation based on content quality, originality, and task completion.
+                {aiEvaluationEnabled
+                  ? 'Automated evaluation based on content quality, originality, and task completion.'
+                  : 'Legacy AI score shown for reference only. Peer reviewers now determine the final XP.'}
               </div>
             </div>
           )}
