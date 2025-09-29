@@ -15,6 +15,7 @@ import {
   RefreshCw
 } from 'lucide-react'
 import Link from 'next/link'
+import { sanitizeUrl } from '@/lib/url-sanitizer'
 import SubmissionDetailHeader from '@/components/Admin/SubmissionDetailHeader'
 import XpBreakdownSection from '@/components/Admin/XpBreakdownSection'
 import PeerReviewsSection from '@/components/Admin/PeerReviewsSection'
@@ -192,7 +193,7 @@ export default function AdminSubmissionDetailPage() {
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
-            <Link href={submission.url} target="_blank">
+            <Link href={sanitizeUrl(submission.url)} target="_blank">
               <Button variant="outline" size="sm">
                 <ExternalLink className="h-4 w-4 mr-2" />
                 View Original

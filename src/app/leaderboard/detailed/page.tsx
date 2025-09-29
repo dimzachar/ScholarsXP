@@ -33,6 +33,7 @@ import {
   Search
 } from 'lucide-react'
 import Link from 'next/link'
+import { sanitizeUrl } from '@/lib/url-sanitizer'
 
 const aiDisabled = (process.env.NEXT_PUBLIC_AI_DISABLED || 'false').toLowerCase() === 'true'
 
@@ -738,7 +739,7 @@ export default function DetailedLeaderboardPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            <Link href={submission.url} target="_blank">
+                            <Link href={sanitizeUrl(submission.url)} target="_blank">
                               <Button variant="ghost" size="sm" title="View original">
                                 <ExternalLink className="h-4 w-4" />
                               </Button>

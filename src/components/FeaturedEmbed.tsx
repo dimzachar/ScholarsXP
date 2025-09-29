@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import { detectPlatform } from '@/lib/utils'
+import { sanitizeUrl, sanitizeImageUrl } from '@/lib/url-sanitizer'
 
 type Props = {
   url: string
@@ -269,16 +270,17 @@ export default function FeaturedEmbed({ url }: Props) {
     // Fallback: static card using server-side summary if available, else a plain link
     try {
       const u = new URL(url)
+      const safeThumbnail = sanitizeImageUrl(summary?.thumbnail)
       return (
         <a
-          href={url}
+          href={sanitizeUrl(url)}
           target="_blank"
           rel="noopener noreferrer"
           className="block w-full focus:outline-none focus:ring-2 focus:ring-primary/40"
         >
-          {summary?.thumbnail && (
+          {safeThumbnail && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={summary.thumbnail} alt={summary.title || 'thumbnail'} className="w-full h-40 object-cover" />
+            <img src={safeThumbnail} alt={summary.title || 'thumbnail'} className="w-full h-40 object-cover" />
           )}
           <div className="p-3 space-y-1">
             <div className="text-xs text-muted-foreground">{summary?.subreddit ? `r/${summary.subreddit}` : u.hostname}</div>
@@ -342,9 +344,9 @@ export default function FeaturedEmbed({ url }: Props) {
         rel="noopener noreferrer"
         className="block overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary/40"
       >
-        {data?.image ? (
+        {sanitizeImageUrl(data?.image) ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={data.image} alt={data.title || 'cover'} className="w-full h-56 object-cover" />
+          <img src={sanitizeImageUrl(data.image)!} alt={data.title || 'cover'} className="w-full h-56 object-cover" />
         ) : (
           <div className="w-full h-40 bg-muted" />
         )}
@@ -381,4 +383,8 @@ export default function FeaturedEmbed({ url }: Props) {
     )
   }
 }
+
+
+
+
 
