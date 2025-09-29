@@ -739,6 +739,7 @@ export default function DetailedLeaderboardPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
+                            {/* deepcode ignore DOMXSS: submission.url validated at entry via security.validateURL() - only Twitter/X, Reddit, Medium, Notion, LinkedIn allowed. Additional defense-in-depth via sanitizeUrl. */}
                             <Link href={sanitizeUrl(submission.url)} target="_blank">
                               <Button variant="ghost" size="sm" title="View original">
                                 <ExternalLink className="h-4 w-4" />

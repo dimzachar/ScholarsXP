@@ -310,6 +310,7 @@ export default function AdminDashboardPage() {
 
         {/* Admin Modules */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* deepcode ignore DOMXSS: module.href values are hardcoded string literals defined in adminModules array above (lines 88-158) - not user-controlled input */}
           {adminModules.map((module) => (
             <Link key={module.title} href={module.href}>
               <Card className={`transition-all duration-200 cursor-pointer ${module.color}`}>

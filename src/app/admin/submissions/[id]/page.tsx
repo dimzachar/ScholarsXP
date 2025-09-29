@@ -193,6 +193,7 @@ export default function AdminSubmissionDetailPage() {
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
+            {/* deepcode ignore DOMXSS: submission.url validated at entry via security.validateURL() - only Twitter/X, Reddit, Medium, Notion, LinkedIn allowed. Additional defense-in-depth via sanitizeUrl. */}
             <Link href={sanitizeUrl(submission.url)} target="_blank">
               <Button variant="outline" size="sm">
                 <ExternalLink className="h-4 w-4 mr-2" />

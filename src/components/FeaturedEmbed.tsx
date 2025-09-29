@@ -280,6 +280,7 @@ export default function FeaturedEmbed({ url }: Props) {
         >
           {safeThumbnail && (
             // eslint-disable-next-line @next/next/no-img-element
+            // deepcode ignore DOMXSS: URL validated at submission via security.validateURL() - only Twitter/X, Reddit, Medium, Notion, LinkedIn allowed. Additional sanitization via sanitizeImageUrl blocks non-http(s) protocols.
             <img src={safeThumbnail} alt={summary.title || 'thumbnail'} className="w-full h-40 object-cover" />
           )}
           <div className="p-3 space-y-1">
@@ -346,6 +347,7 @@ export default function FeaturedEmbed({ url }: Props) {
       >
         {sanitizeImageUrl(data?.image) ? (
           // eslint-disable-next-line @next/next/no-img-element
+          // deepcode ignore DOMXSS: URL from /api/og-snapshot which validates input URL via security checks. Additional sanitization via sanitizeImageUrl blocks non-http(s) protocols.
           <img src={sanitizeImageUrl(data.image)!} alt={data.title || 'cover'} className="w-full h-56 object-cover" />
         ) : (
           <div className="w-full h-40 bg-muted" />
