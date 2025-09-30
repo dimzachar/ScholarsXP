@@ -229,15 +229,19 @@ export const POST = withPermission('review_content')(
     let rewardDetails = null
     const assignedAtDate = assignment.assignedAt ? new Date(assignment.assignedAt) : now
     if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      const { reviewIncentivesService } = await import('@/lib/review-incentives')
-      rewardDetails = await reviewIncentivesService.awardReviewXp(
-        reviewerId,
-        submissionId,
-        null,
-        timeSpent || 1,
-        isLate,
-        assignedAtDate
-      )
+      try {
+        const { reviewIncentivesService } = await import('@/lib/review-incentives')
+        rewardDetails = await reviewIncentivesService.awardReviewXp(
+          reviewerId,
+          submissionId,
+          null,
+          timeSpent || 1,
+          isLate,
+          assignedAtDate
+        )
+      } catch (rewardError) {
+        console.error('Error awarding reviewer incentive XP:', rewardError)
+      }
     } else {
       console.warn(
         'SUPABASE_SERVICE_ROLE_KEY not set; skipping review incentive reward calculation.'

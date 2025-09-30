@@ -340,15 +340,6 @@ export class ReviewIncentivesService {
     submissionId: string,
     rewardDetails: ReviewReward
   ): Promise<void> {
-    // Record XP transaction
-    await xpAnalyticsService.recordXpTransaction(
-      reviewerId,
-      amount,
-      'REVIEW_REWARD',
-      `Review reward for submission ${submissionId}`,
-      submissionId
-    )
-
     // Update user XP
     const { error } = await supabase
       .from('User')
@@ -362,6 +353,15 @@ export class ReviewIncentivesService {
       console.error('Error updating user XP:', error)
       throw error
     }
+
+    // Record XP transaction after successful update
+    await xpAnalyticsService.recordXpTransaction(
+      reviewerId,
+      amount,
+      'REVIEW_REWARD',
+      `Review reward for submission ${submissionId}`,
+      submissionId
+    )
   }
 
   private async applyXpPenalty(

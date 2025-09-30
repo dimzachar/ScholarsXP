@@ -4,10 +4,45 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
+const runningOnVercel =
+  process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV)
+
+const disablePoolerFlag = process.env.SUPABASE_DISABLE_POOLER === 'true'
+const forcePoolerFlag = process.env.SUPABASE_FORCE_POOLER === 'true'
+const directUrl = process.env.DIRECT_URL
+
+const directIsLocalHost = Boolean(directUrl?.match(/(localhost|127\.0\.0\.1)/))
+
+const preferDirectDatabase =
+  Boolean(directUrl) &&
+  !forcePoolerFlag &&
+  (disablePoolerFlag || directIsLocalHost)
+
+const databaseUrl = preferDirectDatabase
+  ? directUrl!
+  : process.env.DATABASE_URL ?? directUrl
+
+if (!databaseUrl) {
+  throw new Error(
+    'Database connection string missing. Set DATABASE_URL or DIRECT_URL.'
+  )
+}
+
+if (
+  preferDirectDatabase &&
+  process.env.NODE_ENV !== 'production' &&
+  process.env.SUPPRESS_LOGS !== 'true'
+) {
+  console.info('[prisma] Using DIRECT_URL for Prisma datasource')
+}
+
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? [] : [],
+    datasources: {
+      db: { url: databaseUrl }
+    }
     // Configure connection pooling via DATABASE_URL parameters
     // The connection limit should be set in the DATABASE_URL itself
     // e.g., DATABASE_URL="postgresql://...?connection_limit=10&pool_timeout=10"

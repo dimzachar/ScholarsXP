@@ -108,21 +108,109 @@ async function buildLegacyStatusFilter(status?: string | null): Promise<Prisma.L
   return { adminStatus: normalized }
 }
 
+function collectLegacyHandleCandidates(user: {
+  username: string | null
+  discordHandle: string | null
+  email: string | null
+}): string[] {
+  const candidates = new Set<string>()
+
+  const addCandidate = (value?: string | null) => {
+    if (!value) return
+    const trimmed = value.trim()
+    if (!trimmed) return
+    candidates.add(trimmed)
+  }
+
+  addCandidate(user.discordHandle)
+  addCandidate(user.username)
+
+  const addBaseVariant = (value?: string | null) => {
+    if (!value) return
+    const trimmed = value.trim()
+    if (!trimmed || !trimmed.includes('#')) {
+      return
+    }
+    const base = trimmed.split('#')[0]?.trim()
+    if (base) {
+      candidates.add(base)
+    }
+  }
+
+  addBaseVariant(user.discordHandle)
+  addBaseVariant(user.username)
+
+  if (user.email) {
+    const localPart = user.email.split('@')[0]?.trim()
+    addCandidate(localPart)
+    addBaseVariant(localPart)
+  }
+
+  return Array.from(candidates)
+}
+
+function buildLegacyHandleConditions(handles: string[]): Prisma.LegacySubmissionWhereInput[] {
+  const conditions: Prisma.LegacySubmissionWhereInput[] = []
+  const seen = new Set<string>()
+
+  handles.forEach(handle => {
+    const trimmed = handle.trim()
+    if (!trimmed) {
+      return
+    }
+
+    const normalized = trimmed.toLowerCase()
+    if (!seen.has(`equals:${normalized}`)) {
+      conditions.push({
+        discordHandle: { equals: trimmed, mode: 'insensitive' }
+      })
+      seen.add(`equals:${normalized}`)
+    }
+
+    const base = trimmed.split('#')[0]?.trim()
+    if (base) {
+      const baseNormalized = base.toLowerCase()
+      if (!seen.has(`equals:${baseNormalized}`)) {
+        conditions.push({
+          discordHandle: { equals: base, mode: 'insensitive' }
+        })
+        seen.add(`equals:${baseNormalized}`)
+      }
+
+      if (!seen.has(`starts:${baseNormalized}`)) {
+        conditions.push({
+          discordHandle: { startsWith: `${base}#`, mode: 'insensitive' }
+        })
+        seen.add(`starts:${baseNormalized}`)
+      }
+    }
+  })
+
+  return conditions
+}
+
 async function createLegacyWhereClause(filters: any = {}): Promise<Prisma.LegacySubmissionWhereInput | null> {
   const andFilters: Prisma.LegacySubmissionWhereInput[] = []
 
   if (filters.userId) {
     const user = await prisma.user.findUnique({
       where: { id: filters.userId },
-      select: { username: true, discordHandle: true }
+      select: { username: true, discordHandle: true, email: true }
     })
 
     if (!user) {
       return null
     }
 
-    const handleForUser = user.discordHandle || user.username
-    andFilters.push({ discordHandle: handleForUser })
+    const handleCandidates = collectLegacyHandleCandidates(user)
+    const handleConditions = buildLegacyHandleConditions(handleCandidates)
+
+    if (handleConditions.length === 0) {
+      console.warn(`Legacy submissions filter - no handle candidates for user ${filters.userId}`)
+      return null
+    }
+
+    andFilters.push({ OR: handleConditions })
   }
 
   const statusFilter = await buildLegacyStatusFilter(filters.status)
