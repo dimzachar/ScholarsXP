@@ -206,20 +206,69 @@ export async function getFeatured(
     }
   }
 
-  // Merge, dedupe by content key
-  const merged: FeaturedInput[] = []
-  const seen = new Set<string>()
+  const pickPreferredCandidate = (current: FeaturedInput, candidate: FeaturedInput): FeaturedInput => {
+    const currentXp = current.finalXp ?? Number.NEGATIVE_INFINITY
+    const candidateXp = candidate.finalXp ?? Number.NEGATIVE_INFINITY
+    if (candidateXp > currentXp) return candidate
+    if (candidateXp < currentXp) return current
+
+    const toTimestamp = (iso: string): number => {
+      const t = new Date(iso).getTime()
+      return Number.isNaN(t) ? Number.NEGATIVE_INFINITY : t
+    }
+
+    const currentTs = toTimestamp(current.createdAt)
+    const candidateTs = toTimestamp(candidate.createdAt)
+    if (candidateTs > currentTs) return candidate
+    if (candidateTs < currentTs) return current
+
+    const currentHasUser = Boolean(current.userId)
+    const candidateHasUser = Boolean(candidate.userId)
+    if (candidateHasUser !== currentHasUser) {
+      return candidateHasUser ? candidate : current
+    }
+
+    if (candidate.origin !== current.origin) {
+      return candidate.origin === 'submission' ? candidate : current
+    }
+
+    return current
+  }
+
+  // Merge, dedupe by content key while preferring higher quality/recent candidates
+  const mergedOrder: string[] = []
+  const mergedByKey = new Map<string, FeaturedInput>()
   for (const item of [...submissions, ...legacy]) {
     const key = dedupeKey(item.url)
-    if (seen.has(key)) {
+    const existing = mergedByKey.get(key)
+    if (!existing) {
+      mergedByKey.set(key, item)
+      mergedOrder.push(key)
+      continue
+    }
+
+    const preferred = pickPreferredCandidate(existing, item)
+    if (preferred === existing) {
       if (DEBUG_AUTHOR && isDebug(item)) {
         console.log('[FeaturedDebug] deduped out by key', { id: item.id, key, url: item.url, authorKey: item.authorKey })
       }
       continue
     }
-    seen.add(key)
-    merged.push(item)
+
+    mergedByKey.set(key, preferred)
+    if (DEBUG_AUTHOR && (isDebug(item) || isDebug(existing))) {
+      console.log('[FeaturedDebug] dedupe replaced entry', {
+        key,
+        replacedId: existing.id,
+        keptId: preferred.id,
+        keptAuthorKey: preferred.authorKey,
+      })
+    }
   }
+
+  const merged: FeaturedInput[] = mergedOrder
+    .map((key) => mergedByKey.get(key))
+    .filter((it): it is FeaturedInput => Boolean(it))
   if (DEBUG_AUTHOR) {
     const dbg = merged.filter(isDebug)
     console.log('[FeaturedDebug] merged matched', DEBUG_AUTHOR, dbg.length)

@@ -1,14 +1,21 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import {
   ExternalLink,
   MessageSquare,
@@ -21,12 +28,35 @@ import {
   Save,
   Eye,
   Flag,
-  Target
+  Target,
+  CircleSlash,
+  Wand2
 } from 'lucide-react'
 import {
   getXpForTier as getXpForTierV2,
-  resolveTaskFromPlatform as resolveTaskFromPlatformV2
+  resolveTaskFromPlatform as resolveTaskFromPlatformV2,
+  getRejectedXp as getRejectedXpV2
 } from '@/lib/xp-rules-v2'
+
+type FeedbackTemplate = {
+  label: string
+  value: string
+}
+
+const REJECTION_TEMPLATES: FeedbackTemplate[] = [
+  {
+    label: 'Unrelated content',
+    value: 'Thanks for sharing this, but it does not relate to the assigned topic or platform requirements, so I cannot award XP. Please ensure future submissions align with the brief.'
+  },
+  {
+    label: 'Insufficient quality',
+    value: 'I am marking this as not eligible for XP because the content does not meet the fundamental quality bar (structure, clarity, or depth). Reworking it with clearer insights would help.'
+  },
+  {
+    label: 'Spam / duplicate',
+    value: 'This submission appears to be spammy, duplicated, or otherwise ineligible under program rules, so I’m rejecting it for XP. Double-check the guidelines before resubmitting.'
+  }
+]
 
 interface Submission {
   id: string
@@ -67,6 +97,7 @@ interface PeerReviewCardProps {
       qualityRating: number
       category?: 'strategy' | 'guide' | 'technical'
       tier?: 'basic' | 'average' | 'awesome'
+      isRejected?: boolean
     }
   ) => void
   onSaveDraft?: (submissionId: string, draftData: any) => void
@@ -84,7 +115,11 @@ export default function PeerReviewCard({
   const task = resolveTaskFromPlatformV2(submission.platform)
   const [category, setCategory] = useState<'strategy' | 'guide' | 'technical'>('strategy')
   const [tier, setTier] = useState<'basic' | 'average' | 'awesome'>('average')
-  const computedXp = task ? getXpForTierV2(task, category, tier) : 0
+  const [isRejected, setIsRejected] = useState(false)
+  const computedXp = useMemo(() => {
+    if (isRejected) return getRejectedXpV2()
+    return task ? getXpForTierV2(task, category, tier) : 0
+  }, [task, category, tier, isRejected])
 
   const [xpScore, setXpScore] = useState(computedXp)
   const [comments, setComments] = useState('')
@@ -96,6 +131,7 @@ export default function PeerReviewCard({
   const [flagReason, setFlagReason] = useState('')
   const [flagDescription, setFlagDescription] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   // Time tracking
   const [startTime] = useState(Date.now())
@@ -115,12 +151,24 @@ export default function PeerReviewCard({
       if (comments.trim()) handleSaveDraft()
     }, 120000)
     return () => clearInterval(auto)
-  }, [comments, xpScore, criteria, onSaveDraft])
+  }, [comments, xpScore, criteria, onSaveDraft, isRejected, category, tier])
 
   useEffect(() => setXpScore(computedXp), [computedXp])
   useEffect(() => {
     if (comments.trim().length >= 20 && error) setError(null)
   }, [comments, error])
+
+  const templateOptions = useMemo(
+    () => (isRejected ? REJECTION_TEMPLATES : []),
+    [isRejected]
+  )
+
+  const handleApplyTemplate = (template: string) => {
+    setComments(template)
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus()
+    })
+  }
 
   const handleSubmit = async () => {
     if (readOnly) return
@@ -128,17 +176,35 @@ export default function PeerReviewCard({
       setError('Please provide detailed comments (minimum 20 characters).')
       return
     }
+    setError(null)
     setIsSubmitting(true)
     try {
-      await onReviewSubmit(submission.id, {
-        xpScore,
+      const finalXpScore = computedXp
+      const payload = {
+        xpScore: finalXpScore,
         comments: comments.trim(),
         criteria,
         timeSpent: Math.max(timeSpent, 1),
-        qualityRating,
-        category,
-        tier
-      })
+        qualityRating
+      } as {
+        xpScore: number
+        comments: string
+        criteria: ReviewCriteria
+        timeSpent: number
+        qualityRating: number
+        category?: 'strategy' | 'guide' | 'technical'
+        tier?: 'basic' | 'average' | 'awesome'
+        isRejected?: boolean
+      }
+
+      if (isRejected) {
+        payload.isRejected = true
+      } else {
+        payload.category = category
+        payload.tier = tier
+      }
+
+      await onReviewSubmit(submission.id, payload)
     } finally {
       setIsSubmitting(false)
     }
@@ -148,7 +214,16 @@ export default function PeerReviewCard({
     if (!onSaveDraft || readOnly) return
     setIsDraft(true)
     try {
-      await onSaveDraft(submission.id, { xpScore, comments, criteria, qualityRating, timeSpent })
+      await onSaveDraft(submission.id, {
+        xpScore,
+        comments,
+        criteria,
+        qualityRating,
+        timeSpent,
+        isRejected,
+        category,
+        tier
+      })
       setLastSaved(new Date())
     } finally {
       setIsDraft(false)
@@ -189,8 +264,10 @@ export default function PeerReviewCard({
 
   const deadlineStatus = getDeadlineStatus()
 
-  const CategorySelector = () => (
-    <fieldset className="flex items-center gap-2 flex-wrap" role="radiogroup" aria-labelledby="category-legend">
+  const CategorySelector = () => {
+    const disabled = !!readOnly || isSubmitting || isRejected
+    return (
+      <fieldset className="flex items-center gap-2 flex-wrap" role="radiogroup" aria-labelledby="category-legend" aria-disabled={disabled}>
       <legend id="category-legend" className="sr-only">Category</legend>
       {(['strategy','guide','technical'] as const).map((c) => {
         const selected = category === c
@@ -204,8 +281,13 @@ export default function PeerReviewCard({
             aria-pressed={selected}
             size="sm"
             variant={variant as any}
-            onClick={() => setCategory(c)}
+            disabled={disabled}
+            onClick={() => {
+              if (disabled) return
+              setCategory(c)
+            }}
             onKeyDown={(e) => {
+              if (disabled) return
               if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
                 e.preventDefault()
                 const order = ['strategy','guide','technical'] as const
@@ -224,11 +306,14 @@ export default function PeerReviewCard({
           </Button>
         )
       })}
-    </fieldset>
-  )
+      </fieldset>
+    )
+  }
 
-  const TierSelector = () => (
-    <fieldset className="flex items-center gap-2 flex-wrap" role="radiogroup" aria-labelledby="tier-legend">
+  const TierSelector = () => {
+    const disabled = !!readOnly || isSubmitting || isRejected
+    return (
+      <fieldset className="flex items-center gap-2 flex-wrap" role="radiogroup" aria-labelledby="tier-legend" aria-disabled={disabled}>
       <legend id="tier-legend" className="sr-only">Quality Tier</legend>
       {(['basic','average','awesome'] as const).map((t) => {
         const selected = tier === t
@@ -242,8 +327,13 @@ export default function PeerReviewCard({
             aria-pressed={selected}
             size="sm"
             variant={variant as any}
-            onClick={() => setTier(t)}
+            disabled={disabled}
+            onClick={() => {
+              if (disabled) return
+              setTier(t)
+            }}
             onKeyDown={(e) => {
+              if (disabled) return
               if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
                 e.preventDefault()
                 const order = ['basic','average','awesome'] as const
@@ -262,8 +352,9 @@ export default function PeerReviewCard({
           </Button>
         )
       })}
-    </fieldset>
-  )
+      </fieldset>
+    )
+  }
 
   return (
     <Card className="border-0 shadow-xl">
@@ -395,8 +486,69 @@ export default function PeerReviewCard({
                   <div className="text-sm font-semibold">Quality Tier</div>
                 </div>
                 <TierSelector />
-                <div className="mt-3 text-sm text-muted-foreground">
-                  Awarded XP: <span className="font-medium text-foreground">{xpScore}</span>
+                <div className="mt-3 space-y-3">
+                  <div className="text-sm text-muted-foreground">
+                    Awarded XP: <span className="font-medium text-foreground">{xpScore}</span>
+                    {isRejected && (
+                      <span className="ml-2 inline-flex items-center gap-1 text-destructive font-medium">
+                        <CircleSlash className="h-4 w-4" aria-hidden="true" /> Not eligible
+                      </span>
+                    )}
+                  </div>
+                  {!readOnly && (
+                    <div className="space-y-3 rounded-md border border-dashed border-destructive/40 bg-destructive/5 p-3">
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          id={`reject-${submission.id}`}
+                          checked={isRejected}
+                          disabled={isSubmitting}
+                          onCheckedChange={(checked) => setIsRejected(checked === true)}
+                          aria-describedby={`reject-helper-${submission.id}`}
+                        />
+                        <div className="space-y-1">
+                          <Label htmlFor={`reject-${submission.id}`} className="text-sm font-medium leading-none">Mark as not eligible for XP</Label>
+                          <p id={`reject-helper-${submission.id}`} className="text-xs text-muted-foreground">
+                            Use when the submission falls outside the assignment scope, is off-topic, or fails basic quality checks. Category and tier selections are disabled while active.
+                          </p>
+                        </div>
+                      </div>
+                      {isRejected && templateOptions.length > 0 && (
+                        <div className="rounded-md border border-destructive/30 bg-background/60 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 text-xs font-medium text-destructive">
+                              <Wand2 className="h-4 w-4" aria-hidden="true" />
+                              Quick rejection reason
+                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button type="button" variant="outline" size="sm" className="text-xs">
+                                  Insert template
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="start" className="w-72 text-sm">
+                                {templateOptions.map((template) => (
+                                  <DropdownMenuItem
+                                    key={template.label}
+                                    onSelect={(event) => {
+                                      event.preventDefault()
+                                      handleApplyTemplate(template.value)
+                                    }}
+                                    className="flex flex-col items-start gap-1 whitespace-normal"
+                                  >
+                                    <span className="font-medium text-foreground">{template.label}</span>
+                                    <span className="text-xs text-muted-foreground leading-snug">{template.value}</span>
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                          <p className="mt-2 text-[11px] text-muted-foreground">
+                            Selecting a template will populate the comments field. Feel free to personalize it before submitting.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="rounded-lg border bg-card p-4">
@@ -406,6 +558,7 @@ export default function PeerReviewCard({
                 <span className="text-destructive">*</span>
               </div>
               <Textarea
+                ref={textareaRef}
                 value={comments}
                 onChange={(e) => setComments(e.target.value)}
                 placeholder="Provide specific, constructive feedback about the content. Explain your ratings and suggest improvements..."
@@ -448,6 +601,7 @@ export default function PeerReviewCard({
                     setComments('')
                     setCriteria({ originality: 4, quality: 4, relevance: 4, educational: 4 })
                     setQualityRating(4)
+                    setIsRejected(false)
                   }}
                 >
                   Cancel

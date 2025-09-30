@@ -42,6 +42,7 @@ interface ReviewSubmissionPayload {
   qualityRating: number
   category?: "strategy" | "guide" | "technical"
   tier?: "basic" | "average" | "awesome"
+  isRejected?: boolean
 }
 
 export interface SubmissionReviewRowProps {

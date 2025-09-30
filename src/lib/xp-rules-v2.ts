@@ -15,6 +15,12 @@ export const ALLOWED_XP: Record<TaskIdV2, Record<TaskCategory, [number, number, 
   }
 }
 
+export const REJECTED_XP = 0
+
+export function getRejectedXp(): number {
+  return REJECTED_XP
+}
+
 export function getAllowedXp(task: TaskIdV2, category: TaskCategory): number[] {
   return ALLOWED_XP[task][category]
 }
@@ -28,7 +34,7 @@ export function getXpForTier(task: TaskIdV2, category: TaskCategory, tier: Quali
 export function resolveTaskFromPlatform(platform: string): TaskIdV2 | null {
   const p = (platform || '').toLowerCase()
   if (p === 'twitter' || p === 'x' || p === 'x.com') return 'A'
-  if (p === 'medium' || p === 'reddit') return 'B'
+  if (p === 'medium' || p === 'reddit' || p === 'notion' || p === 'notion.so') return 'B'
   return null
 }
 

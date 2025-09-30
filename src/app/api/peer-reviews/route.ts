@@ -6,7 +6,8 @@ import {
   resolveTaskFromPlatform,
   getXpForTier,
   isValidCategory,
-  isValidTier
+  isValidTier,
+  getRejectedXp
 } from '@/lib/xp-rules-v2'
 import { withErrorHandling, createSuccessResponse, validateRequiredFields } from '@/lib/api-middleware'
 import { ValidationError } from '@/lib/api-error-handler'
@@ -21,12 +22,15 @@ export const POST = withPermission('review_content')(
       timeSpent,
       qualityRating,
       category,
-      tier
+      tier,
+      isRejected
     } = await request.json()
 
     // Require submissionId always; require either numeric xpScore (legacy) or category+tier (v2)
     validateRequiredFields({ submissionId }, ['submissionId'])
-    if (!(isValidCategory(category) && isValidTier(tier)) && (xpScoreInput === undefined || xpScoreInput === null)) {
+    const rejected = Boolean(isRejected)
+
+    if (!rejected && !(isValidCategory(category) && isValidTier(tier)) && (xpScoreInput === undefined || xpScoreInput === null)) {
       throw new ValidationError('Provide category+tier (v2) or legacy xpScore', {
         required: ['submissionId', 'category+tier' /* or xpScore */]
       })
@@ -74,7 +78,9 @@ export const POST = withPermission('review_content')(
 
     // Compute XP via v2 mapping when category+tier provided; otherwise support legacy xpScore validation
     let computedXp: number
-    if (isValidCategory(category) && isValidTier(tier)) {
+    if (rejected) {
+      computedXp = getRejectedXp()
+    } else if (isValidCategory(category) && isValidTier(tier)) {
       const task = resolveTaskFromPlatform(submission.platform)
       if (!task) {
         return NextResponse.json({
@@ -183,8 +189,8 @@ export const POST = withPermission('review_content')(
         reviewerId,
         submissionId,
         xpScore: computedXp,
-        contentCategory: isValidCategory(category) ? category : null,
-        qualityTier: isValidTier(tier) ? tier : null,
+        contentCategory: !rejected && isValidCategory(category) ? category : null,
+        qualityTier: !rejected && isValidTier(tier) ? tier : null,
         comments: comments.trim(),
         timeSpent: timeSpent || 1,
         // No self-assessed quality in v2; persist null
@@ -260,7 +266,7 @@ export const POST = withPermission('review_content')(
       }
     }
 
-    console.log(`✅ Review submitted by ${reviewerId} for submission ${submissionId}: ${xpScore} XP, quality: ${qualityRating}/5, time: ${timeSpent}min, late: ${isLate}`)
+    console.log(`✅ Review submitted by ${reviewerId} for submission ${submissionId}: ${computedXp} XP, quality: ${qualityRating}/5, time: ${timeSpent}min, late: ${isLate}, rejected: ${rejected}`)
 
     return createSuccessResponse({
       message: 'Review submitted successfully',

@@ -69,6 +69,7 @@ interface ReviewSubmissionPayload {
   qualityRating: number
   category?: 'strategy' | 'guide' | 'technical'
   tier?: 'basic' | 'average' | 'awesome'
+  isRejected?: boolean
 }
 
 export default function ReviewPage() {
