@@ -60,10 +60,15 @@ async function isTweetAvailable(url: string): Promise<boolean> {
     } catch {}
     const api = `https://publish.twitter.com/oembed?url=${encodeURIComponent(u)}`
     const res = await fetch(api, { headers: { 'User-Agent': 'ScholarsXP/featured-check/1.0' } })
-    // Deleted/private tweets typically 404/403; only treat OK as available
-    return res.ok
+    if (res.status === 404 || res.status === 410) return false
+    if (res.status === 401) return false
+    if (res.status === 403) {
+      // 403 is ambiguous (private, rate-limited, or geo/IP blocked). Treat as uncertain but allow.
+      return true
+    }
+    return true
   } catch {
-    return false
+    return true
   }
 }
 
@@ -289,21 +294,36 @@ export async function getFeatured(
     if (platform === 'Reddit') {
       try {
         const summary = await getRedditSummary(item.url)
-        if (summary && !summary.removed) {
-          result.push(item)
+        if (summary?.removed) {
+          if (DEBUG_AUTHOR && isDebug(item)) {
+            console.log('[FeaturedDebug] filtered removed Reddit post', { id: item.id, url: item.url })
+          }
+          continue
         }
-      } catch {
-        // Skip on error to avoid showing broken embeds
+      } catch (err) {
+        if (DEBUG_AUTHOR && isDebug(item)) {
+          console.log('[FeaturedDebug] reddit summary failed, allowing item', { id: item.id, url: item.url, error: String(err) })
+        }
       }
+      result.push(item)
       continue
     }
 
     if (platform === 'Twitter') {
       try {
         const ok = await isTweetAvailable(item.url)
-        if (ok) result.push(item)
-      } catch {
-        // Skip if availability check fails
+        if (ok) {
+          result.push(item)
+        } else {
+          if (DEBUG_AUTHOR && isDebug(item)) {
+            console.log('[FeaturedDebug] twitter availability check failed', { id: item.id, url: item.url })
+          }
+        }
+      } catch (err) {
+        if (DEBUG_AUTHOR && isDebug(item)) {
+          console.log('[FeaturedDebug] twitter availability error, allowing item', { id: item.id, url: item.url, error: String(err) })
+        }
+        result.push(item)
       }
       continue
     }
