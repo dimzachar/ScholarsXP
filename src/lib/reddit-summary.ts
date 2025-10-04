@@ -91,8 +91,11 @@ async function fetchSummaryFromJsonUrl(jurl: string, signal?: AbortSignal): Prom
     signal,
   })
   if (!res.ok) {
-    if ([401, 403, 404, 410, 451].includes(res.status)) {
+    if ([404, 410, 451].includes(res.status)) {
       return { removed: true }
+    }
+    if ([401, 403].includes(res.status)) {
+      return null
     }
     return null
   }
