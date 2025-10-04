@@ -78,12 +78,21 @@ async function fetchSummaryFromJsonUrl(jurl: string, signal?: AbortSignal): Prom
     redirect: 'follow',
     signal,
   })
-  if (!res.ok) return null
+  if (!res.ok) {
+    if ([404, 410, 451].includes(res.status)) {
+      return { removed: true }
+    }
+    return { removed: false }
+  }
   const contentType = res.headers.get('content-type') || ''
-  if (!contentType.includes('application/json')) return null
+  if (!contentType.includes('application/json')) {
+    return { removed: false }
+  }
   const data = await res.json()
   const post = Array.isArray(data) && data[0]?.data?.children?.[0]?.data
-  if (!post) return null
+  if (!post) {
+    return { removed: false }
+  }
   // Consider common removal signals
   const removed = Boolean(post.removed_by_category || post.removed || post.selftext?.includes('[removed]') || post.author === '[deleted]')
 
