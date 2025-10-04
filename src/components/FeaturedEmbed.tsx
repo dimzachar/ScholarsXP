@@ -196,7 +196,9 @@ export default function FeaturedEmbed({ url }: Props) {
           const res = await fetch(`/api/reddit/summary?url=${encodeURIComponent(url)}`)
           if (cancelled) return
           if (!res.ok) {
-            setUnavailable(true)
+            if ([403, 404, 410, 451].includes(res.status)) {
+              setUnavailable(true)
+            }
             return
           }
           const json = await res.json()
@@ -209,7 +211,7 @@ export default function FeaturedEmbed({ url }: Props) {
             selftext: json.selftext,
             removed: json.removed,
           })
-          if (json.removed) setUnavailable(true)
+           if (json.removed) setUnavailable(true)
         } catch {
           // ignore
         }
@@ -225,7 +227,12 @@ export default function FeaturedEmbed({ url }: Props) {
       const run = async () => {
         try {
           const res = await fetch(`/api/reddit/summary?url=${encodeURIComponent(url)}`)
-          if (!res.ok) return
+          if (!res.ok) {
+            if ([403, 404, 410, 451].includes(res.status)) {
+              setUnavailable(true)
+            }
+            return
+          }
           const json = await res.json()
           if (!cancelled) {
             setSummary({
