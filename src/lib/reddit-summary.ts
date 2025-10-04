@@ -28,12 +28,18 @@ function isCommentsPath(pathname: string) {
   return /\/comments\//.test(pathname)
 }
 
-function buildJsonUrlFromCanonical(canonical: string): string | null {
+export function buildJsonUrlFromCanonical(canonical: string): string | null {
   try {
     const u = new URL(canonical)
     normalizeHost(u)
     if (!isCommentsPath(u.pathname)) return null
-    if (!u.pathname.endsWith('.json')) u.pathname = u.pathname.replace(/\/?$/, '.json')
+
+    const idMatch = u.pathname.match(/\/comments\/([a-z0-9]+)/i)
+    const postId = idMatch?.[1]
+    if (!postId) return null
+
+    const base = `${u.protocol}//${u.host}`
+    const jsonUrl = new URL(`/comments/${postId}.json`, base)
 
     const search = new URLSearchParams()
     const raw = u.searchParams
@@ -42,8 +48,8 @@ function buildJsonUrlFromCanonical(canonical: string): string | null {
       search.append(key, value)
     }
     search.set('raw_json', '1')
-    u.search = search.toString()
-    return u.toString()
+    jsonUrl.search = search.toString()
+    return jsonUrl.toString()
   } catch {
     return null
   }
@@ -85,19 +91,19 @@ async function fetchSummaryFromJsonUrl(jurl: string, signal?: AbortSignal): Prom
     signal,
   })
   if (!res.ok) {
-    if ([404, 410, 451].includes(res.status)) {
+    if ([401, 403, 404, 410, 451].includes(res.status)) {
       return { removed: true }
     }
-    return { removed: false }
+    return null
   }
   const contentType = res.headers.get('content-type') || ''
   if (!contentType.includes('application/json')) {
-    return { removed: false }
+    return null
   }
   const data = await res.json()
   const post = Array.isArray(data) && data[0]?.data?.children?.[0]?.data
   if (!post) {
-    return { removed: false }
+    return null
   }
   // Consider common removal signals
   const removed = Boolean(post.removed_by_category || post.removed || post.selftext?.includes('[removed]') || post.author === '[deleted]')
