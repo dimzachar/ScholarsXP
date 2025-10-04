@@ -34,8 +34,14 @@ function buildJsonUrlFromCanonical(canonical: string): string | null {
     normalizeHost(u)
     if (!isCommentsPath(u.pathname)) return null
     if (!u.pathname.endsWith('.json')) u.pathname = u.pathname.replace(/\/?$/, '.json')
-    const search = u.searchParams
-    if (!search.has('raw_json')) search.set('raw_json', '1')
+
+    const search = new URLSearchParams()
+    const raw = u.searchParams
+    for (const [key, value] of raw.entries()) {
+      if (/^(utm_|fbclid|gclid|campaign$)/i.test(key)) continue
+      search.append(key, value)
+    }
+    search.set('raw_json', '1')
     u.search = search.toString()
     return u.toString()
   } catch {
