@@ -180,7 +180,7 @@ Visit `http://localhost:3002` to access the application.
    - Provide constructive feedback
 
 2. **Earn Review XP**:
-   - +5 XP per completed review
+   - +10 XP per completed review
    - Bonus XP for high-quality reviews
    - Penalties for missed deadlines
 
@@ -233,7 +233,7 @@ The platform supports 6 distinct task types, each with specific XP ranges and we
 - **Duplicate Detection**: Content fingerprinting prevents resubmissions
 - **AI Content Detection**: Flags potentially generated content
 - **Spam Prevention**: Pattern analysis for promotional content
-- **Review Incentives**: +5 XP per completed review, penalties for missed reviews
+- **Review Incentives**: +10 XP per completed review, penalties for missed reviews
 - **Streak System**: Bonus XP every 4 weeks for consistent activity
 
 ## 🔧 API Endpoints

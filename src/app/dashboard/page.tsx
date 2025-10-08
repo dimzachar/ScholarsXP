@@ -302,7 +302,7 @@ function QuickActionsSection({
           color: 'primary',
           onClick: () => router.push('/review'),
           badges: [
-            { text: 'Base 5 XP', variant: 'outline' },
+            { text: 'Base 10 XP', variant: 'outline' },
             { text: 'Bonuses up to +11', variant: 'outline' }
           ]
         }

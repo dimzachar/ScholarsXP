@@ -174,7 +174,7 @@ export default function ReviewPage() {
         ...reviewData
       })
 
-      setMessage('Review submitted successfully! +5 XP earned')
+      setMessage('Review submitted successfully! +10 XP earned')
       // Remove the reviewed submission from the list
       setPendingReviews(prev => prev.filter(item => item.submission.id !== submissionId))
     } catch (error) {

@@ -367,7 +367,7 @@ const originalHandler = withPermission('authenticated')(async (request: Authenti
       return acc
     }, {} as Record<string, number>)
 
-    const reviewXp = (transactionsByType['REVIEW_REWARD'] || 0) + (totalReviews * 5) // Transaction XP + base review XP
+    const reviewXp = (transactionsByType['REVIEW_REWARD'] || 0) + (totalReviews * 10) // Transaction XP + base review XP
     const achievementXp = (transactionsByType['ACHIEVEMENT_REWARD'] || 0) + (achievements?.reduce((sum, ach) => sum + (ach.achievement?.xpReward || 0), 0) || 0)
     const legacyXp = transactionsByType['ADMIN_ADJUSTMENT'] || 0 // Legacy imported XP
     const streakXp = transactionsByType['STREAK_BONUS'] || 0

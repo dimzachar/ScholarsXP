@@ -254,7 +254,7 @@ export async function notifyReviewAssigned(userId: string, submissionId: string,
     userId,
     NotificationType.REVIEW_ASSIGNED,
     '📝 New review assignment',
-    'You have been assigned a new submission to review. Complete it within 72 hours to earn +5 XP.',
+    'You have been assigned a new submission to review. Complete it within 72 hours to earn +10 XP.',
     { submissionId, submissionUrl }
   )
 }
