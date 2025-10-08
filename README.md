@@ -1,5 +1,7 @@
 # Scholars_XP - Gamified Content Evaluation Platform
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/dimzachar/ScholarsXP)
+
 **Scholars_XP** is a comprehensive gamified content evaluation platform built with Next.js 15, Supabase, and PostgreSQL. The system enables users to submit content from various platforms (Twitter/X, Medium, Reddit, Notion) for AI-powered evaluation and peer review, implementing a sophisticated role-based access control system with three distinct user roles: USER, REVIEWER, and ADMIN.
 
 ## 🎯 Project Overview
