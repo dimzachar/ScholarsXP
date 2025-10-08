@@ -195,7 +195,7 @@ export class ReviewerPoolService {
       const reviewerCount = Math.min(availableReviewers.length, minimumReviewers)
       const selectedReviewers = availableReviewers.slice(0, reviewerCount)
 
-      // Calculate deadline (48 hours from now, excluding weekends)
+      // Calculate deadline (72 hours from now, excluding weekends)
       const deadline = this.calculateReviewDeadline()
 
       // Create review assignments
@@ -246,14 +246,14 @@ export class ReviewerPoolService {
   }
 
   /**
-   * Calculate review deadline (48 hours, excluding weekends)
+   * Calculate review deadline (72 hours, excluding weekends)
    */
   private calculateReviewDeadline(): Date {
     const now = new Date()
     const deadline = new Date(now)
-    
-    // Add 48 hours
-    deadline.setHours(deadline.getHours() + 48)
+
+    // Add 72 hours
+    deadline.setHours(deadline.getHours() + 72)
     
     // If deadline falls on weekend, extend to Monday
     const dayOfWeek = deadline.getDay()

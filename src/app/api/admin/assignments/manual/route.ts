@@ -82,9 +82,9 @@ export const POST = withPermission('admin_access')(async (request: Authenticated
       )
     }
 
-    // Calculate deadline (48 hours from now, excluding weekends)
+    // Calculate deadline (72 hours from now, excluding weekends)
     const deadline = new Date()
-    deadline.setHours(deadline.getHours() + 48)
+    deadline.setHours(deadline.getHours() + 72)
     
     // If deadline falls on weekend, extend to Monday
     const dayOfWeek = deadline.getDay()
