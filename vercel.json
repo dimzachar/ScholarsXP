@@ -27,7 +27,7 @@
   "crons": [
     {
       "path": "/api/cron/deadline-monitor",
-      "schedule": "0 * * * *"
+      "schedule": "0 1 * * *"
     }
   ]
 }
