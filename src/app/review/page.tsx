@@ -237,7 +237,7 @@ export default function ReviewPage() {
             showTrend={false}
           />
           <ResponsiveStatCard
-            data={createStatCardData('XP per Review', 5, { 
+            data={createStatCardData('XP per Review', 10, { 
               color: 'secondary',
               icon: Star,
               subtitle: 'Earned when you submit'
