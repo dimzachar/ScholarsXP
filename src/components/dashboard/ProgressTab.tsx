@@ -43,6 +43,41 @@ export function ProgressTab({
     }
   }, [profileData])
 
+  const timeframeKey = analyticsData?.timeframe || selectedTimeframe
+  const weeklyTrends = analyticsData?.weeklyTrends || []
+
+  const timeframeCounts = React.useMemo(() => {
+    const aggregateMetric = (metric: 'submissions' | 'reviews' | 'streaks') =>
+      weeklyTrends.reduce((sum: number, week: any) => sum + (week?.[metric] || 0), 0)
+
+    const latestWeek = weeklyTrends[weeklyTrends.length - 1] || {}
+
+    switch (timeframeKey) {
+      case 'current_week':
+        return {
+          submissions: latestWeek.submissions || 0,
+          reviews: latestWeek.reviews || 0,
+          streaks: latestWeek.streaks || 0
+        }
+      case 'last_12_weeks':
+        return {
+          submissions: aggregateMetric('submissions'),
+          reviews: aggregateMetric('reviews'),
+          streaks: aggregateMetric('streaks')
+        }
+      case 'all_time':
+      default:
+        return {
+          submissions: Math.max(
+            profileData?.statistics?.totalSubmissions || 0,
+            aggregateMetric('submissions')
+          ),
+          reviews: aggregateMetric('reviews'),
+          streaks: aggregateMetric('streaks')
+        }
+    }
+  }, [timeframeKey, weeklyTrends, profileData])
+
   return (
     <div className="space-y-6">
       {/* Analytics Error State */}
@@ -109,7 +144,7 @@ export function ProgressTab({
                 <TrendingUp className="h-4 w-4 text-purple-500" />
                 <div>
                   <p className="text-sm font-medium">Submissions</p>
-                  <p className="text-2xl font-bold">{profileData?.statistics?.totalSubmissions || 0}</p>
+                  <p className="text-2xl font-bold">{timeframeCounts.submissions || 0}</p>
                 </div>
               </div>
             </Card>
@@ -151,6 +186,9 @@ export function ProgressTab({
               title="Progress Trends"
               showDetails={true}
               totalSubmissions={profileData?.statistics?.totalSubmissions}
+              totalXpOverride={analyticsData?.breakdown?.total}
+              timeframe={timeframeKey}
+              summaryCounts={timeframeCounts}
             />
           )}
         </LazyWrapper>

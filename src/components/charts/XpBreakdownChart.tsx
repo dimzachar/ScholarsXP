@@ -15,16 +15,24 @@ interface XpBreakdownData {
   total: number
 }
 
+type TransactionsByType = Record<string, Array<{ amount: number }>>
+type PercentageBreakdown = Record<string, number>
+type BreakdownCategoryKey = Exclude<keyof XpBreakdownData, 'total'>
+
 interface XpBreakdownChartProps {
   data: XpBreakdownData
   title?: string
   timeframe?: string
+  transactionsByType?: TransactionsByType
+  percentageBreakdown?: PercentageBreakdown | null
 }
 
 export default function XpBreakdownChart({
   data,
   title = "XP Breakdown",
-  timeframe = "Current Week"
+  timeframe = "Current Week",
+  transactionsByType,
+  percentageBreakdown
 }: XpBreakdownChartProps) {
 
 
@@ -54,77 +62,142 @@ export default function XpBreakdownChart({
   }
 
   // Calculate percentages and prepare data for visualization using theme colors
-  const categories = [
+  type Category = {
+    key: BreakdownCategoryKey
+    name: string
+    value: number
+    rawValue: number
+    color: string
+    lightBg: string
+    textColor: string
+  }
+
+  const categories: Category[] = []
+
+  const addCategory = (
+    key: BreakdownCategoryKey,
+    name: string,
+    rawValue: number,
+    color: string,
+    lightBg: string,
+    textColor: string
+  ) => {
+    if (!rawValue) return
+    categories.push({
+      key,
+      name,
+      rawValue,
+      value: Math.abs(rawValue),
+      color,
+      lightBg,
+      textColor
+    })
+  }
+
+  const sumTransactionsForTypes = (types: string[]): number => {
+    if (!transactionsByType) return 0
+
+    return types.reduce((total, type) => {
+      const group = transactionsByType[type]
+      if (!group) return total
+
+      const groupTotal = group.reduce((sum, transaction) => {
+        const amount = typeof transaction.amount === 'number' ? transaction.amount : 0
+        return sum + amount
+      }, 0)
+
+      return total + groupTotal
+    }, 0)
+  }
+
+  const CATEGORY_CONFIG: Array<{
+    key: BreakdownCategoryKey
+    label: string
+    transactionTypes: string[]
+    color: string
+    lightBg: string
+    textColor: string
+  }> = [
     {
-      name: 'Submissions',
-      value: data.submissions,
-      color: 'hsl(var(--chart-1))', // Primary theme color
-      bgColor: 'bg-chart-1',
+      key: 'submissions',
+      label: 'Submissions',
+      transactionTypes: ['SUBMISSION_REWARD'],
+      color: 'hsl(var(--chart-1))',
       lightBg: 'bg-primary/10',
       textColor: 'text-chart-1'
     },
     {
-      name: 'Reviews',
-      value: data.reviews,
-      color: 'hsl(var(--chart-2))', // Secondary theme color
-      bgColor: 'bg-chart-2',
+      key: 'reviews',
+      label: 'Reviews',
+      transactionTypes: ['REVIEW_REWARD'],
+      color: 'hsl(var(--chart-2))',
       lightBg: 'bg-secondary/10',
       textColor: 'text-chart-2'
     },
     {
-      name: 'Streaks',
-      value: data.streaks,
-      color: 'hsl(var(--chart-3))', // Accent theme color
-      bgColor: 'bg-chart-3',
+      key: 'streaks',
+      label: 'Streaks',
+      transactionTypes: ['STREAK_BONUS'],
+      color: 'hsl(var(--chart-3))',
       lightBg: 'bg-accent/10',
       textColor: 'text-chart-3'
     },
     {
-      name: 'Achievements',
-      value: data.achievements,
-      color: 'hsl(var(--purple))', // Purple theme color
-      bgColor: 'bg-purple',
+      key: 'achievements',
+      label: 'Achievements',
+      transactionTypes: ['ACHIEVEMENT_BONUS'],
+      color: 'hsl(var(--purple))',
       lightBg: 'bg-purple/10',
       textColor: 'text-purple'
     },
     {
-      name: 'Admin Adjustments',
-      value: data.adminAdjustments,
-      color: 'hsl(var(--chart-5))', // Muted theme color
-      bgColor: 'bg-chart-5',
+      key: 'adminAdjustments',
+      label: 'Admin Adjustments',
+      transactionTypes: ['ADMIN_ADJUSTMENT'],
+      color: 'hsl(var(--chart-5))',
       lightBg: 'bg-muted/20',
       textColor: 'text-chart-5'
-    }
-  ].filter(category => category.value !== 0) // Only show categories with values
-
-  // Add penalties if they exist (negative values)
-  if (data.penalties < 0) {
-    categories.push({
-      name: 'Penalties',
-      value: Math.abs(data.penalties),
-      color: 'hsl(var(--destructive))', // Destructive theme color
-      bgColor: 'bg-destructive',
+    },
+    {
+      key: 'penalties',
+      label: 'Penalties',
+      transactionTypes: ['PENALTY'],
+      color: 'hsl(var(--destructive))',
       lightBg: 'bg-destructive/10',
       textColor: 'text-destructive'
-    })
-  }
+    }
+  ]
 
-  const totalAbsolute = categories.reduce((sum, cat) => sum + Math.abs(cat.value), 0)
+  CATEGORY_CONFIG.forEach(config => {
+    const transactionTotal = sumTransactionsForTypes(config.transactionTypes)
+    const fallbackValue = data?.[config.key] ?? 0
+    const rawValue = transactionTotal !== 0 ? transactionTotal : fallbackValue
+
+    addCategory(config.key, config.label, rawValue, config.color, config.lightBg, config.textColor)
+  })
+
+  const totalAbsolute = categories.reduce((sum, cat) => sum + cat.value, 0)
 
 
 
   // Calculate angles for pie chart
   let currentAngle = 0
   const pieData = categories.map(category => {
-    const percentage = totalAbsolute > 0 ? (Math.abs(category.value) / totalAbsolute) * 100 : 0
-    const angle = (percentage / 100) * 360
+    const actualPercentage = totalAbsolute > 0 ? (category.value / totalAbsolute) * 100 : 0
+    const angle = (actualPercentage / 100) * 360
     const startAngle = currentAngle
     const endAngle = currentAngle + angle
     currentAngle = endAngle
 
+    const overridePercentage = percentageBreakdown?.[category.key]
+    const displayPercentage = typeof overridePercentage === 'number'
+      ? Math.abs(overridePercentage)
+      : actualPercentage
+
     return {
       ...category,
-      percentage,
+      percentage: displayPercentage,
+      actualPercentage,
       startAngle,
       endAngle,
       angle
@@ -208,7 +281,7 @@ export default function XpBreakdownChart({
                 {/* Segment labels */}
                 {pieData.map((slice, index) => {
                   // Only show labels for slices > 5% to avoid clutter
-                  if (slice.percentage < 5) return null
+                  if (slice.actualPercentage < 5) return null
 
                   const { x, y } = getLabelPosition(slice.startAngle, slice.endAngle)
 
@@ -222,7 +295,7 @@ export default function XpBreakdownChart({
                         className="fill-white text-xs font-semibold drop-shadow-sm"
                         style={{
                           filter: 'drop-shadow(1px 1px 1px rgba(0,0,0,0.5))',
-                          fontSize: slice.percentage > 15 ? '14px' : '12px'
+                          fontSize: slice.actualPercentage > 15 ? '14px' : '12px'
                         }}
                       >
                         {slice.percentage.toFixed(0)}%
@@ -272,7 +345,7 @@ export default function XpBreakdownChart({
                     {slice.percentage.toFixed(1)}%
                   </span>
                   <Badge variant="outline" className={`${slice.textColor} text-xs`}>
-                    {slice.name === 'Penalties' ? '-' : '+'}{slice.value} XP
+                    {slice.rawValue >= 0 ? '+' : '-'}{slice.value} XP
                   </Badge>
                 </div>
               </div>
@@ -287,11 +360,11 @@ export default function XpBreakdownChart({
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium">{category.name}</span>
                   <span className={`text-sm font-bold ${category.textColor}`}>
-                    {category.name === 'Penalties' ? '-' : '+'}{category.value} XP
+                    {category.rawValue >= 0 ? '+' : '-'}{category.value} XP
                   </span>
                 </div>
                 <Progress 
-                  value={totalAbsolute > 0 ? (Math.abs(category.value) / totalAbsolute) * 100 : 0} 
+                  value={totalAbsolute > 0 ? (category.value / totalAbsolute) * 100 : 0} 
                   className="h-2"
                 />
               </div>

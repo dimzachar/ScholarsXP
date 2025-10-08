@@ -8,6 +8,7 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
     const { searchParams } = new URL(request.url)
     const timeframe = searchParams.get('timeframe') || 'current_week' // 'current_week', 'all_time', 'last_12_weeks'
     const userId = request.user.id
+    const currentWeekNumber = getCurrentWeekNumber()
 
 
 
@@ -24,20 +25,19 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
       case 'all_time':
         xpBreakdown = await xpAnalyticsService.getAllTimeBreakdown(userId)
         // Always fetch weekly trends for chart display
-        weeklyTrends = await xpAnalyticsService.getWeeklyTrends(userId, 12)
+        weeklyTrends = await xpAnalyticsService.getWeeklyTrends(userId, currentWeekNumber)
         break
       
       case 'last_12_weeks':
         weeklyTrends = await xpAnalyticsService.getWeeklyTrends(userId, 12)
-        // Calculate total for last 12 weeks
         xpBreakdown = {
-          submissions: weeklyTrends.reduce((sum, week) => sum + (week.submissions * 25), 0), // Estimate
-          reviews: weeklyTrends.reduce((sum, week) => sum + (week.reviews * 5), 0),
-          streaks: weeklyTrends.reduce((sum, week) => sum + week.streaks, 0),
-          achievements: 0, // TODO: Calculate from achievements in timeframe
-          penalties: 0, // TODO: Calculate from penalties in timeframe
-          adminAdjustments: 0, // TODO: Calculate from admin adjustments in timeframe
-          total: weeklyTrends.reduce((sum, week) => sum + week.xpEarned, 0)
+          submissions: 0,
+          reviews: 0,
+          streaks: 0,
+          achievements: 0,
+          penalties: 0,
+          adminAdjustments: 0,
+          total: 0
         }
         break
       
@@ -53,18 +53,20 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
     // Filter transactions based on timeframe
     let filteredTransactions = transactionHistory
     if (timeframe === 'current_week') {
-      const currentWeek = getCurrentWeekNumber()
       filteredTransactions = transactionHistory.filter(t => {
         const transactionWeek = getWeekNumber(t.createdAt)
-        return transactionWeek === currentWeek
+        return transactionWeek === currentWeekNumber
       })
     } else if (timeframe === 'last_12_weeks') {
-      const currentWeek = getCurrentWeekNumber()
-      const startWeek = currentWeek - 11
+      const startWeek = Math.max(1, currentWeekNumber - 11)
       filteredTransactions = transactionHistory.filter(t => {
         const transactionWeek = getWeekNumber(t.createdAt)
-        return transactionWeek >= startWeek && transactionWeek <= currentWeek
+        return transactionWeek >= startWeek && transactionWeek <= currentWeekNumber
       })
+    }
+
+    if (timeframe === 'last_12_weeks') {
+      xpBreakdown = buildBreakdownFromTransactions(filteredTransactions)
     }
 
     // Group transactions by type for detailed breakdown
@@ -78,7 +80,7 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
 
     // Calculate percentage breakdown
     const total = Math.abs(xpBreakdown.total) || 1 // Avoid division by zero
-    const percentageBreakdown = {
+    let percentageBreakdown = {
       submissions: Math.round((xpBreakdown.submissions / total) * 100),
       reviews: Math.round((xpBreakdown.reviews / total) * 100),
       streaks: Math.round((xpBreakdown.streaks / total) * 100),
@@ -108,6 +110,50 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
 
     const userProfile = userProfileResult.data
     const submissions = submissionStatsResult.data || []
+
+    const startWeekForSubmissions = timeframe === 'current_week'
+      ? currentWeekNumber
+      : timeframe === 'last_12_weeks'
+        ? Math.max(1, currentWeekNumber - 11)
+        : 1
+
+    const submissionWeekCounts = submissions.reduce((acc, submission) => {
+      const createdAt = submission.createdAt ? new Date(submission.createdAt) : null
+      if (!createdAt) return acc
+
+      const weekNumber = getWeekNumber(createdAt)
+
+      if (timeframe === 'current_week' && weekNumber !== currentWeekNumber) {
+        return acc
+      }
+
+      if (
+        timeframe === 'last_12_weeks' &&
+        (weekNumber < startWeekForSubmissions || weekNumber > currentWeekNumber)
+      ) {
+        return acc
+      }
+
+      acc.set(weekNumber, (acc.get(weekNumber) || 0) + 1)
+      return acc
+    }, new Map<number, number>())
+
+    weeklyTrends = weeklyTrends.map(week => ({
+      ...week,
+      submissions: submissionWeekCounts.get(week.week) ?? week.submissions
+    }))
+
+    if (timeframe === 'last_12_weeks') {
+      const recalculatedTotal = Math.abs(xpBreakdown.total) || 1
+      percentageBreakdown = {
+        submissions: Math.round((xpBreakdown.submissions / recalculatedTotal) * 100),
+        reviews: Math.round((xpBreakdown.reviews / recalculatedTotal) * 100),
+        streaks: Math.round((xpBreakdown.streaks / recalculatedTotal) * 100),
+        achievements: Math.round((xpBreakdown.achievements / recalculatedTotal) * 100),
+        penalties: Math.round((Math.abs(xpBreakdown.penalties) / recalculatedTotal) * 100),
+        adminAdjustments: Math.round((Math.abs(xpBreakdown.adminAdjustments) / recalculatedTotal) * 100)
+      }
+    }
 
     // Calculate enhanced metrics
     const totalSubmissions = submissions.length
@@ -424,4 +470,45 @@ function getWeekNumber(date: Date): number {
   const startOfYear = new Date(date.getFullYear(), 0, 1)
   const dayOfYear = Math.floor((date.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000))
   return Math.ceil((dayOfYear + startOfYear.getDay() + 1) / 7)
+}
+
+function buildBreakdownFromTransactions(transactions: any[]) {
+  const breakdown = {
+    submissions: 0,
+    reviews: 0,
+    streaks: 0,
+    achievements: 0,
+    penalties: 0,
+    adminAdjustments: 0,
+    total: 0
+  }
+
+  transactions.forEach(transaction => {
+    const amount = transaction.amount
+
+    switch (transaction.type) {
+      case 'SUBMISSION_REWARD':
+        breakdown.submissions += amount
+        break
+      case 'REVIEW_REWARD':
+        breakdown.reviews += amount
+        break
+      case 'STREAK_BONUS':
+        breakdown.streaks += amount
+        break
+      case 'ACHIEVEMENT_BONUS':
+        breakdown.achievements += amount
+        break
+      case 'PENALTY':
+        breakdown.penalties += amount
+        break
+      case 'ADMIN_ADJUSTMENT':
+        breakdown.adminAdjustments += amount
+        break
+    }
+
+    breakdown.total += amount
+  })
+
+  return breakdown
 }

@@ -151,7 +151,7 @@ export class XpAnalyticsService {
   async getWeeklyTrends(userId: string, weeks: number = 12): Promise<XpTrend[]> {
     try {
       const currentWeek = this.getCurrentWeekNumber()
-      const startWeek = currentWeek - weeks + 1
+      const startWeek = Math.max(1, currentWeek - weeks + 1)
 
       const { data: transactions, error } = await supabase
         .from('XpTransaction')

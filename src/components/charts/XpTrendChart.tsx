@@ -28,6 +28,13 @@ interface XpTrendChartProps {
   title?: string
   showDetails?: boolean
   totalSubmissions?: number
+  totalXpOverride?: number
+  timeframe?: 'current_week' | 'last_12_weeks' | 'all_time'
+  summaryCounts?: {
+    submissions?: number
+    reviews?: number
+    streaks?: number
+  }
 }
 
 const chartConfig = {
@@ -53,11 +60,30 @@ export default function XpTrendChart({
   data,
   title = "Progress Trends",
   showDetails = true,
-  totalSubmissions
+  totalSubmissions,
+  totalXpOverride,
+  timeframe,
+  summaryCounts
 }: XpTrendChartProps) {
   const [activeMetrics, setActiveMetrics] = useState(['xpEarned'])
 
-  if (!data || data.length === 0) {
+  const timeframeKey = timeframe || 'last_12_weeks'
+
+  const displayData = React.useMemo(() => {
+    if (!data || data.length === 0) return []
+
+    switch (timeframeKey) {
+      case 'current_week':
+        return data.slice(-1)
+      case 'last_12_weeks':
+        return data.slice(-12)
+      case 'all_time':
+      default:
+        return data
+    }
+  }, [data, timeframeKey])
+
+  if (!displayData || displayData.length === 0) {
     return (
       <Card className="h-full">
         <CardHeader>
@@ -87,8 +113,8 @@ export default function XpTrendChart({
   }
 
   // Calculate trend
-  const recentWeeks = data.slice(-4)
-  const olderWeeks = data.slice(0, -4)
+  const recentWeeks = displayData.slice(-4)
+  const olderWeeks = displayData.slice(0, -4)
   const recentAvg = recentWeeks.reduce((sum, d) => sum + d.xpEarned, 0) / recentWeeks.length
   const olderAvg = olderWeeks.length > 0
     ? olderWeeks.reduce((sum, d) => sum + d.xpEarned, 0) / olderWeeks.length
@@ -97,6 +123,43 @@ export default function XpTrendChart({
   const trendPercentage = olderAvg > 0 ? ((recentAvg - olderAvg) / olderAvg) * 100 : 0
   const isPositiveTrend = trendPercentage > 5
   const isNegativeTrend = trendPercentage < -5
+
+  const totalXp = typeof totalXpOverride === 'number'
+    ? totalXpOverride
+    : displayData.reduce((sum, d) => sum + d.xpEarned, 0)
+
+  const latestWeek = displayData[displayData.length - 1]
+  const submissionsFromData = displayData.reduce((sum, d) => sum + d.submissions, 0)
+  const reviewsFromData = displayData.reduce((sum, d) => sum + d.reviews, 0)
+  const streaksFromData = displayData.reduce((sum, d) => sum + d.streaks, 0)
+
+  const submissionsValue = summaryCounts?.submissions ?? (() => {
+    switch (timeframeKey) {
+      case 'current_week':
+        return latestWeek?.submissions || 0
+      case 'all_time':
+        return typeof totalSubmissions === 'number' ? totalSubmissions : submissionsFromData
+      case 'last_12_weeks':
+      default:
+        return submissionsFromData
+    }
+  })()
+
+  const reviewsValue = summaryCounts?.reviews ?? (timeframeKey === 'current_week'
+    ? latestWeek?.reviews || 0
+    : reviewsFromData)
+
+  const streaksValue = summaryCounts?.streaks ?? (timeframeKey === 'current_week'
+    ? latestWeek?.streaks || 0
+    : streaksFromData)
+
+  const periodsConsidered = timeframeKey === 'current_week'
+    ? 1
+    : timeframeKey === 'last_12_weeks'
+      ? displayData.length
+      : displayData.length
+
+  const averageXp = periodsConsidered > 0 ? Math.round(totalXp / periodsConsidered) : 0
 
   // Toggle metric visibility
   const toggleMetric = (metric: string) => {
@@ -161,7 +224,7 @@ export default function XpTrendChart({
           <ChartContainer config={chartConfig} className="min-h-[300px] w-full">
             <AreaChart
               accessibilityLayer
-              data={data}
+              data={displayData}
               margin={{
                 left: 12,
                 right: 12,
@@ -257,25 +320,25 @@ export default function XpTrendChart({
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="text-center p-3 bg-blue-50 rounded-lg">
                   <div className="text-lg font-bold text-blue-600">
-                    {data.reduce((sum, d) => sum + d.xpEarned, 0)}
+                    {totalXp}
                   </div>
                   <div className="text-xs text-blue-600">Total XP</div>
                 </div>
                 <div className="text-center p-3 bg-green-50 rounded-lg">
                   <div className="text-lg font-bold text-green-600">
-                    {totalSubmissions || data.reduce((sum, d) => sum + d.submissions, 0)}
+                    {submissionsValue}
                   </div>
                   <div className="text-xs text-green-600">Submissions</div>
                 </div>
                 <div className="text-center p-3 bg-purple-50 rounded-lg">
                   <div className="text-lg font-bold text-purple-600">
-                    {data.reduce((sum, d) => sum + d.reviews, 0)}
+                    {reviewsValue}
                   </div>
                   <div className="text-xs text-purple-600">Reviews</div>
                 </div>
                 <div className="text-center p-3 bg-orange-50 rounded-lg">
                   <div className="text-lg font-bold text-orange-600">
-                    {Math.round(data.reduce((sum, d) => sum + d.xpEarned, 0) / data.length)}
+                    {averageXp}
                   </div>
                   <div className="text-xs text-orange-600">Avg/Week</div>
                 </div>
