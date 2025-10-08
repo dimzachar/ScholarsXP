@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { reviewerPoolService } from '@/lib/reviewer-pool'
 import { prisma } from '@/lib/prisma'
+import { notifyReviewAssigned } from '@/lib/notifications'
 
 export const POST = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
@@ -30,7 +31,7 @@ export const POST = withPermission('admin_access')(async (request: Authenticated
 
     const { data: submission, error: submissionError } = await supabase
       .from('Submission')
-      .select('userId, status')
+      .select('userId, status, url')
       .eq('id', submissionId)
       .single()
 
@@ -133,7 +134,28 @@ export const POST = withPermission('admin_access')(async (request: Authenticated
       console.error('Failed to update submission:', submissionUpdateError)
     }
 
-    // TODO: Send notifications to newly assigned reviewers
+    // Send notifications to newly assigned reviewers
+    if (createdAssignments && submission.url) {
+      const notificationResults = await Promise.allSettled(
+        createdAssignments.map(async assignment => {
+          await notifyReviewAssigned(
+            assignment.reviewerId,
+            submissionId,
+            submission.url
+          )
+        })
+      )
+
+      notificationResults.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          const assignment = createdAssignments[index]
+          console.error(
+            `Failed to notify reviewer ${assignment.reviewerId} about assignment ${assignment.id}:`,
+            result.reason
+          )
+        }
+      })
+    }
 
     // Best-effort admin action log for manual assignments
     try {

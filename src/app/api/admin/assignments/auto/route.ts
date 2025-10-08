@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { createServiceClient } from '@/lib/supabase-server'
 import { reviewerPoolService } from '@/lib/reviewer-pool'
+import { notifyReviewAssigned } from '@/lib/notifications'
 
 export const POST = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
@@ -20,7 +21,7 @@ export const POST = withPermission('admin_access')(async (request: Authenticated
 
     const { data: submission, error: submissionError } = await supabase
       .from('Submission')
-      .select('userId, status, taskTypes')
+      .select('userId, status, taskTypes, url')
       .eq('id', submissionId)
       .single()
 
@@ -72,8 +73,28 @@ export const POST = withPermission('admin_access')(async (request: Authenticated
       )
     }
 
-    // TODO: Send notifications to assigned reviewers
-    // This would integrate with the notification system
+    const notificationResults = await Promise.allSettled(
+      assignmentResult.assignedReviewers.map(reviewer =>
+        notifyReviewAssigned(reviewer.id, submissionId, submission.url)
+      )
+    )
+
+    const notificationWarnings = notificationResults.reduce<string[]>((warnings, result, index) => {
+      if (result.status === 'rejected') {
+        const reviewer = assignmentResult.assignedReviewers[index]
+        console.error(
+          `Failed to notify reviewer ${reviewer.id} about assignment to submission ${submissionId}:`,
+          result.reason
+        )
+        warnings.push(`Failed to notify reviewer ${reviewer.username || reviewer.email}`)
+      }
+      return warnings
+    }, [])
+
+    const combinedWarnings = [
+      ...assignmentResult.warnings,
+      ...notificationWarnings
+    ]
 
     return NextResponse.json({
       message: 'Reviewers assigned successfully',
@@ -83,7 +104,7 @@ export const POST = withPermission('admin_access')(async (request: Authenticated
         totalXp: reviewer.totalXp,
         activeAssignments: reviewer.activeAssignments
       })),
-      warnings: assignmentResult.warnings
+      warnings: combinedWarnings
     })
 
   } catch (error) {
