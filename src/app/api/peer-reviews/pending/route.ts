@@ -28,6 +28,15 @@ export const GET = withPermission('review_content')(async (request: Authenticate
           id,
           username,
           email
+        ),
+        reviewAssignments:ReviewAssignment(
+          id,
+          status,
+          reviewer:User(
+            id,
+            username,
+            email
+          )
         )
       `)
       .in('status', ['PENDING', 'AI_REVIEWED', 'UNDER_PEER_REVIEW'])

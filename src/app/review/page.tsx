@@ -34,6 +34,11 @@ interface Submission {
     username: string
   }
   createdAt: string
+  assignedReviewers?: Array<{
+    id: string
+    username?: string | null
+    email?: string | null
+  }>
 }
 
 interface PendingReview {
@@ -107,6 +112,15 @@ export default function ReviewPage() {
           originalityScore?: number | null
           user?: { username?: string }
           createdAt: string
+          reviewAssignments?: Array<{
+            id: string
+            status?: string
+            reviewer?: {
+              id: string
+              username?: string | null
+              email?: string | null
+            }
+          }>
         }
         const list = (json.data?.submissions || json.submissions || []) as ApiSubmission[]
         const mapped: Submission[] = list.map((s: ApiSubmission) => ({
@@ -117,7 +131,15 @@ export default function ReviewPage() {
           aiXp: s.aiXp || 0,
           originalityScore: s.originalityScore ?? undefined,
           user: { username: s.user?.username || 'Unknown' },
-          createdAt: s.createdAt
+          createdAt: s.createdAt,
+          assignedReviewers: (s.reviewAssignments || [])
+            .map((assignment) => assignment.reviewer)
+            .filter((reviewer): reviewer is NonNullable<typeof reviewer> => Boolean(reviewer))
+            .map((reviewer) => ({
+              id: reviewer.id,
+              username: reviewer.username || reviewer.email || 'Unknown',
+              email: reviewer.email || null
+            }))
         }))
         setAdminPendingSubmissions(mapped)
       } catch (e) {
@@ -130,7 +152,16 @@ export default function ReviewPage() {
 
   const filteredAdminSubmissions = adminPendingSubmissions.filter((s) => {
     const matchesSearch = adminSearch
-      ? [s.url, s.platform, s.user?.username].filter(Boolean).join(' ').toLowerCase().includes(adminSearch.toLowerCase())
+      ? [
+          s.url,
+          s.platform,
+          s.user?.username,
+          ...(s.assignedReviewers || []).map((reviewer) => reviewer?.username || reviewer?.email)
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(adminSearch.toLowerCase())
       : true
     const matchesPlatform = adminPlatformFilter === 'all' || s.platform?.toLowerCase() === adminPlatformFilter.toLowerCase()
     return matchesSearch && matchesPlatform

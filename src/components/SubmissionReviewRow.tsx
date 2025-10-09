@@ -3,9 +3,19 @@
 import { useMemo } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ChevronDown, ChevronRight, Clock, ExternalLink, FileText, Twitter } from "lucide-react"
+import {
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  ExternalLink,
+  FileText,
+  Twitter,
+  Users
+} from "lucide-react"
 import PeerReviewCard from "@/components/PeerReviewCard"
 import { cn } from "@/lib/utils"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface Submission {
   id: string
@@ -18,6 +28,11 @@ interface Submission {
     username: string
   }
   createdAt: string
+  assignedReviewers?: Array<{
+    id: string
+    username?: string | null
+    email?: string | null
+  }>
 }
 
 interface ReviewCriteria {
@@ -61,6 +76,41 @@ function PlatformIcon({ platform }: { platform: string }) {
   return <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
 }
 
+const shortenString = (value: string, max = 48) =>
+  value.length > max ? `${value.slice(0, max - 1)}…` : value
+
+function formatDisplayUrl(rawUrl: string) {
+  if (!rawUrl) return ""
+
+  const ensureProtocol = (value: string) =>
+    value.startsWith("http://") || value.startsWith("https://") ? value : `https://${value}`
+
+  try {
+    const parsed = new URL(ensureProtocol(rawUrl))
+    const path = parsed.pathname && parsed.pathname !== "/" ? parsed.pathname.replace(/\/$/, "") : ""
+    const suffix = parsed.search || parsed.hash ? "…" : ""
+    const combined = `${parsed.hostname}${path}${suffix}`
+    return shortenString(combined)
+  } catch (error) {
+    return shortenString(rawUrl)
+  }
+}
+
+const getInitials = (value: string) => {
+  const segments = value
+    .trim()
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+  if (segments.length === 0) return "?"
+  return segments
+    .map((segment) => segment.charAt(0).toUpperCase())
+    .join("")
+}
+
+const reviewerPillClass =
+  "inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-muted/20 px-2.5 py-1 text-[12px] font-medium text-foreground/80 shadow-sm"
+
 export default function SubmissionReviewRow({
   submission,
   assignment,
@@ -79,6 +129,26 @@ export default function SubmissionReviewRow({
     }
     return null
   }, [assignment])
+
+  const displayUrl = useMemo(() => formatDisplayUrl(submission.url), [submission.url])
+  const assignedReviewers = useMemo(
+    () =>
+      (submission.assignedReviewers || [])
+        .slice(0, 3)
+        .map((reviewer, index) => {
+          const displayName = (reviewer?.username || reviewer?.email || "Unknown reviewer").trim()
+          const shortLabel = shortenString(displayName, 14)
+          const initials = getInitials(displayName)
+
+          return {
+            id: reviewer?.id || `${displayName}-${index}`,
+            displayName,
+            shortLabel,
+            initials
+          }
+        }),
+    [submission.assignedReviewers]
+  )
 
   return (
     <Card className="border-0 shadow-sm">
@@ -106,13 +176,77 @@ export default function SubmissionReviewRow({
                 <Badge variant="secondary">+{submission.taskTypes.length - 3}</Badge>
               )}
             </div>
-            <span className="truncate text-sm text-primary">
-              {submission.url}
-            </span>
+            <div className="min-w-0 flex flex-col">
+              <span
+                className="truncate text-sm text-primary max-w-[220px] sm:max-w-[280px]"
+                title={submission.url}
+              >
+                {displayUrl}
+              </span>
+              {assignedReviewers.length > 0 && (
+                <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground sm:hidden">
+                  <Users className="h-3 w-3 text-muted-foreground/80" aria-hidden="true" />
+                  <span className="uppercase tracking-wide text-[10px] font-semibold text-muted-foreground/80">
+                    Reviewers
+                  </span>
+                  {assignedReviewers.map((reviewer) => (
+                    <span
+                      key={reviewer.id}
+                      className="rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground/90"
+                      title={reviewer.displayName}
+                    >
+                      {reviewer.shortLabel}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
+          {(readOnly || assignedReviewers.length > 0) && (
+            <TooltipProvider>
+              <div className="hidden md:flex min-w-[240px] max-w-[360px] items-center justify-end gap-3 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1 text-muted-foreground/70 whitespace-nowrap">
+                  <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em]">
+                    Reviewers
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {assignedReviewers.length > 0 ? (
+                    assignedReviewers.map((reviewer) => (
+                      <Tooltip key={reviewer.id}>
+                        <TooltipTrigger asChild>
+                          <span className={reviewerPillClass}>
+                            <Avatar className="h-6 w-6 border border-border/60 bg-background">
+                              <AvatarFallback className="text-[11px] font-semibold text-foreground/80">
+                                {reviewer.initials}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="truncate max-w-[120px]" aria-hidden="true">
+                              {reviewer.shortLabel}
+                            </span>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" align="start">
+                          {reviewer.displayName}
+                        </TooltipContent>
+                      </Tooltip>
+                    ))
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className="px-3 py-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground/80 border-dashed"
+                    >
+                      Unassigned
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </TooltipProvider>
+          )}
           <div className="hidden md:flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="truncate max-w-[160px]">{submission.user.username}</span>
-            <span>·</span>
+            <span className="truncate max-w-[140px]">{submission.user.username}</span>
+            <span>•</span>
             <span>{new Date(submission.createdAt).toLocaleDateString()}</span>
             {deadlineLabel && (
               <span className={cn(
