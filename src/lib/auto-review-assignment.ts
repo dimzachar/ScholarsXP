@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { reviewerPoolService } from '@/lib/reviewer-pool'
 import type { AssignmentResult, ReviewerPoolOptions } from '@/lib/reviewer-pool'
+import { notifyReviewAssigned } from '@/lib/notifications'
 
 export interface EnsureReviewAssignmentsResult {
   success: boolean
@@ -61,6 +62,40 @@ export async function ensureReviewAssignments(
       console.log(`[PeerReview] Auto-assigned ${assignmentResult.assignedReviewers.length} reviewer(s) to submission ${submissionId}`)
       if (assignmentResult.warnings.length > 0) {
         console.warn(`[PeerReview] Assignment warnings for ${submissionId}: ${assignmentResult.warnings.join('; ')}`)
+      }
+
+      if (assignmentResult.assignedReviewers.length > 0) {
+        let submissionUrl: string | null = null
+
+        try {
+          const submission = await prisma.submission.findUnique({
+            where: { id: submissionId },
+            select: { url: true }
+          })
+
+          submissionUrl = submission?.url ?? null
+        } catch (error) {
+          console.error(`[PeerReview] Failed to fetch submission URL for ${submissionId} notifications:`, error)
+        }
+
+        const notificationResults = await Promise.allSettled(
+          assignmentResult.assignedReviewers.map(reviewer =>
+            notifyReviewAssigned(reviewer.id, submissionId, submissionUrl)
+          )
+        )
+
+        notificationResults.forEach((result, index) => {
+          if (result.status === 'rejected') {
+            const reviewer = assignmentResult.assignedReviewers[index]
+            console.error(
+              `[PeerReview] Failed to notify reviewer ${reviewer.id} about assignment to submission ${submissionId}:`,
+              result.reason
+            )
+            assignmentResult.warnings.push(
+              `Failed to notify reviewer ${reviewer.username || reviewer.email}`
+            )
+          }
+        })
       }
     } else {
       const errorMessage = assignmentResult.errors.join('; ') || 'Unknown error'

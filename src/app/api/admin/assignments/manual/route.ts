@@ -135,13 +135,15 @@ export const POST = withPermission('admin_access')(async (request: Authenticated
     }
 
     // Send notifications to newly assigned reviewers
-    if (createdAssignments && submission.url) {
+    if (createdAssignments && createdAssignments.length > 0) {
+      const submissionUrl = submission.url ?? null
+
       const notificationResults = await Promise.allSettled(
         createdAssignments.map(async assignment => {
           await notifyReviewAssigned(
             assignment.reviewerId,
             submissionId,
-            submission.url
+            submissionUrl
           )
         })
       )

@@ -249,13 +249,21 @@ export async function notifyXPAwarded(userId: string, xp: number, submissionUrl:
   )
 }
 
-export async function notifyReviewAssigned(userId: string, submissionId: string, submissionUrl: string) {
+export async function notifyReviewAssigned(
+  userId: string,
+  submissionId: string,
+  submissionUrl?: string | null
+) {
+  const data = submissionUrl
+    ? { submissionId, submissionUrl }
+    : { submissionId }
+
   await createNotification(
     userId,
     NotificationType.REVIEW_ASSIGNED,
     '📝 New review assignment',
     'You have been assigned a new submission to review. Complete it within 72 hours to earn +10 XP.',
-    { submissionId, submissionUrl }
+    data
   )
 }
 

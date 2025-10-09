@@ -73,9 +73,11 @@ export const POST = withPermission('admin_access')(async (request: Authenticated
       )
     }
 
+    const submissionUrl = submission.url ?? null
+
     const notificationResults = await Promise.allSettled(
       assignmentResult.assignedReviewers.map(reviewer =>
-        notifyReviewAssigned(reviewer.id, submissionId, submission.url)
+        notifyReviewAssigned(reviewer.id, submissionId, submissionUrl)
       )
     )
 
