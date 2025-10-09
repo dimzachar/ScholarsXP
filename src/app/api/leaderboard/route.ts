@@ -7,7 +7,7 @@ import { withErrorHandling, createSuccessResponse } from '@/lib/api-middleware'
 import { multiLayerCache } from '@/lib/cache/enhanced-cache'
 import { withPublicOptimization } from '@/middleware/api-optimization'
 
-const CACHE_VERSION = 'v2'
+const CACHE_VERSION = 'v3'
 
 export const GET = withPublicOptimization(withErrorHandling(async (request: NextRequest) => {
   const { searchParams } = new URL(request.url)
@@ -41,9 +41,10 @@ export const GET = withPublicOptimization(withErrorHandling(async (request: Next
     // Vercel will automatically cache this at the edge
     return NextResponse.json({ success: true, data }, {
       headers: {
-        'Cache-Control': 'public, max-age=300, stale-while-revalidate=600',
+        'Cache-Control': 'no-store, max-age=0, s-maxage=0',
         'X-Cache-Layer': 'Multi-Layer',
-        'X-Cache-Key': cacheKey
+        'X-Cache-Key': cacheKey,
+        'X-Cache-Version': CACHE_VERSION
       }
     })
   } catch (error) {
