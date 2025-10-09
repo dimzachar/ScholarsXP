@@ -43,6 +43,7 @@ interface PendingReview {
     deadline: string
     timeRemaining?: { hours: number; minutes: number }
     isOverdue?: boolean
+    weekendExtension?: boolean
   }
 }
 
@@ -52,6 +53,7 @@ interface AssignmentResponse {
     deadline: string
     timeRemaining?: { hours: number; minutes: number }
     isOverdue?: boolean
+    weekendExtension?: boolean
     submission?: Submission
   }>
 }
@@ -150,7 +152,8 @@ export default function ReviewPage() {
               id: assignment.id,
               deadline: assignment.deadline,
               timeRemaining: assignment.timeRemaining,
-              isOverdue: assignment.isOverdue
+              isOverdue: assignment.isOverdue,
+              weekendExtension: assignment.weekendExtension
             }
           }
         })

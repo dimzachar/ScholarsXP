@@ -85,6 +85,7 @@ interface PeerReviewCardProps {
     deadline: string
     timeRemaining?: { hours: number; minutes: number }
     isOverdue?: boolean
+    weekendExtension?: boolean
   }
   readOnly?: boolean
   onReviewSubmit: (
@@ -256,7 +257,7 @@ export default function PeerReviewCard({
         color: isUrgent ? 'text-warning' : 'text-info',
         bg: isUrgent ? 'bg-warning/10 border-warning/20' : 'bg-info/10 border-info/20',
         icon: <Clock className="h-4 w-4" aria-hidden="true" />,
-        text: `${hours}h ${minutes}m remaining`
+        text: `${hours}h ${minutes}m remaining${assignment.weekendExtension ? ' (due to weekend)' : ''}`
       }
     }
     return null

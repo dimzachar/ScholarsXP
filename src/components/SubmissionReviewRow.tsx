@@ -32,6 +32,7 @@ interface AssignmentMeta {
   deadline: string
   timeRemaining?: { hours: number; minutes: number }
   isOverdue?: boolean
+  weekendExtension?: boolean
 }
 
 interface ReviewSubmissionPayload {
@@ -73,7 +74,8 @@ export default function SubmissionReviewRow({
     if (assignment.isOverdue) return { text: "Overdue", tone: "destructive" as const }
     if (assignment.timeRemaining) {
       const { hours, minutes } = assignment.timeRemaining
-      return { text: `${hours}h ${minutes}m left`, tone: hours < 6 ? ("warning" as const) : ("secondary" as const) }
+      const weekendSuffix = assignment.weekendExtension ? " (due to weekend)" : ""
+      return { text: `${hours}h ${minutes}m left${weekendSuffix}`, tone: hours < 6 ? ("warning" as const) : ("secondary" as const) }
     }
     return null
   }, [assignment])

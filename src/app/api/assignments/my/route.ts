@@ -90,11 +90,12 @@ export const GET = withPermission('review_content')(
     const enrichedAssignments = assignments?.map(assignment => {
       let timeRemaining = null
       let isOverdue = false
+      let weekendExtension = false
 
       if (['PENDING', 'IN_PROGRESS'].includes(assignment.status)) {
         const deadline = new Date(assignment.deadline)
         const timeDiff = deadline.getTime() - now.getTime()
-        
+
         if (timeDiff > 0) {
           const hours = Math.floor(timeDiff / (1000 * 60 * 60))
           const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60))
@@ -102,12 +103,34 @@ export const GET = withPermission('review_content')(
         } else {
           isOverdue = true
         }
+
+        if (assignment.assignedAt) {
+          const assignedAt = new Date(assignment.assignedAt)
+          const baseDeadline = new Date(assignedAt)
+          baseDeadline.setHours(baseDeadline.getHours() + 72)
+
+          const weekendAdjusted = new Date(baseDeadline)
+          const baseDay = weekendAdjusted.getDay()
+
+          if (baseDay === 0) {
+            weekendAdjusted.setDate(weekendAdjusted.getDate() + 1)
+          } else if (baseDay === 6) {
+            weekendAdjusted.setDate(weekendAdjusted.getDate() + 2)
+          }
+
+          if (weekendAdjusted.getTime() !== baseDeadline.getTime()) {
+            const actualDeadline = deadline.getTime()
+            const adjustedTime = weekendAdjusted.getTime()
+            weekendExtension = Math.abs(actualDeadline - adjustedTime) <= 5 * 60 * 1000
+          }
+        }
       }
 
       return {
         ...assignment,
         timeRemaining,
         isOverdue,
+        weekendExtension,
         submission: {
           ...assignment.submission,
           user: {
