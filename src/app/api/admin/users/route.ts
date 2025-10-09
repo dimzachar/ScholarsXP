@@ -187,6 +187,7 @@ async function fetchUserMetricsData(
         streakWeeks: true,
         createdAt: true,
         lastActiveAt: true,
+        preferences: true,
         discordHandle: true,
         _count: {
           select: {
@@ -251,6 +252,56 @@ async function fetchUserMetricsData(
     legacyCountsGrouped.map(r => [r.discordHandle as string, r._count._all])
   )
 
+  const parseReviewerAvailability = (preferences: unknown) => {
+    if (!preferences) {
+      return {
+        reviewerOptOut: false,
+        reviewerOptOutUntil: null as string | null,
+        reviewerOptOutActive: false
+      }
+    }
+
+    let parsed: Record<string, unknown>
+
+    if (typeof preferences === 'string') {
+      try {
+        parsed = JSON.parse(preferences)
+      } catch (error) {
+        console.warn('Failed to parse user preferences JSON:', error)
+        return {
+          reviewerOptOut: false,
+          reviewerOptOutUntil: null,
+          reviewerOptOutActive: false
+        }
+      }
+    } else {
+      parsed = preferences as Record<string, unknown>
+    }
+
+    const optOutFlag = parsed.reviewerOptOut === true
+
+    let optOutUntilIso: string | null = null
+    let optOutUntilFuture = false
+
+    const untilValue = parsed.reviewerOptOutUntil
+    if (untilValue instanceof Date) {
+      optOutUntilIso = untilValue.toISOString()
+      optOutUntilFuture = untilValue.getTime() > Date.now()
+    } else if (typeof untilValue === 'string' && untilValue) {
+      const untilDate = new Date(untilValue)
+      if (!Number.isNaN(untilDate.getTime())) {
+        optOutUntilIso = untilDate.toISOString()
+        optOutUntilFuture = untilDate.getTime() > Date.now()
+      }
+    }
+
+    return {
+      reviewerOptOut: optOutFlag,
+      reviewerOptOutUntil: optOutUntilIso,
+      reviewerOptOutActive: optOutFlag || optOutUntilFuture
+    }
+  }
+
   // Calculate additional metrics for each user - Optimized in-memory processing
   const usersWithMetrics = users.map((user) => {
     // Calculate weekly XP from included transactions
@@ -288,6 +339,8 @@ async function fetchUserMetricsData(
       }
     }
 
+    const reviewerAvailability = parseReviewerAvailability(user.preferences)
+
     return {
       id: user.id,
       username: user.username,
@@ -298,6 +351,9 @@ async function fetchUserMetricsData(
       streakWeeks: user.streakWeeks || 0,
       createdAt: user.createdAt,
       lastActiveAt: user.lastActiveAt,
+      reviewerOptOut: reviewerAvailability.reviewerOptOut,
+      reviewerOptOutUntil: reviewerAvailability.reviewerOptOutUntil,
+      reviewerOptOutActive: reviewerAvailability.reviewerOptOutActive,
       metrics: {
         weeklyXp,
         submissionSuccessRate: Math.round(submissionSuccessRate),
@@ -489,6 +545,78 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
           })
         }
         break
+
+      case 'setReviewAvailability': {
+        if (!data || typeof data !== 'object') {
+          return NextResponse.json(
+            { message: 'Data payload is required for setReviewAvailability action' },
+            { status: 400 }
+          )
+        }
+
+        let updatedCount = 0
+
+        for (const userId of userIds) {
+          const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { preferences: true }
+          })
+
+          if (!user) {
+            continue
+          }
+
+          const currentPreferences =
+            user.preferences && typeof user.preferences === 'object'
+              ? { ...(user.preferences as Record<string, unknown>) }
+              : {}
+
+          if (data.reviewerOptOut === true) {
+            currentPreferences.reviewerOptOut = true
+            delete currentPreferences.reviewerOptOutUntil
+          } else if (data.reviewerOptOut === false) {
+            delete currentPreferences.reviewerOptOut
+          }
+
+          if (typeof data.reviewerOptOutUntil === 'string' && data.reviewerOptOutUntil) {
+            currentPreferences.reviewerOptOutUntil = data.reviewerOptOutUntil
+            if (data.reviewerOptOut !== true) {
+              delete currentPreferences.reviewerOptOut
+            }
+          } else if (data.reviewerOptOutUntil === null) {
+            delete currentPreferences.reviewerOptOutUntil
+          }
+
+          await prisma.user.update({
+            where: { id: userId },
+            data: {
+              preferences: currentPreferences,
+              updatedAt: new Date()
+            }
+          })
+
+          await prisma.adminAction.create({
+            data: {
+              adminId: request.user.id,
+              action: 'SYSTEM_CONFIG',
+              targetType: 'user',
+              targetId: userId,
+              details: {
+                subAction: 'REVIEW_AVAILABILITY_UPDATE',
+                reviewerOptOut: data.reviewerOptOut ?? null,
+                reviewerOptOutUntil: data.reviewerOptOutUntil ?? null,
+                mode: data.mode || null,
+                timestamp: new Date().toISOString()
+              }
+            }
+          })
+
+          updatedCount++
+        }
+
+        result = { count: updatedCount }
+        break
+      }
 
       default:
         return NextResponse.json(

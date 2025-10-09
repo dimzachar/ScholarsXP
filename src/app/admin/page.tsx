@@ -26,7 +26,8 @@ import {
   Zap,
   Calendar,
   Database,
-  Activity
+  Activity,
+  PauseCircle
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import AutomationStatus from '@/components/Admin/AutomationStatus'
@@ -707,6 +708,14 @@ export default function AdminDashboardPage() {
                   >
                     <Users className="h-4 w-4" />
                     Open User Management
+                  </Button>
+                  <Button
+                    onClick={() => router.push('/admin/reviewer-availability')}
+                    className="flex items-center gap-2"
+                    variant="outline"
+                  >
+                    <PauseCircle className="h-4 w-4" />
+                    Manage Reviewer Availability
                   </Button>
                   <div className="text-sm text-muted-foreground space-y-1">
                     <p>• View and search all users</p>

@@ -72,7 +72,8 @@ export class ReviewerPoolService {
           role,
           totalXp,
           missedReviews,
-          lastActiveAt
+          lastActiveAt,
+          preferences
         `)
         .in('role', this.REVIEWER_ROLES)
         .not('id', 'in', `(${excludedIds.map(id => `"${id}"`).join(',')})`)
@@ -107,6 +108,7 @@ export class ReviewerPoolService {
 
       // Filter and transform users to reviewer candidates
       const candidates: ReviewerCandidate[] = users
+        .filter(user => !this.isReviewerOptedOut(user.preferences))
         .map(user => ({
           id: user.id,
           username: user.username || user.email.split('@')[0],
@@ -336,12 +338,16 @@ export class ReviewerPoolService {
     // Get reviewer details
     const { data: reviewer } = await supabase
       .from('User')
-      .select('role, totalXp, missedReviews')
+      .select('role, totalXp, missedReviews, preferences')
       .eq('id', reviewerId)
       .single()
 
     if (!reviewer) {
       return { canAssign: false, reason: 'Reviewer not found' }
+    }
+
+    if (this.isReviewerOptedOut(reviewer.preferences)) {
+      return { canAssign: false, reason: 'Reviewer is temporarily unavailable' }
     }
 
     // Check role
@@ -368,6 +374,43 @@ export class ReviewerPoolService {
     }
 
     return { canAssign: true }
+  }
+
+  private isReviewerOptedOut(preferences: unknown): boolean {
+    if (!preferences) {
+      return false
+    }
+
+    let parsed: Record<string, unknown>
+
+    if (typeof preferences === 'string') {
+      try {
+        parsed = JSON.parse(preferences)
+      } catch (error) {
+        console.warn('Failed to parse reviewer preferences JSON:', error)
+        return false
+      }
+    } else {
+      parsed = preferences as Record<string, unknown>
+    }
+
+    const now = Date.now()
+
+    const optOutFlag = parsed.reviewerOptOut === true
+
+    const optOutUntilRaw = parsed.reviewerOptOutUntil
+    if (optOutUntilRaw instanceof Date) {
+      if (optOutUntilRaw.getTime() > now) {
+        return true
+      }
+    } else if (typeof optOutUntilRaw === 'string') {
+      const optOutUntil = new Date(optOutUntilRaw)
+      if (!Number.isNaN(optOutUntil.getTime()) && optOutUntil.getTime() > now) {
+        return true
+      }
+    }
+
+    return optOutFlag
   }
 }
 
