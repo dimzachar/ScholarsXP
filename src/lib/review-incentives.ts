@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { xpAnalyticsService } from './xp-analytics'
 import { achievementEngine } from './achievement-engine'
+import { prisma } from './prisma'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -126,16 +127,14 @@ export class ReviewIncentivesService {
       )
 
       // Update missed reviews count
-      const { error } = await supabase
-        .from('User')
-        .update({
-          missedReviews: supabase.sql`"missedReviews" + 1`
-        })
-        .eq('id', reviewerId)
-
-      if (error) {
-        console.error('Error updating missed reviews count:', error)
-      }
+      await prisma.user.update({
+        where: { id: reviewerId },
+        data: {
+          missedReviews: {
+            increment: 1
+          }
+        }
+      })
 
       // Check if reviewer should be temporarily suspended
       await this.checkReviewerSuspension(reviewerId)
@@ -341,18 +340,17 @@ export class ReviewIncentivesService {
     rewardDetails: ReviewReward
   ): Promise<void> {
     // Update user XP
-    const { error } = await supabase
-      .from('User')
-      .update({
-        totalXp: supabase.sql`"totalXp" + ${amount}`,
-        currentWeekXp: supabase.sql`"currentWeekXp" + ${amount}`
-      })
-      .eq('id', reviewerId)
-
-    if (error) {
-      console.error('Error updating user XP:', error)
-      throw error
-    }
+    await prisma.user.update({
+      where: { id: reviewerId },
+      data: {
+        totalXp: {
+          increment: amount
+        },
+        currentWeekXp: {
+          increment: amount
+        }
+      }
+    })
 
     // Record XP transaction after successful update
     await xpAnalyticsService.recordXpTransaction(
@@ -379,19 +377,30 @@ export class ReviewIncentivesService {
       submissionId
     )
 
-    // Update user XP (ensure it doesn't go below 0)
-    const { error } = await supabase
-      .from('User')
-      .update({
-        totalXp: supabase.sql`GREATEST(0, "totalXp" + ${penalty})`,
-        currentWeekXp: supabase.sql`GREATEST(0, "currentWeekXp" + ${penalty})`
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id: reviewerId },
+        select: {
+          totalXp: true,
+          currentWeekXp: true
+        }
       })
-      .eq('id', reviewerId)
 
-    if (error) {
-      console.error('Error applying XP penalty:', error)
-      throw error
-    }
+      if (!user) {
+        return
+      }
+
+      const nextTotal = Math.max(0, (user.totalXp ?? 0) + penalty)
+      const nextWeek = Math.max(0, (user.currentWeekXp ?? 0) + penalty)
+
+      await tx.user.update({
+        where: { id: reviewerId },
+        data: {
+          totalXp: nextTotal,
+          currentWeekXp: nextWeek
+        }
+      })
+    })
   }
 
   private async checkReviewerSuspension(reviewerId: string): Promise<void> {
