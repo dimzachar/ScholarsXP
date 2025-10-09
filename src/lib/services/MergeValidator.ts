@@ -91,7 +91,10 @@ export class MergeValidator {
       }
 
       // Check for potential legacy account
-      const hasLegacyAccount = await this.checkLegacyAccountExists(request.discordHandle)
+      const hasLegacyAccount = await this.checkLegacyAccountExists(
+        request.discordHandle,
+        request.fallbackUsername
+      )
       if (!hasLegacyAccount) {
         warnings.push('No legacy account found with provided Discord handle')
       }
@@ -325,17 +328,39 @@ export class MergeValidator {
   /**
    * Checks if legacy account exists for Discord handle
    */
-  private async checkLegacyAccountExists(discordHandle: string): Promise<boolean> {
+  private async checkLegacyAccountExists(discordHandle: string, fallbackUsername?: string): Promise<boolean> {
     try {
-      const baseHandle = discordHandle.split('#')[0]
-      
+      const emailLocalParts = new Set<string>()
+
+      const addHandle = (value?: string | null) => {
+        if (!value) return
+        const trimmed = value.trim()
+        if (!trimmed) return
+
+        const normalized = trimmed.replace(/^@/, '').toLowerCase()
+        const base = normalized.split('#')[0]
+
+        if (base) {
+          emailLocalParts.add(base)
+        }
+      }
+
+      addHandle(discordHandle)
+      addHandle(fallbackUsername)
+
+      if (emailLocalParts.size === 0) {
+        return false
+      }
+
+      const candidateEmails = Array.from(emailLocalParts).map(localPart => `${localPart}@legacy.import`)
+
       const { data, error } = await this.supabase
         .from('User')
         .select('id')
-        .or(`and(discordHandle.eq.${discordHandle},email.eq.${discordHandle}@legacy.import),and(discordHandle.eq.${baseHandle},email.eq.${baseHandle}@legacy.import)`)
+        .in('email', candidateEmails)
         .limit(1)
 
-      return !error && data && data.length > 0
+      return !error && !!data && data.length > 0
     } catch (error) {
       return false
     }

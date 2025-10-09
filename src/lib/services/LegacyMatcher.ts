@@ -28,7 +28,7 @@ export interface LegacyAccount {
 
 export interface MatchResult {
   account: LegacyAccount | null
-  matchMethod: 'DISCORD_ID' | 'EXACT_HANDLE' | 'BASE_HANDLE' | 'USERNAME_FALLBACK' | 'NONE'
+  matchMethod: 'DISCORD_ID' | 'EXACT_HANDLE' | 'EMAIL_VARIATION' | 'BASE_HANDLE' | 'USERNAME_FALLBACK' | 'NONE'
   confidence: 'HIGH' | 'MEDIUM' | 'LOW'
   warnings: string[]
 }
@@ -79,7 +79,26 @@ export class LegacyMatcher {
       }
       warnings.push('No legacy account found with exact Discord handle')
 
-      // Priority 3: Base handle (without discriminator)
+      // Priority 3: Legacy email local-part variation (handles renamed handles)
+      const emailVariationMatch = await this.findByEmailVariation(
+        criteria.discordHandle,
+        criteria.fallbackUsername
+      )
+      if (emailVariationMatch) {
+        const variationWarning = emailVariationMatch.distance === 0
+          ? `Matched legacy email local-part "${emailVariationMatch.matchedLocalPart}" using reference "${emailVariationMatch.referenceHandle}" (exact)`
+          : `Matched legacy email local-part "${emailVariationMatch.matchedLocalPart}" using reference "${emailVariationMatch.referenceHandle}" with distance ${emailVariationMatch.distance}`
+        warnings.push(variationWarning)
+        return {
+          account: emailVariationMatch.account,
+          matchMethod: 'EMAIL_VARIATION',
+          confidence: emailVariationMatch.distance === 0 ? 'HIGH' : 'MEDIUM',
+          warnings
+        }
+      }
+      warnings.push('No legacy account found with email variation for Discord handle')
+
+      // Priority 4: Base handle (without discriminator)
       const baseHandle = this.extractBaseHandle(criteria.discordHandle)
       if (baseHandle !== criteria.discordHandle) {
         const baseMatch = await this.findByBaseHandle(baseHandle)
@@ -95,7 +114,7 @@ export class LegacyMatcher {
         warnings.push('No legacy account found with base Discord handle')
       }
 
-      // Priority 4: Username fallback (least reliable)
+      // Priority 5: Username fallback (least reliable)
       if (criteria.fallbackUsername) {
         const usernameMatch = await this.findByUsername(criteria.fallbackUsername)
         if (usernameMatch) {
@@ -243,6 +262,122 @@ export class LegacyMatcher {
   }
 
   /**
+   * Finds legacy account by matching variations of the email local-part derived from
+   * the current and fallback handles. Supports renamed Discord users.
+   */
+  private async findByEmailVariation(
+    discordHandle: string,
+    fallbackUsername?: string
+  ): Promise<EmailVariationMatch | null> {
+    const handleCandidates: Array<{ original: string; sanitized: string }> = []
+    const seen = new Set<string>()
+
+    const addHandleCandidate = (value?: string): void => {
+      if (typeof value !== 'string') return
+      const trimmed = value.trim()
+      if (!trimmed) return
+
+      const sanitized = this.sanitizeHandle(trimmed)
+      if (!sanitized) return
+
+      const base = sanitized.split('#')[0]
+      if (!base || seen.has(base)) {
+        return
+      }
+
+      seen.add(base)
+      handleCandidates.push({ original: trimmed, sanitized: base })
+    }
+
+    addHandleCandidate(discordHandle)
+    addHandleCandidate(fallbackUsername)
+
+    if (handleCandidates.length === 0) {
+      return null
+    }
+
+    const localPartCandidates = new Set<string>()
+    for (const candidate of handleCandidates) {
+      const variants = this.generateEmailLocalPartCandidates(candidate.sanitized)
+      variants.forEach(variant => localPartCandidates.add(variant))
+    }
+
+    if (localPartCandidates.size === 0) {
+      return null
+    }
+
+    const candidateEmails = Array.from(localPartCandidates).map(localPart => `${localPart}@legacy.import`)
+
+    try {
+      const { data, error } = await this.supabase
+        .from('User')
+        .select(`
+          id, email, username, discordHandle, totalXp, createdAt,
+          xpTransactions:XpTransaction(count),
+          weeklyStats:WeeklyStats(count)
+        `)
+        .in('email', candidateEmails)
+
+      if (error) {
+        console.error('Error finding by email variation:', error)
+        return null
+      }
+
+      if (!data || data.length === 0) {
+        return null
+      }
+
+      const scoredMatches = data
+        .map(record => {
+          const localPart = this.extractEmailLocalPart(record.email)
+          let bestReference = handleCandidates[0]
+          let bestDistance = Number.POSITIVE_INFINITY
+
+          for (const candidate of handleCandidates) {
+            const distance = this.calculateLevenshteinDistance(candidate.sanitized, localPart)
+            if (distance < bestDistance) {
+              bestDistance = distance
+              bestReference = candidate
+            }
+          }
+
+          return {
+            record,
+            localPart,
+            distance: bestDistance,
+            referenceHandle: bestReference?.original ?? localPart
+          }
+        })
+        .filter(entry => entry.distance <= 1)
+
+      if (scoredMatches.length === 0) {
+        return null
+      }
+
+      scoredMatches.sort((a, b) => {
+        if (a.distance !== b.distance) {
+          return a.distance - b.distance
+        }
+        const aXp = a.record.totalXp || 0
+        const bXp = b.record.totalXp || 0
+        return bXp - aXp
+      })
+
+      const bestMatch = scoredMatches[0]
+
+      return {
+        account: this.formatLegacyAccount(bestMatch.record),
+        matchedLocalPart: bestMatch.localPart,
+        distance: bestMatch.distance,
+        referenceHandle: bestMatch.referenceHandle
+      }
+    } catch (error) {
+      console.error('Error in findByEmailVariation:', error)
+      return null
+    }
+  }
+
+  /**
    * Extracts base handle from Discord handle (removes discriminator)
    */
   private extractBaseHandle(discordHandle: string): string {
@@ -263,6 +398,98 @@ export class LegacyMatcher {
       transactionCount: data.xpTransactions?.[0]?.count || 0,
       weeklyStatsCount: data.weeklyStats?.[0]?.count || 0
     }
+  }
+
+  /**
+   * Sanitizes a Discord handle for matching by removing leading @, whitespace, and lowercasing.
+   */
+  private sanitizeHandle(discordHandle: string): string {
+    if (!discordHandle) {
+      return ''
+    }
+
+    return discordHandle
+      .replace(/^@/, '')
+      .replace(/\s+/g, '')
+      .toLowerCase()
+  }
+
+  /**
+   * Generates candidate email local-parts by removing at most one character from the handle.
+   */
+  private generateEmailLocalPartCandidates(sanitizedHandle: string): string[] {
+    if (!sanitizedHandle) {
+      return []
+    }
+
+    const variants = new Set<string>()
+    variants.add(sanitizedHandle)
+
+    const minLength = Math.max(2, sanitizedHandle.length - 1)
+
+    for (let i = 0; i < sanitizedHandle.length; i += 1) {
+      const candidate = sanitizedHandle.slice(0, i) + sanitizedHandle.slice(i + 1)
+      if (candidate.length >= minLength) {
+        variants.add(candidate)
+      }
+    }
+
+    return Array.from(variants)
+  }
+
+  /**
+   * Extracts the local part (before @) from an email and normalises it.
+   */
+  private extractEmailLocalPart(email: string): string {
+    if (!email) {
+      return ''
+    }
+
+    const [localPart] = email.split('@')
+    return (localPart || '').toLowerCase()
+  }
+
+  /**
+   * Computes the Levenshtein distance between two strings.
+   */
+  private calculateLevenshteinDistance(a: string, b: string): number {
+    if (a === b) {
+      return 0
+    }
+
+    if (!a.length) {
+      return b.length
+    }
+
+    if (!b.length) {
+      return a.length
+    }
+
+    const rows = b.length + 1
+    const cols = a.length + 1
+    const distance: number[][] = Array.from({ length: rows }, () => Array(cols).fill(0))
+
+    for (let i = 0; i < cols; i += 1) {
+      distance[0][i] = i
+    }
+
+    for (let j = 0; j < rows; j += 1) {
+      distance[j][0] = j
+    }
+
+    for (let row = 1; row < rows; row += 1) {
+      for (let col = 1; col < cols; col += 1) {
+        const cost = a[col - 1] === b[row - 1] ? 0 : 1
+
+        distance[row][col] = Math.min(
+          distance[row - 1][col] + 1,
+          distance[row][col - 1] + 1,
+          distance[row - 1][col - 1] + cost
+        )
+      }
+    }
+
+    return distance[rows - 1][cols - 1]
   }
 
   /**
@@ -299,6 +526,7 @@ export class LegacyMatcher {
       const strategies = [
         () => criteria.discordId ? this.findByDiscordId(criteria.discordId) : null,
         () => this.findByExactHandle(criteria.discordHandle),
+        () => this.findByEmailVariation(criteria.discordHandle, criteria.fallbackUsername).then(match => match?.account ?? null),
         () => this.findByBaseHandle(this.extractBaseHandle(criteria.discordHandle)),
         () => criteria.fallbackUsername ? this.findByUsername(criteria.fallbackUsername) : null
       ]

@@ -18,6 +18,7 @@ export interface MergeRequest {
   discordHandle: string
   discordId?: string
   email: string
+  fallbackUsername?: string
   initiatedBy?: 'SYSTEM' | 'ADMIN' | 'USER'
 }
 
@@ -99,7 +100,8 @@ export class MergeService {
       const legacyAccount = await this.legacyMatcher.findLegacyAccount({
         discordId: request.discordId,
         discordHandle: request.discordHandle,
-        email: request.email
+        email: request.email,
+        fallbackUsername: request.fallbackUsername
       })
 
       if (!legacyAccount) {

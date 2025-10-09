@@ -15,7 +15,21 @@ interface MergeInitiateRequest {
   discordHandle: string
   discordId?: string
   email: string
+  fallbackUsername?: string
   initiatedBy?: 'SYSTEM' | 'ADMIN' | 'USER'
+}
+
+const extractString = (value: unknown): string | undefined => {
+  if (!value) return undefined
+  if (Array.isArray(value)) {
+    const candidate = value.find(item => typeof item === 'string' && item.trim().length > 0)
+    return candidate?.trim()
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed.length > 0 ? trimmed : undefined
+  }
+  return undefined
 }
 
 /**
@@ -77,6 +91,25 @@ async function postHandler(request: NextRequest) {
       }, { status: 403 })
     }
 
+    const metadata = (user.user_metadata ?? {}) as Record<string, unknown>
+    const customClaims = metadata['custom_claims']
+    const customGlobalName = typeof customClaims === 'object' && customClaims !== null
+      ? extractString((customClaims as Record<string, unknown>)['global_name'])
+      : undefined
+
+    const fallbackUsername = extractString(body.fallbackUsername)
+      ?? extractString(metadata['legacy_username'])
+      ?? extractString(metadata['legacyUsername'])
+      ?? extractString(metadata['previous_username'])
+      ?? extractString(metadata['previousUsername'])
+      ?? extractString(metadata['username_history'])
+      ?? extractString(metadata['usernameHistory'])
+      ?? customGlobalName
+
+    const normalizedFallback = fallbackUsername && fallbackUsername.toLowerCase() === body.discordHandle.toLowerCase()
+      ? undefined
+      : fallbackUsername
+
     // Initiate merge using the service
     const mergeService = new MergeService()
     const result = await mergeService.initiateMerge({
@@ -84,6 +117,7 @@ async function postHandler(request: NextRequest) {
       discordHandle: body.discordHandle,
       discordId: body.discordId,
       email: body.email,
+      fallbackUsername: normalizedFallback,
       initiatedBy: isAdmin ? 'ADMIN' : 'USER'
     })
 
