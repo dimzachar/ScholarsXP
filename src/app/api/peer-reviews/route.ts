@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
-import { createAuthenticatedClient } from '@/lib/supabase-server'
+import { createAuthenticatedClient, createServiceClient } from '@/lib/supabase-server'
 import { getTaskType } from '@/lib/task-types'
 import {
   resolveTaskFromPlatform,
@@ -177,6 +177,36 @@ export const POST = withPermission('review_content')(
       }, { status: 400 })
     }
 
+    // Guard against duplicate reviews for the same submission/reviewer pair
+    const { data: existingReview, error: existingReviewError } = await supabase
+      .from('PeerReview')
+      .select('id')
+      .eq('submissionId', submissionId)
+      .eq('reviewerId', reviewerId)
+      .maybeSingle()
+
+    if (existingReviewError && existingReviewError.code !== 'PGRST116') {
+      console.error('Error checking for existing review:', existingReviewError)
+      return NextResponse.json({
+        success: false,
+        error: {
+          error: 'Failed to verify existing review',
+          code: 'DATABASE_ERROR',
+          details: existingReviewError.message
+        }
+      }, { status: 500 })
+    }
+
+    if (existingReview) {
+      return NextResponse.json({
+        success: false,
+        error: {
+          error: 'Review already submitted for this submission',
+          code: 'ALREADY_EXISTS'
+        }
+      }, { status: 400 })
+    }
+
     // Check if review is late
     const deadline = new Date(assignment.deadline)
     const now = new Date()
@@ -223,6 +253,27 @@ export const POST = withPermission('review_content')(
 
     if (assignmentUpdateError) {
       console.error('Error updating assignment:', assignmentUpdateError)
+
+      if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        try {
+          const serviceClient = createServiceClient()
+          await serviceClient
+            .from('PeerReview')
+            .delete()
+            .eq('id', review.id)
+        } catch (cleanupError) {
+          console.error('Error rolling back peer review after assignment update failure:', cleanupError)
+        }
+      }
+
+      return NextResponse.json({
+        success: false,
+        error: {
+          error: 'Failed to finalize review assignment',
+          code: 'DATABASE_ERROR',
+          details: assignmentUpdateError.message
+        }
+      }, { status: 500 })
     }
 
     // Award XP using the incentives system
