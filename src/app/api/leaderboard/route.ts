@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { weeklyStatsService, userService } from '@/lib/database'
 import { supabaseClient } from '@/lib/supabase'
 import { prisma } from '@/lib/prisma'
-import { getWeekNumber } from '@/lib/utils'
+import { getWeekNumber, getWeekBoundaries } from '@/lib/utils'
 import { withErrorHandling, createSuccessResponse } from '@/lib/api-middleware'
 import { multiLayerCache } from '@/lib/cache/enhanced-cache'
 import { withPublicOptimization } from '@/middleware/api-optimization'
+
+const CACHE_VERSION = 'v2'
 
 export const GET = withPublicOptimization(withErrorHandling(async (request: NextRequest) => {
   const { searchParams } = new URL(request.url)
@@ -21,7 +23,7 @@ export const GET = withPublicOptimization(withErrorHandling(async (request: Next
   const type = typeParam || 'both' // 'weekly', 'alltime', or 'both'
 
   // Create cache key based on parameters
-  const cacheKey = `leaderboard:${currentWeek}:${limit}:${page}:${type}`
+  const cacheKey = `leaderboard:${CACHE_VERSION}:${currentWeek}:${limit}:${page}:${type}`
 
   try {
     // Check multi-layer cache first
@@ -60,12 +62,16 @@ async function fetchLeaderboardFromDatabase(currentWeek: number, limit: number, 
   let allTimeTotalXp = 0
   let weeklySubmissionCounts: any = { data: [] }
   let weeklyLegacySubmissionCounts: any = { data: [] }
+  let weeklyReviewsByUser: Record<string, number> = {}
   let totalSubmissionsByUser: Record<string, number> = {}
   let totalLegacySubmissionsByUsername: Record<string, number> = {}
   let totalReviewsByUser: Record<string, number> = {}
 
   if (type === 'weekly' || type === 'both') {
     // Get weekly leaderboard with pagination and counts
+    const currentYear = new Date().getFullYear()
+    const { startDate, endDate } = getWeekBoundaries(currentWeek, currentYear)
+
     const weeklyPromises = await Promise.all([
       weeklyStatsService.findLeaderboard(currentWeek, limit, type === 'weekly' ? offset : 0),
       weeklyStatsService.countByWeek(currentWeek),
@@ -75,13 +81,33 @@ async function fetchLeaderboardFromDatabase(currentWeek: number, limit: number, 
         .eq('weekNumber', currentWeek),
       supabaseClient
         .from('LegacySubmission')
-        .select('discordHandle')
+        .select('discordHandle'),
+      prisma.peerReview.groupBy({
+        by: ['reviewerId'],
+        where: {
+          createdAt: {
+            gte: startDate,
+            lte: endDate
+          }
+        },
+        _count: {
+          _all: true
+        }
+      })
     ])
 
     weeklyStats = weeklyPromises[0]
     weeklyStatsCount = weeklyPromises[1]
     weeklySubmissionCounts = weeklyPromises[2]
     weeklyLegacySubmissionCounts = weeklyPromises[3]
+    const weeklyReviewGroups = weeklyPromises[4]
+
+    weeklyReviewsByUser = (weeklyReviewGroups || []).reduce((acc: Record<string, number>, row: any) => {
+      if (row.reviewerId) {
+        acc[row.reviewerId] = row._count._all
+      }
+      return acc
+    }, {})
   }
 
   if (type === 'alltime' || type === 'both') {
@@ -154,7 +180,7 @@ async function fetchLeaderboardFromDatabase(currentWeek: number, limit: number, 
     weeklyXp: stat.xpTotal,
     streak: stat.earnedStreak ? 1 : 0, // TODO: Calculate actual streak
     submissions: (submissionCountsByUser[stat.userId] || 0) + (legacySubmissionsByUsername[stat.user.username] || 0),
-    reviews: stat.reviewsDone
+    reviews: weeklyReviewsByUser[stat.userId] ?? stat.reviewsDone ?? 0
   }))
 
   // Calculate weekly stats across the full week (not just current page)
