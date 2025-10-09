@@ -369,9 +369,11 @@ erDiagram
 
 **Scheduled Operations**:
 - Weekly XP aggregation and leaderboard updates
-- User role promotions based on XP thresholds
 - Notification cleanup and data maintenance
 - System health monitoring and alerting
+
+**Realtime Role Sync**:
+- Database trigger (`supabase/migrations/20251015_sync_reviewer_roles.sql`) promotes users to `REVIEWER` once they cross 1000 XP and demotes them back to `USER` if they fall below the threshold, without relying on pg_cron.
 
 ### XP Propagation Service
 
