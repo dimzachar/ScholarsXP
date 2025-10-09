@@ -136,21 +136,20 @@ export function getWeekNumber(date: Date = new Date()): number {
 }
 
 export function getWeekBoundaries(weekNumber: number, year: number): { startDate: Date; endDate: Date } {
-  // Calculate the start of the year
-  const yearStart = new Date(year, 0, 1)
+  // ISO week calculations: week 1 is the week with January 4th
+  const januaryFourth = new Date(year, 0, 4)
+  const dayOfWeek = januaryFourth.getDay() || 7 // Treat Sunday (0) as 7
 
-  // Find the first Monday of the year
-  const firstMonday = new Date(yearStart)
-  const dayOfWeek = yearStart.getDay()
-  const daysToMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek
-  firstMonday.setDate(yearStart.getDate() + daysToMonday)
+  // Monday of the first ISO week
+  const weekOneMonday = new Date(januaryFourth)
+  weekOneMonday.setDate(januaryFourth.getDate() - dayOfWeek + 1)
 
-  // Calculate the start of the specified week
-  const startDate = new Date(firstMonday)
-  startDate.setDate(firstMonday.getDate() + (weekNumber - 1) * 7)
+  // Calculate the start of the requested week
+  const startDate = new Date(weekOneMonday)
+  startDate.setDate(weekOneMonday.getDate() + (weekNumber - 1) * 7)
   startDate.setHours(0, 0, 0, 0)
 
-  // Calculate the end of the week (Sunday)
+  // End of the week (Sunday)
   const endDate = new Date(startDate)
   endDate.setDate(startDate.getDate() + 6)
   endDate.setHours(23, 59, 59, 999)

@@ -37,6 +37,13 @@ interface LeaderboardEntry {
   reviews: number
 }
 
+export const normalizeLeaderboardEntries = (entries: any[] = []): LeaderboardEntry[] =>
+  entries.map((entry) => ({
+    ...entry,
+    submissions: entry.submissions ?? entry.totalSubmissions ?? entry.submissionCount ?? 0,
+    reviews: entry.reviews ?? entry.reviewCount ?? entry.reviewsCount ?? 0
+  }))
+
 interface WeeklyStats {
   activeParticipants: number
   totalXpAwarded: number
@@ -113,16 +120,24 @@ export default function LeaderboardPage() {
         fetchCurrentUserPosition(),
       ])
 
-      setWeeklyStats(
-        weeklyData?.data?.weeklyStats || weeklyData?.weeklyStats || weeklyData
-      )
-      setAllTimeLeaders(
+      const rawWeeklyStats = weeklyData?.data?.weeklyStats || weeklyData?.weeklyStats || weeklyData
+      if (rawWeeklyStats) {
+        setWeeklyStats({
+          ...rawWeeklyStats,
+          topPerformers: normalizeLeaderboardEntries(rawWeeklyStats.topPerformers ?? [])
+        })
+      } else {
+        setWeeklyStats(null)
+      }
+
+      const rawAllTimeLeaders =
         allTimeData?.data?.items ||
         allTimeData?.items ||
         allTimeData?.data?.allTimeLeaders ||
         allTimeData?.allTimeLeaders ||
         []
-      )
+
+      setAllTimeLeaders(normalizeLeaderboardEntries(rawAllTimeLeaders))
       setAllTimePagination(
         allTimeData?.data?.pagination ||
         allTimeData?.pagination ||
