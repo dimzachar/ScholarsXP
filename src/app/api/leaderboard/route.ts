@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { weeklyStatsService, userService } from '@/lib/database'
 import { supabaseClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 import { getWeekNumber } from '@/lib/utils'
 import { withErrorHandling, createSuccessResponse } from '@/lib/api-middleware'
 import { multiLayerCache } from '@/lib/cache/enhanced-cache'
@@ -59,6 +60,9 @@ async function fetchLeaderboardFromDatabase(currentWeek: number, limit: number, 
   let allTimeTotalXp = 0
   let weeklySubmissionCounts: any = { data: [] }
   let weeklyLegacySubmissionCounts: any = { data: [] }
+  let totalSubmissionsByUser: Record<string, number> = {}
+  let totalLegacySubmissionsByUsername: Record<string, number> = {}
+  let totalReviewsByUser: Record<string, number> = {}
 
   if (type === 'weekly' || type === 'both') {
     // Get weekly leaderboard with pagination and counts
@@ -91,6 +95,44 @@ async function fetchLeaderboardFromDatabase(currentWeek: number, limit: number, 
     allTimeUsers = allTimePromises[0]
     allTimeUsersCount = allTimePromises[1]
     allTimeTotalXp = allTimePromises[2]
+
+    const [submissionGroups, legacySubmissionGroups, reviewGroups] = await Promise.all([
+      prisma.submission.groupBy({
+        by: ['userId'],
+        _count: {
+          _all: true
+        }
+      }),
+      prisma.legacySubmission.groupBy({
+        by: ['discordHandle'],
+        _count: {
+          _all: true
+        }
+      }),
+      prisma.peerReview.groupBy({
+        by: ['reviewerId'],
+        _count: {
+          _all: true
+        }
+      })
+    ])
+
+    totalSubmissionsByUser = submissionGroups.reduce((acc, row) => {
+      acc[row.userId] = row._count._all
+      return acc
+    }, {} as Record<string, number>)
+
+    totalLegacySubmissionsByUsername = legacySubmissionGroups.reduce((acc, row) => {
+      if (row.discordHandle) {
+        acc[row.discordHandle] = row._count._all
+      }
+      return acc
+    }, {} as Record<string, number>)
+
+    totalReviewsByUser = reviewGroups.reduce((acc, row) => {
+      acc[row.reviewerId] = row._count._all
+      return acc
+    }, {} as Record<string, number>)
   }
 
   const submissionCountsByUser = weeklySubmissionCounts.data?.reduce((acc, sub) => {
@@ -123,35 +165,6 @@ async function fetchLeaderboardFromDatabase(currentWeek: number, limit: number, 
   const weeklyAverageXp = weeklyActiveParticipants > 0 ? weeklyTotalXpAwarded / weeklyActiveParticipants : 0
 
   // Get total submission counts for all users (both regular and legacy)
-  const [allSubmissions, allLegacySubmissions] = await Promise.all([
-    supabaseClient
-      .from('Submission')
-      .select('userId'),
-    supabaseClient
-      .from('LegacySubmission')
-      .select('discordHandle')
-  ])
-
-  const totalSubmissionsByUser = allSubmissions.data?.reduce((acc, sub) => {
-    acc[sub.userId] = (acc[sub.userId] || 0) + 1
-    return acc
-  }, {} as Record<string, number>) || {}
-
-  const totalLegacySubmissionsByUsername = allLegacySubmissions.data?.reduce((acc, sub) => {
-    acc[sub.discordHandle] = (acc[sub.discordHandle] || 0) + 1
-    return acc
-  }, {} as Record<string, number>) || {}
-
-  // Get total review counts for all users
-  const allReviews = await supabaseClient
-    .from('PeerReview')
-    .select('reviewerId')
-
-  const totalReviewsByUser = allReviews.data?.reduce((acc, review) => {
-    acc[review.reviewerId] = (acc[review.reviewerId] || 0) + 1
-    return acc
-  }, {} as Record<string, number>) || {}
-
   const allTimeLeaders = allTimeUsers.map((user, index) => ({
     rank: (type === 'alltime' ? offset : 0) + index + 1, // Account for pagination offset
     username: user.username,
