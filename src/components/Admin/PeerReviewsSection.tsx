@@ -51,18 +51,45 @@ export default function PeerReviewsSection({
     return new Date(dateString).toLocaleString()
   }
 
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-green-600'
-    if (score >= 60) return 'text-blue-600'
-    if (score >= 40) return 'text-yellow-600'
+  const TIER_PRESENTATION: Record<string, { label: string; badgeClass: string; colorClass: string }> = {
+    basic: {
+      label: 'Basic',
+      badgeClass: 'bg-amber-100 text-amber-800',
+      colorClass: 'text-amber-600'
+    },
+    average: {
+      label: 'Average',
+      badgeClass: 'bg-blue-100 text-blue-800',
+      colorClass: 'text-blue-600'
+    },
+    awesome: {
+      label: 'Awesome',
+      badgeClass: 'bg-emerald-100 text-emerald-800',
+      colorClass: 'text-emerald-600'
+    }
+  }
+
+  const getScoreColor = (score: number, tier?: string | null) => {
+    if (tier && TIER_PRESENTATION[tier]) {
+      return TIER_PRESENTATION[tier].colorClass
+    }
+
+    if (score >= 90) return 'text-emerald-600'
+    if (score >= 70) return 'text-blue-600'
+    if (score >= 40) return 'text-amber-600'
     return 'text-red-600'
   }
 
-  const getScoreBadge = (score: number) => {
-    if (score >= 80) return <Badge className="bg-green-100 text-green-800">Excellent</Badge>
-    if (score >= 60) return <Badge className="bg-blue-100 text-blue-800">Good</Badge>
-    if (score >= 40) return <Badge className="bg-yellow-100 text-yellow-800">Fair</Badge>
-    return <Badge className="bg-red-100 text-red-800">Poor</Badge>
+  const getScoreBadge = (score: number, tier?: string | null) => {
+    if (tier && TIER_PRESENTATION[tier]) {
+      const presentation = TIER_PRESENTATION[tier]
+      return <Badge className={presentation.badgeClass}>{presentation.label}</Badge>
+    }
+
+    if (score >= 90) return <Badge className="bg-emerald-100 text-emerald-800">Excellent</Badge>
+    if (score >= 70) return <Badge className="bg-blue-100 text-blue-800">Strong</Badge>
+    if (score >= 40) return <Badge className="bg-amber-100 text-amber-800">Needs Review</Badge>
+    return <Badge className="bg-red-100 text-red-800">Insufficient</Badge>
   }
 
   const renderStars = (rating: number | null) => {
@@ -225,11 +252,11 @@ export default function PeerReviewsSection({
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3">
                     {/* XP Score */}
                     <div className="text-center p-3 bg-muted/50 rounded">
-                      <div className={`text-2xl font-bold ${getScoreColor(review.xpScore)}`}>
+                      <div className={`text-2xl font-bold ${getScoreColor(review.xpScore, review.qualityTier)}`}>
                         {review.xpScore}
                       </div>
                       <div className="text-sm text-muted-foreground">XP Score</div>
-                      {getScoreBadge(review.xpScore)}
+                      {getScoreBadge(review.xpScore, review.qualityTier)}
                     </div>
 
                     {/* Category/Tier */}
@@ -321,5 +348,10 @@ export default function PeerReviewsSection({
     </>
   )
 }
+
+
+
+
+
 
 
