@@ -33,6 +33,7 @@ export interface MergeResult {
     weeklyStatsTransferred?: number
     weeklyStatsConflicts?: number
     processingTimeMs?: number
+    legacySubmissionsRekeyed?: number
   }
   error?: {
     code: string
@@ -294,7 +295,8 @@ export class MergeService {
             totalXpTransferred: parseInt(data.totalXpTransferred) || 0,
             weeklyStatsTransferred: parseInt(data.weeklyStatsTransferred) || 0,
             weeklyStatsConflicts: parseInt(data.weeklyStatsConflicts) || 0,
-            processingTimeMs: parseInt(data.processingTimeMs) || 0
+            processingTimeMs: parseInt(data.processingTimeMs) || 0,
+            legacySubmissionsRekeyed: parseInt(data.legacySubmissionsRekeyed) || 0
           }
         }
       }

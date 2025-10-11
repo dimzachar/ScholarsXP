@@ -17,6 +17,12 @@ DECLARE
     v_transfer_result JSONB;
     v_weekly_result JSONB;
     v_processing_time INTEGER;
+    v_new_handle TEXT;
+    v_old_handle_variants TEXT[];
+    v_old_base_handle TEXT;
+    v_old_handle_label TEXT;
+    v_reassignment_note TEXT;
+    v_handles_reassigned INTEGER := 0;
 BEGIN
     -- Validate input parameters
     IF p_real_user_id IS NULL OR p_legacy_user_id IS NULL THEN
@@ -86,6 +92,64 @@ BEGIN
     -- Transfer/merge weekly stats
     v_weekly_result := merge_weekly_stats(p_legacy_user_id, p_real_user_id, v_merge_id);
     
+    -- Reassign legacy submissions to the merged handle
+    v_new_handle := NULLIF(TRIM(COALESCE(
+        v_real_user."discordHandle",
+        p_discord_handle,
+        v_real_user."username"
+    )), '');
+
+    IF v_new_handle IS NOT NULL THEN
+        v_old_handle_variants := ARRAY[]::TEXT[];
+
+        IF v_legacy_user."discordHandle" IS NOT NULL AND TRIM(v_legacy_user."discordHandle") <> '' THEN
+            v_old_handle_variants := array_append(v_old_handle_variants, LOWER(TRIM(v_legacy_user."discordHandle")));
+            v_old_handle_variants := array_append(v_old_handle_variants, LOWER(TRIM(v_legacy_user."discordHandle" || '#0')));
+            v_old_base_handle := TRIM(split_part(v_legacy_user."discordHandle", '#', 1));
+            IF v_old_base_handle IS NOT NULL AND v_old_base_handle <> '' THEN
+                v_old_handle_variants := array_append(v_old_handle_variants, LOWER(v_old_base_handle));
+                v_old_handle_variants := array_append(v_old_handle_variants, LOWER(v_old_base_handle || '#0'));
+            END IF;
+        END IF;
+
+        IF v_legacy_user."username" IS NOT NULL AND TRIM(v_legacy_user."username") <> '' THEN
+            v_old_handle_variants := array_append(v_old_handle_variants, LOWER(TRIM(v_legacy_user."username")));
+            v_old_handle_variants := array_append(v_old_handle_variants, LOWER(TRIM(v_legacy_user."username" || '#0')));
+        END IF;
+
+        IF v_old_handle_variants IS NOT NULL THEN
+            SELECT ARRAY(SELECT DISTINCT h FROM unnest(v_old_handle_variants) AS h WHERE h IS NOT NULL AND h <> '')
+            INTO v_old_handle_variants;
+        END IF;
+
+        IF v_old_handle_variants IS NOT NULL AND array_length(v_old_handle_variants, 1) > 0 THEN
+            v_old_handle_label := COALESCE(
+                NULLIF(TRIM(v_legacy_user."discordHandle"), ''),
+                NULLIF(TRIM(v_legacy_user."username"), ''),
+                'unknown'
+            );
+
+            v_reassignment_note := format(
+                '%s merge reassigned from %s to %s',
+                to_char(NOW(), 'YYYY-MM-DD'),
+                v_old_handle_label,
+                v_new_handle
+            );
+
+            UPDATE "LegacySubmission"
+            SET "discordHandle" = v_new_handle,
+                "adminNotes" = CASE
+                    WHEN "adminNotes" IS NULL OR "adminNotes" = '' THEN v_reassignment_note
+                    ELSE "adminNotes" || E'\n' || v_reassignment_note
+                END,
+                "adminUpdatedAt" = NOW(),
+                "adminUpdatedBy" = p_real_user_id
+            WHERE LOWER("discordHandle") = ANY (v_old_handle_variants);
+
+            GET DIAGNOSTICS v_handles_reassigned = ROW_COUNT;
+        END IF;
+    END IF;
+
     -- Update user metadata
     UPDATE "User" SET
         "streakWeeks" = GREATEST("streakWeeks", v_legacy_user."streakWeeks"),
@@ -130,7 +194,8 @@ BEGIN
         'transactionsTransferred', v_transfer_result->>'transferred',
         'totalXpTransferred', v_transfer_result->>'totalXp',
         'weeklyStatsTransferred', v_weekly_result->>'merged',
-        'weeklyStatsConflicts', v_weekly_result->>'conflicts_resolved'
+        'weeklyStatsConflicts', v_weekly_result->>'conflicts_resolved',
+        'legacySubmissionsRekeyed', v_handles_reassigned
     );
     
     RETURN v_result;
