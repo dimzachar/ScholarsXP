@@ -16,12 +16,15 @@ const optimizedProfileHandler = withPermission('authenticated')(async (request: 
 
     // Use optimized implementation with caching
     const useOptimizedProfile = process.env.USE_OPTIMIZED_PROFILE !== 'false' // Default to true
+    const searchParams = new URL(request.url).searchParams
+    const refreshCache = searchParams.get('refreshCache') === '1' || searchParams.get('refreshCache') === 'true'
+    const skipCache = searchParams.get('skipCache') === '1' || searchParams.get('skipCache') === 'true'
 
     if (useOptimizedProfile) {
       console.log('🚀 Using optimized user profile implementation')
       const startTime = Date.now()
 
-      const profileData = await getOptimizedCompleteProfile(userId)
+      const profileData = await getOptimizedCompleteProfile(userId, { refreshCache, skipCache })
 
       const executionTime = Date.now() - startTime
       console.log(`⚡ Optimized user profile completed in ${executionTime}ms`)
@@ -52,7 +55,10 @@ export const GET = withUserOptimization(optimizedProfileHandler)
  * Optimized complete profile function with caching and minimal data
  * Target: 30KB → 8KB (73% reduction)
  */
-async function getOptimizedCompleteProfile(userId: string): Promise<CompleteUserProfileDTO> {
+async function getOptimizedCompleteProfile(
+  userId: string,
+  options: { refreshCache?: boolean; skipCache?: boolean } = {}
+): Promise<CompleteUserProfileDTO> {
   const cacheKey = QueryCache.createKey('complete_profile', { userId })
 
   return await withQueryCache(
@@ -249,7 +255,11 @@ async function getOptimizedCompleteProfile(userId: string): Promise<CompleteUser
         achievements
       }
     },
-    { logPerformance: true }
+    {
+      logPerformance: true,
+      refreshCache: options.refreshCache,
+      skipCache: options.skipCache
+    }
   )
 }
 
