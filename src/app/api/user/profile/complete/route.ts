@@ -3,7 +3,7 @@ import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { withUserOptimization } from '@/middleware/api-optimization'
 import { QueryCache, CacheTTL, withQueryCache } from '@/lib/cache/query-cache'
 import { CompleteUserProfileDTO, ResponseTransformer } from '@/types/api-responses'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, createServiceClient } from '@/lib/supabase-server'
 import { getWeekNumber } from '@/lib/utils'
 import { xpAnalyticsService } from '@/lib/xp-analytics'
 import { ENABLE_ACHIEVEMENTS } from '@/config/feature-flags'
@@ -60,6 +60,7 @@ async function getOptimizedCompleteProfile(userId: string): Promise<CompleteUser
     CacheTTL.USER_PROFILE,
     async () => {
       const supabase = createServerSupabaseClient()
+      const serviceSupabase = createServiceClient()
 
       // Get basic user profile
       const { data: userProfile, error: userError } = await supabase
@@ -77,6 +78,7 @@ async function getOptimizedCompleteProfile(userId: string): Promise<CompleteUser
         submissionsResult,
         legacySubmissionsResult,
         reviewsResult,
+        reviewCountResult,
         achievementsResult,
         xpTransactionsResult
       ] = await Promise.all([
@@ -124,10 +126,16 @@ async function getOptimizedCompleteProfile(userId: string): Promise<CompleteUser
         // Get recent reviews only (limit to 5)
         supabase
           .from('PeerReview')
-          .select('id, xpScore, createdAt, submission:submissionId(title, url)')
+          .select('id, xpScore, createdAt, submission:submissionId(title, url)', { count: 'exact' })
           .eq('reviewerId', userId)
           .order('createdAt', { ascending: false })
           .limit(5),
+
+        // Get total review count separately to ensure accuracy
+        serviceSupabase
+          .from('PeerReview')
+          .select('*', { count: 'exact', head: true })
+          .eq('reviewerId', userId),
 
         // Get recent achievements only (limit to 10)
         ENABLE_ACHIEVEMENTS
@@ -155,7 +163,7 @@ async function getOptimizedCompleteProfile(userId: string): Promise<CompleteUser
       const legacyCompleted = legacySubmissionsResult.data?.length || 0 // Legacy submissions are considered completed
       const completedSubmissions = regularCompleted + legacyCompleted
 
-      const totalReviews = reviewsResult.count || 0
+      const totalReviews = reviewCountResult.count ?? reviewsResult.count ?? reviewsResult.data?.length ?? 0
       const achievementsData = achievementsResult.data || []
       const totalAchievements = ENABLE_ACHIEVEMENTS
         ? (achievementsResult.count ?? achievementsData.length ?? 0)

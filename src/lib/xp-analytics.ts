@@ -335,7 +335,6 @@ export class XpAnalyticsService {
         .from('User')
         .select('*', { count: 'exact', head: true })
         .gt('totalXp', user.totalXp)
-        .neq('role', 'ADMIN')
 
       // Get weekly rank from WeeklyStats
       const { data: userWeeklyStats, error: weeklyStatsError } = await supabase
@@ -358,11 +357,9 @@ export class XpAnalyticsService {
         }
       }
 
-      // Get total users count (excluding admins)
       const { count: totalUsers } = await supabase
         .from('User')
         .select('*', { count: 'exact', head: true })
-        .neq('role', 'ADMIN')
 
       return {
         weekly: weeklyRank,

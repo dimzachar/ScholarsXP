@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/contexts/AuthContext'
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout'
-import { MobileLayout, MobileSection, MobileHeader, MobileCardGrid } from '@/components/layout/MobileLayout'
+import { MobileLayout, MobileSection, MobileHeader } from '@/components/layout/MobileLayout'
 import { ENABLE_ACHIEVEMENTS } from '@/config/feature-flags'
 import {
   ArrowLeft,
@@ -236,7 +236,7 @@ export default function ProfilePage() {
                   </p>
                 </div>
 
-                <div className={isMobile ? "grid grid-cols-2 gap-3" : "flex gap-6"}>
+                <div className={isMobile ? "grid grid-cols-2 gap-3" : "grid grid-cols-3 gap-6"}>
                   <div className="text-center">
                     <div className="flex items-center justify-center gap-1 mb-1">
                       <Zap className="h-4 w-4 text-primary" />
@@ -265,6 +265,20 @@ export default function ProfilePage() {
                     </div>
                     <p className="text-xs text-muted-foreground">Submissions</p>
                   </div>
+                  <div className="text-center">
+                    <div className="flex items-center justify-center gap-1 mb-1">
+                      <TrendingUp className="h-4 w-4 text-green-500" />
+                      <span className="text-2xl font-bold">{profile.currentWeekXp} XP</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">This Week</p>
+                  </div>
+                  <div className="text-center">
+                    <div className="flex items-center justify-center gap-1 mb-1">
+                      <Users className="h-4 w-4 text-blue-500" />
+                      <span className="text-2xl font-bold">{statistics?.totalReviews ?? 0}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Total Reviews</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -272,51 +286,22 @@ export default function ProfilePage() {
         </Card>
       </MobileSection>
 
-      {/* Statistics Grid */}
-      <MobileSection spacing="normal">
-        <MobileCardGrid columns={{ mobile: 1, tablet: 2, desktop: 3 }} gap="md">
+      {ENABLE_ACHIEVEMENTS && (
+        <MobileSection spacing="normal">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-green-500" />
-                This Week
+                <Award className="h-4 w-4 text-purple-500" />
+                Achievements
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{profile.currentWeekXp} XP</div>
-              <p className="text-xs text-muted-foreground">Weekly Progress</p>
+              <div className="text-2xl font-bold">{statistics?.totalAchievements || 0}</div>
+              <p className="text-xs text-muted-foreground">Unlocked</p>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Users className="h-4 w-4 text-blue-500" />
-                Reviews
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{statistics?.totalReviews || 0}</div>
-              <p className="text-xs text-muted-foreground">Peer Reviews</p>
-            </CardContent>
-          </Card>
-
-          {ENABLE_ACHIEVEMENTS && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Award className="h-4 w-4 text-purple-500" />
-                  Achievements
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{statistics?.totalAchievements || 0}</div>
-                <p className="text-xs text-muted-foreground">Unlocked</p>
-              </CardContent>
-            </Card>
-          )}
-        </MobileCardGrid>
-      </MobileSection>
+        </MobileSection>
+      )}
 
       {/* Member Since */}
       <MobileSection spacing="normal">
