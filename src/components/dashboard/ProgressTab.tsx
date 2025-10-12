@@ -12,6 +12,7 @@ import XpTrendChart from '@/components/charts/XpTrendChart'
 import { GoalProgressWidget } from '@/components/dashboard/GoalProgressWidget'
 import { AnalyticsInsights } from '@/components/dashboard/AnalyticsInsights'
 import { BarChart3, TrendingUp, Target, Trophy } from 'lucide-react'
+import { ENABLE_ACHIEVEMENTS } from '@/config/feature-flags'
 
 interface ProgressTabProps {
   analyticsData: any
@@ -222,17 +223,19 @@ export function ProgressTab({
       </LazyWrapper>
 
       {/* Achievements Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Recent Achievements</h3>
+      {ENABLE_ACHIEVEMENTS && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold">Recent Achievements</h3>
+          </div>
+          <LazyWrapper minHeight="300px">
+            <MobileLazyComponents.AchievementGallery
+              recentlyEarned={analyticsData?.achievements?.recentlyEarned || []}
+              loading={loadingAnalytics}
+            />
+          </LazyWrapper>
         </div>
-        <LazyWrapper minHeight="300px">
-          <MobileLazyComponents.AchievementGallery
-            recentlyEarned={analyticsData?.achievements?.recentlyEarned || []}
-            loading={loadingAnalytics}
-          />
-        </LazyWrapper>
-      </div>
+      )}
     </div>
   )
 }

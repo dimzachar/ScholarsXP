@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { xpAnalyticsService } from '@/lib/xp-analytics'
+import { applyTransactionToBreakdown, createEmptyBreakdown } from '@/lib/xp-ledger'
 import { createServiceClient } from '@/lib/supabase-server'
 
 export const GET = withPermission('authenticated')(async (request: AuthenticatedRequest) => {
@@ -473,42 +474,15 @@ function getWeekNumber(date: Date): number {
 }
 
 function buildBreakdownFromTransactions(transactions: any[]) {
-  const breakdown = {
-    submissions: 0,
-    reviews: 0,
-    streaks: 0,
-    achievements: 0,
-    penalties: 0,
-    adminAdjustments: 0,
-    total: 0
-  }
+  const breakdown = createEmptyBreakdown()
 
   transactions.forEach(transaction => {
-    const amount = transaction.amount
-
-    switch (transaction.type) {
-      case 'SUBMISSION_REWARD':
-        breakdown.submissions += amount
-        break
-      case 'REVIEW_REWARD':
-        breakdown.reviews += amount
-        break
-      case 'STREAK_BONUS':
-        breakdown.streaks += amount
-        break
-      case 'ACHIEVEMENT_BONUS':
-        breakdown.achievements += amount
-        break
-      case 'PENALTY':
-        breakdown.penalties += amount
-        break
-      case 'ADMIN_ADJUSTMENT':
-        breakdown.adminAdjustments += amount
-        break
-    }
-
-    breakdown.total += amount
+    applyTransactionToBreakdown(breakdown, {
+      amount: transaction.amount,
+      type: transaction.type
+    })
   })
 
-  return breakdown
+  const { other, ...normalized } = breakdown
+  return normalized
 }

@@ -18,6 +18,7 @@ import {
   ArrowLeft
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { ENABLE_ACHIEVEMENTS } from '@/config/feature-flags'
 
 type AnalyticsData = {
   xpBreakdown?: {
@@ -208,12 +209,14 @@ export default function AnalyticsPage() {
                           </div>
                           <div className="text-sm text-orange-600">Streak Weeks</div>
                         </div>
-                        <div className="text-center p-4 bg-purple-50 rounded-lg">
-                          <div className="text-2xl font-bold text-purple-600">
-                            {analyticsData?.profile?.achievements?.earned || '0'}
+                        {ENABLE_ACHIEVEMENTS && (
+                          <div className="text-center p-4 bg-purple-50 rounded-lg">
+                            <div className="text-2xl font-bold text-purple-600">
+                              {analyticsData?.profile?.achievements?.earned || '0'}
+                            </div>
+                            <div className="text-sm text-purple-600">Achievements</div>
                           </div>
-                          <div className="text-sm text-purple-600">Achievements</div>
-                        </div>
+                        )}
                       </div>
 
                       {/* Performance Metrics */}

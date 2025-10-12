@@ -251,10 +251,6 @@ export default function XpTrendChart({
                 content={
                   <ChartTooltipContent
                     labelFormatter={(value) => `Week ${value}`}
-                    formatter={(value, name) => [
-                      value,
-                      chartConfig[name as keyof typeof chartConfig]?.label || name
-                    ]}
                   />
                 }
               />

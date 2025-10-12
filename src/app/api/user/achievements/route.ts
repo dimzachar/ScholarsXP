@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
+import { ENABLE_ACHIEVEMENTS } from '@/config/feature-flags'
 import { achievementEngine } from '@/lib/achievement-engine'
 
 export const GET = withPermission('authenticated')(async (request: AuthenticatedRequest) => {
@@ -9,6 +10,45 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
     const status = searchParams.get('status') // 'all', 'earned', 'available', 'in_progress'
 
     const userId = request.user.id
+
+    if (!ENABLE_ACHIEVEMENTS) {
+      return NextResponse.json({
+        achievements: [],
+        byCategory: {
+          SUBMISSION: [],
+          REVIEW: [],
+          STREAK: [],
+          MILESTONE: [],
+          SPECIAL: []
+        },
+        stats: {
+          total: 0,
+          earned: 0,
+          inProgress: 0,
+          notStarted: 0,
+          totalXpFromAchievements: 0,
+          recentlyEarned: 0
+        },
+        categoryStats: [],
+        nextToEarn: [],
+        recentlyEarned: [],
+        milestones: {
+          firstAchievement: null,
+          latestAchievement: null,
+          mostValuableAchievement: null
+        },
+        insights: {
+          achievementVelocity: 0,
+          completionRate: 0,
+          averageXpPerAchievement: 0,
+          daysToNextAchievement: null
+        },
+        filters: {
+          category: category || 'all',
+          status: status || 'all'
+        }
+      })
+    }
 
     // Get comprehensive achievement data
     const [achievementProgress, userAchievements] = await Promise.all([
@@ -149,6 +189,14 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
 // POST endpoint to manually trigger achievement evaluation (for testing)
 export const POST = withPermission('authenticated')(async (request: AuthenticatedRequest) => {
   try {
+    if (!ENABLE_ACHIEVEMENTS) {
+      return NextResponse.json({
+        message: 'Achievements are temporarily disabled',
+        newAchievements: [],
+        count: 0
+      })
+    }
+
     const { triggerType } = await request.json()
     const userId = request.user.id
 

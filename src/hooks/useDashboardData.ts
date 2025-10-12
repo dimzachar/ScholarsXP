@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from 'react'
+import { ENABLE_ACHIEVEMENTS } from '@/config/feature-flags'
 
 // Simple cache implementation for dashboard data
 const cache = new Map<string, { data: any; timestamp: number; ttl: number }>()
@@ -10,6 +11,43 @@ const CACHE_TTL = {
   leaderboard: 2 * 60 * 1000, // 2 minutes
   analytics: 3 * 60 * 1000, // 3 minutes
   achievements: 10 * 60 * 1000, // 10 minutes
+} as const
+
+const EMPTY_ACHIEVEMENTS_SUMMARY = {
+  achievements: [],
+  byCategory: {
+    SUBMISSION: [],
+    REVIEW: [],
+    STREAK: [],
+    MILESTONE: [],
+    SPECIAL: []
+  },
+  stats: {
+    total: 0,
+    earned: 0,
+    inProgress: 0,
+    notStarted: 0,
+    totalXpFromAchievements: 0,
+    recentlyEarned: 0
+  },
+  categoryStats: [],
+  nextToEarn: [],
+  recentlyEarned: [],
+  milestones: {
+    firstAchievement: null,
+    latestAchievement: null,
+    mostValuableAchievement: null
+  },
+  insights: {
+    achievementVelocity: 0,
+    completionRate: 0,
+    averageXpPerAchievement: 0,
+    daysToNextAchievement: null
+  },
+  filters: {
+    category: 'all',
+    status: 'all'
+  }
 } as const
 
 interface FetchState<T> {
@@ -134,17 +172,21 @@ export function useAnalyticsData(timeframe = 'current_week', enabled = true) {
     try {
       setState(prev => ({ ...prev, loading: true, error: null }))
       
+      const achievementsPromise = ENABLE_ACHIEVEMENTS
+        ? fetchWithCache(
+            '/api/user/achievements',
+            'achievements',
+            CACHE_TTL.achievements
+          )
+        : Promise.resolve(EMPTY_ACHIEVEMENTS_SUMMARY)
+
       const [xpBreakdownResponse, achievementsResponse] = await Promise.all([
         fetchWithCache(
           `/api/user/xp-breakdown?timeframe=${timeframe}`,
           `xp-breakdown-${timeframe}`,
           CACHE_TTL.analytics
         ),
-        fetchWithCache(
-          '/api/user/achievements',
-          'achievements',
-          CACHE_TTL.achievements
-        )
+        achievementsPromise
       ])
 
       // Use insights directly from API (no transformation needed)

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { ENABLE_ACHIEVEMENTS } from '@/config/feature-flags'
 import { xpAnalyticsService } from './xp-analytics'
 
 const supabase = createClient(
@@ -217,6 +218,10 @@ export class AchievementEngine {
    * Get all active achievements
    */
   async getActiveAchievements(): Promise<Achievement[]> {
+    if (!ENABLE_ACHIEVEMENTS) {
+      return []
+    }
+
     try {
       const { data, error } = await supabase
         .from('Achievement')
@@ -243,6 +248,10 @@ export class AchievementEngine {
    * Get user's earned achievements
    */
   async getUserAchievements(userId: string): Promise<UserAchievement[]> {
+    if (!ENABLE_ACHIEVEMENTS) {
+      return []
+    }
+
     try {
       const { data, error } = await supabase
         .from('UserAchievement')
@@ -276,6 +285,10 @@ export class AchievementEngine {
    * Get user's achievement progress
    */
   async getUserAchievementProgress(userId: string): Promise<AchievementProgress[]> {
+    if (!ENABLE_ACHIEVEMENTS) {
+      return []
+    }
+
     try {
       const [achievements, userAchievements] = await Promise.all([
         this.getActiveAchievements(),
@@ -317,6 +330,10 @@ export class AchievementEngine {
    * Evaluate achievements for a user after an action
    */
   async evaluateAchievements(userId: string, triggerType: 'submission' | 'review' | 'xp_change'): Promise<Achievement[]> {
+    if (!ENABLE_ACHIEVEMENTS) {
+      return []
+    }
+
     try {
       const newlyEarnedAchievements: Achievement[] = []
       const achievements = await this.getActiveAchievements()
@@ -354,6 +371,10 @@ export class AchievementEngine {
    * Award an achievement to a user
    */
   async awardAchievement(userId: string, achievementId: string): Promise<boolean> {
+    if (!ENABLE_ACHIEVEMENTS) {
+      return false
+    }
+
     try {
       // Check if user already has this achievement
       const { data: existing } = await supabase
@@ -388,7 +409,6 @@ export class AchievementEngine {
         .single()
 
       if (achievement && achievement.xpReward > 0) {
-        // Record XP transaction
         await xpAnalyticsService.recordXpTransaction(
           userId,
           achievement.xpReward,
@@ -397,18 +417,7 @@ export class AchievementEngine {
           achievementId
         )
 
-        // Update user's total XP
-        const { error: xpError } = await supabase
-          .from('User')
-          .update({
-            totalXp: supabase.sql`"totalXp" + ${achievement.xpReward}`,
-            currentWeekXp: supabase.sql`"currentWeekXp" + ${achievement.xpReward}`
-          })
-          .eq('id', userId)
-
-        if (xpError) {
-          console.error('Error updating user XP for achievement:', xpError)
-        }
+        await this.applyAchievementXpReward(userId, achievementId, achievement.xpReward)
       }
 
       console.log(`🏆 Achievement awarded: ${achievement?.name} to user ${userId}`)
@@ -418,6 +427,92 @@ export class AchievementEngine {
       console.error('Error in awardAchievement:', error)
       return false
     }
+  }
+
+  private async applyAchievementXpReward(userId: string, achievementId: string, xpReward: number): Promise<void> {
+    try {
+      const weekNumber = this.getCurrentWeekNumber()
+
+      const { data: user, error: fetchError } = await supabase
+        .from('User')
+        .select('totalXp, currentWeekXp')
+        .eq('id', userId)
+        .single()
+
+      if (fetchError || !user) {
+        throw new Error(fetchError?.message || 'User not found while applying achievement XP')
+      }
+
+      const updatedTotals = {
+        totalXp: (user.totalXp || 0) + xpReward,
+        currentWeekXp: (user.currentWeekXp || 0) + xpReward
+      }
+
+      const { error: updateError } = await supabase
+        .from('User')
+        .update({
+          totalXp: updatedTotals.totalXp,
+          currentWeekXp: updatedTotals.currentWeekXp,
+          updatedAt: new Date().toISOString()
+        })
+        .eq('id', userId)
+
+      if (updateError) {
+        throw new Error(updateError.message)
+      }
+
+      const { data: weeklyStats, error: weeklyFetchError } = await supabase
+        .from('WeeklyStats')
+        .select('xpTotal, reviewsDone, reviewsMissed, earnedStreak')
+        .eq('userId', userId)
+        .eq('weekNumber', weekNumber)
+        .maybeSingle()
+
+      if (weeklyFetchError && weeklyFetchError.code !== 'PGRST116') {
+        console.error('Error fetching weekly stats for achievement XP:', weeklyFetchError)
+      }
+
+      const existingWeeklyXp = weeklyStats?.xpTotal || 0
+
+      const { error: weeklyUpsertError } = await supabase
+        .from('WeeklyStats')
+        .upsert({
+          userId,
+          weekNumber,
+          xpTotal: existingWeeklyXp + xpReward,
+          reviewsDone: weeklyStats?.reviewsDone ?? 0,
+          reviewsMissed: weeklyStats?.reviewsMissed ?? 0,
+          earnedStreak: weeklyStats?.earnedStreak ?? (existingWeeklyXp + xpReward >= 100)
+        }, { onConflict: 'userId,weekNumber' })
+
+      if (weeklyUpsertError) {
+        console.error('Error updating weekly stats for achievement XP:', weeklyUpsertError)
+      }
+
+      console.log('🏆 Achievement XP applied', {
+        userId,
+        achievementId,
+        xpReward,
+        totalXp: updatedTotals.totalXp,
+        currentWeekXp: updatedTotals.currentWeekXp,
+        weekNumber
+      })
+    } catch (error) {
+      console.error('Failed to apply achievement XP:', {
+        userId,
+        achievementId,
+        xpReward,
+        error
+      })
+      throw error
+    }
+  }
+
+  private getCurrentWeekNumber(): number {
+    const now = new Date()
+    const startOfYear = new Date(now.getFullYear(), 0, 1)
+    const dayOfYear = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000))
+    return Math.ceil((dayOfYear + startOfYear.getDay() + 1) / 7)
   }
 
   /**

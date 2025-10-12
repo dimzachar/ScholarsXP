@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/contexts/AuthContext'
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout'
 import { MobileLayout, MobileSection, MobileHeader, MobileCardGrid } from '@/components/layout/MobileLayout'
+import { ENABLE_ACHIEVEMENTS } from '@/config/feature-flags'
 import {
   ArrowLeft,
   User,
@@ -300,18 +301,20 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Award className="h-4 w-4 text-purple-500" />
-                Achievements
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{statistics?.totalAchievements || 0}</div>
-              <p className="text-xs text-muted-foreground">Unlocked</p>
-            </CardContent>
-          </Card>
+          {ENABLE_ACHIEVEMENTS && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Award className="h-4 w-4 text-purple-500" />
+                  Achievements
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{statistics?.totalAchievements || 0}</div>
+                <p className="text-xs text-muted-foreground">Unlocked</p>
+              </CardContent>
+            </Card>
+          )}
         </MobileCardGrid>
       </MobileSection>
 

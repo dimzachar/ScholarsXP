@@ -1,4 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
+import { ENABLE_ACHIEVEMENTS } from '@/config/feature-flags'
+import { mapTransactionTypeToBucket } from './xp-ledger'
+import { applyTransactionToBreakdown, createEmptyBreakdown } from './xp-ledger'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -175,6 +178,12 @@ export class XpAnalyticsService {
       }>()
 
       transactions?.forEach(transaction => {
+        const bucket = mapTransactionTypeToBucket(transaction.type)
+
+        if (!ENABLE_ACHIEVEMENTS && (bucket === 'achievements' || bucket === 'adminAdjustments')) {
+          return
+        }
+
         const week = transaction.weekNumber
         if (!weeklyData.has(week)) {
           weeklyData.set(week, { xpEarned: 0, submissions: 0, reviews: 0, streaks: 0 })
@@ -193,10 +202,6 @@ export class XpAnalyticsService {
             break
           case 'STREAK_BONUS':
             data.streaks++
-            break
-          case 'ADMIN_ADJUSTMENT':
-            // Legacy data and admin adjustments - count as submissions for trend display
-            data.submissions++
             break
         }
       })
@@ -440,48 +445,22 @@ export class XpAnalyticsService {
   // Helper methods
 
   private calculateBreakdownFromTransactions(transactions: any[]): XpBreakdown {
-    const breakdown = this.getEmptyBreakdown()
+    const breakdown = createEmptyBreakdown()
 
     transactions.forEach(transaction => {
-      const amount = transaction.amount
-      
-      switch (transaction.type) {
-        case 'SUBMISSION_REWARD':
-          breakdown.submissions += amount
-          break
-        case 'REVIEW_REWARD':
-          breakdown.reviews += amount
-          break
-        case 'STREAK_BONUS':
-          breakdown.streaks += amount
-          break
-        case 'ACHIEVEMENT_BONUS':
-          breakdown.achievements += amount
-          break
-        case 'PENALTY':
-          breakdown.penalties += amount // Note: penalties are negative
-          break
-        case 'ADMIN_ADJUSTMENT':
-          breakdown.adminAdjustments += amount
-          break
-      }
-      
-      breakdown.total += amount
+      applyTransactionToBreakdown(breakdown, {
+        amount: transaction.amount,
+        type: transaction.type
+      })
     })
 
-    return breakdown
+    const { other, ...normalized } = breakdown
+    return normalized
   }
 
   private getEmptyBreakdown(): XpBreakdown {
-    return {
-      submissions: 0,
-      reviews: 0,
-      streaks: 0,
-      achievements: 0,
-      penalties: 0,
-      adminAdjustments: 0,
-      total: 0
-    }
+    const { other, ...empty } = createEmptyBreakdown()
+    return empty
   }
 
   private calculateProjectedWeeklyXp(trends: XpTrend[]): number {
