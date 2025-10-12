@@ -6,6 +6,19 @@ import { parsePaginationParams } from '@/lib/pagination'
 import { prisma } from '@/lib/prisma'
 import { getWeekNumber } from '@/lib/utils'
 
+const REVIEWER_COUNT_ENV_VALUES = [
+  process.env.MIN_REVIEWERS_REQUIRED,
+  process.env.REVIEWER_MINIMUM_REQUIRED,
+  process.env.NEXT_PUBLIC_MIN_REVIEWERS_REQUIRED
+]
+
+const DEFAULT_REVIEWERS_REQUIRED = REVIEWER_COUNT_ENV_VALUES
+  .map((value) => {
+    const parsed = value ? parseInt(value, 10) : NaN
+    return Number.isNaN(parsed) || parsed <= 0 ? undefined : parsed
+  })
+  .find((value): value is number => value !== undefined) ?? 3
+
 // Optimized admin submissions handler with compression
 const optimizedSubmissionsHandler = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
@@ -236,6 +249,16 @@ const originalGetHandler = withPermission('admin_access')(async (request: Authen
                 role: true,
                 totalXp: true
               }
+            },
+            peerReviews: {
+              select: {
+                xpScore: true
+              }
+            },
+            _count: {
+              select: {
+                reviewAssignments: true
+              }
             }
           }
         }),
@@ -305,22 +328,41 @@ const originalGetHandler = withPermission('admin_access')(async (request: Authen
       const heuristicTaskType = submission.taskTypes?.[0]
         || (platformLower.includes('twitter') || platformLower.includes('x.com') ? 'A'
             : (platformLower.includes('reddit') || platformLower.includes('notion') || platformLower.includes('medium') ? 'B' : 'Unknown'))
+      const hasPeerReviewsArray = Array.isArray(submission.peerReviews)
+      const peerReviewsArray = hasPeerReviewsArray ? submission.peerReviews : []
+      const peerReviewCount = hasPeerReviewsArray
+        ? peerReviewsArray.length
+        : submission.completedReviewCount
+          ?? submission.reviewCount
+          ?? 0
+      const assignmentCount = submission.reviewAssignments?.length
+        ?? submission._count?.reviewAssignments
+        ?? submission.reviewAssignmentsCount
+        ?? 0
+      const expectedReviews = assignmentCount > 0
+        ? assignmentCount
+        : Math.max(DEFAULT_REVIEWERS_REQUIRED, peerReviewCount)
+      const pendingCount = Math.max(0, expectedReviews - peerReviewCount)
+      const avgPeerScore = peerReviewsArray.length > 0
+        ? peerReviewsArray.reduce((total: number, review: any) => total + (review.xpScore || 0), 0) / peerReviewsArray.length
+        : null
+
       return {
         ...submission,
         // Transform fields to match frontend expectations
         title: `${submission.platform} submission`,
-        content: `Submission from ${submission.url}`,
+        content: submission.content || submission.url || '',
         taskType: heuristicTaskType,
         xpAwarded: submission.finalXp || submission.aiXp || 0,
         peerXp: submission.peerXp || null,
         metrics: {
-          avgPeerScore: null,
+          avgPeerScore,
           reviewProgress: {
-            assigned: 0,
-            completed: submission.reviewCount || 0,
-            pending: 0
+            assigned: expectedReviews,
+            completed: peerReviewCount,
+            pending: pendingCount
           },
-          reviewCount: submission.reviewCount || 0
+          reviewCount: peerReviewCount
         }
       }
     })

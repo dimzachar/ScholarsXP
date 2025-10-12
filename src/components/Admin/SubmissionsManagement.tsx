@@ -47,6 +47,8 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Pagination } from '@/components/ui/pagination'
 
+const DEFAULT_REVIEWERS_REQUIRED = Number(process.env.NEXT_PUBLIC_MIN_REVIEWERS_REQUIRED || '3') || 3
+
 interface Submission {
   id: string
   title: string
@@ -894,86 +896,119 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {submissions.map((submission) => (
-                  <TableRow key={submission.id}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedSubmissions.includes(submission.id)}
-                        onCheckedChange={() => handleSelectSubmission(submission.id)}
-                      />
-                    </TableCell>
-                    <TableCell className="max-w-xs">
-                      <div className="truncate font-medium">{submission.title}</div>
-                      <div className="text-sm text-muted-foreground truncate">
-                        {submission.content.substring(0, 100)}...
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium">{submission.user.username}</div>
-                      <div className="text-sm text-muted-foreground">{submission.user.email}</div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{submission.platform}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{submission.taskType}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getStatusColor(submission.status)}>
-                        {submission.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-xs space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-blue-600">AI:</span>
-                          <span className="font-medium">{submission.aiXp || 0}</span>
+                {submissions.map((submission) => {
+                  const normalizedUrl = submission.url
+                    ? submission.url.startsWith('http')
+                      ? submission.url
+                      : `https://${submission.url}`
+                    : ''
+                  const contentPreview = submission.content || ''
+                  const reviewProgress = submission.metrics?.reviewProgress || { completed: 0, assigned: 0, pending: 0 }
+                  const completedReviews = reviewProgress.completed ?? 0
+                  const expectedReviewsRaw = reviewProgress.assigned ?? 0
+                  const expectedReviews = expectedReviewsRaw > 0
+                    ? expectedReviewsRaw
+                    : Math.max(DEFAULT_REVIEWERS_REQUIRED, completedReviews)
+                  const pendingReviews = reviewProgress.pending ?? Math.max(0, expectedReviews - completedReviews)
+                  const averagePeerScore = submission.metrics?.avgPeerScore
+                  const reviewTooltip = pendingReviews > 0
+                    ? `${completedReviews} completed, ${pendingReviews} pending of ${expectedReviews} reviews`
+                    : `${completedReviews} of ${expectedReviews} reviews completed`
+
+                  return (
+                    <TableRow key={submission.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedSubmissions.includes(submission.id)}
+                          onCheckedChange={() => handleSelectSubmission(submission.id)}
+                        />
+                      </TableCell>
+                      <TableCell className="max-w-[14rem] space-y-1">
+                        <div className="truncate font-medium">{submission.title}</div>
+                        {submission.url ? (
+                          <a
+                            href={normalizedUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block truncate text-sm text-primary hover:underline"
+                          >
+                            {submission.url}
+                          </a>
+                        ) : (
+                          <div className="text-sm text-muted-foreground truncate">
+                            {contentPreview.length > 100
+                              ? `${contentPreview.substring(0, 100)}...`
+                              : contentPreview}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{submission.user.username}</div>
+                        <div className="text-sm text-muted-foreground">{submission.user.email}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{submission.platform}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{submission.taskType}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getStatusColor(submission.status)}>
+                          {submission.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-xs space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-blue-600">AI:</span>
+                            <span className="font-medium">{submission.aiXp || 0}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-green-600">Peer:</span>
+                            <span className="font-medium">{submission.peerXp || 'N/A'}</span>
+                          </div>
+                          <div className="flex items-center justify-between border-t pt-1">
+                            <span className="text-purple-600 font-medium">Final:</span>
+                            <span className="font-bold">{submission.finalXp || 'Pending'}</span>
+                          </div>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-green-600">Peer:</span>
-                          <span className="font-medium">{submission.peerXp || 'N/A'}</span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm" title={reviewTooltip}>
+                          {completedReviews}/{expectedReviews}
                         </div>
-                        <div className="flex items-center justify-between border-t pt-1">
-                          <span className="text-purple-600 font-medium">Final:</span>
-                          <span className="font-bold">{submission.finalXp || 'Pending'}</span>
+                        {averagePeerScore !== undefined && averagePeerScore !== null && (
+                          <div className="text-xs text-muted-foreground">
+                            Avg: {averagePeerScore.toFixed(1)}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {new Date(submission.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.push(`/admin/submissions/${submission.id}`)}
+                            title="View submission details"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openQuickEdit(submission)}
+                            title="Quick edit submission"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        {submission.metrics.reviewProgress.completed}/{submission.metrics.reviewProgress.assigned}
-                      </div>
-                      {submission.metrics.avgPeerScore && (
-                        <div className="text-xs text-muted-foreground">
-                          Avg: {submission.metrics.avgPeerScore.toFixed(1)}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {new Date(submission.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => router.push(`/admin/submissions/${submission.id}`)}
-                          title="View submission details"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openQuickEdit(submission)}
-                          title="Quick edit submission"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           )}

@@ -347,6 +347,11 @@ async function getOptimizedSubmissions(query: any) {
         select: {
           xpScore: true
         }
+      },
+      _count: {
+        select: {
+          reviewAssignments: true
+        }
       }
       // Removed: reviewAssignments, detailed metrics, timeline data
     },

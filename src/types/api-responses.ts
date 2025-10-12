@@ -237,6 +237,19 @@ export interface AnalyticsOverviewDTO {
 // RESPONSE TRANSFORMATION UTILITIES
 // ============================================================================
 
+const REVIEWER_COUNT_ENV_VALUES = [
+  process.env.MIN_REVIEWERS_REQUIRED,
+  process.env.REVIEWER_MINIMUM_REQUIRED,
+  process.env.NEXT_PUBLIC_MIN_REVIEWERS_REQUIRED
+]
+
+const DEFAULT_REVIEWERS_REQUIRED = REVIEWER_COUNT_ENV_VALUES
+  .map((value) => {
+    const parsed = value ? parseInt(value, 10) : NaN
+    return Number.isNaN(parsed) || parsed <= 0 ? undefined : parsed
+  })
+  .find((value): value is number => value !== undefined) ?? 3
+
 export class ResponseTransformer {
   /**
    * Transform full user object to UserProfileDTO
@@ -259,17 +272,33 @@ export class ResponseTransformer {
 
   /**
    * Transform full submission object to AdminSubmissionDTO
-   */
+  */
   static toAdminSubmissionDTO(submission: any): AdminSubmissionDTO {
     const platformLower = (submission.platform || '').toLowerCase()
     const inferredTaskType = submission.taskTypes?.[0]
       || submission.taskType
       || (platformLower.includes('twitter') || platformLower.includes('x.com') ? 'A'
         : (platformLower.includes('reddit') || platformLower.includes('notion') || platformLower.includes('medium') ? 'B' : 'Unknown'))
+    const hasPeerReviewsArray = Array.isArray(submission.peerReviews)
+    const peerReviews = hasPeerReviewsArray ? submission.peerReviews : []
+    const completedReviewsCount = hasPeerReviewsArray
+      ? peerReviews.length
+      : submission.completedReviewCount
+        ?? submission.reviewCount
+        ?? 0
+    const assignmentCount = submission.reviewAssignments?.length
+      ?? submission._count?.reviewAssignments
+      ?? submission.reviewAssignmentsCount
+      ?? 0
+    const expectedReviews = assignmentCount > 0
+      ? assignmentCount
+      : Math.max(DEFAULT_REVIEWERS_REQUIRED, completedReviewsCount)
+    const pendingReviewsCount = Math.max(0, expectedReviews - completedReviewsCount)
+
     return {
       id: submission.id,
       title: submission.title || `${submission.platform} submission`,
-      content: submission.content || `Submission from ${submission.url}`,
+      content: submission.content || submission.url || '',
       url: submission.url,
       platform: submission.platform,
       taskType: inferredTaskType,
@@ -287,14 +316,14 @@ export class ResponseTransformer {
         totalXp: submission.user?.totalXp || 0
       },
       metrics: {
-        reviewCount: submission.reviewCount || 0,
-        avgPeerScore: submission.peerReviews?.length > 0
-          ? submission.peerReviews.reduce((sum: number, review: any) => sum + (review.xpScore || 0), 0) / submission.peerReviews.length
+        reviewCount: completedReviewsCount,
+        avgPeerScore: peerReviews.length > 0
+          ? peerReviews.reduce((sum: number, review: any) => sum + (review.xpScore || 0), 0) / peerReviews.length
           : undefined,
         reviewProgress: {
-          assigned: submission.reviewAssignments?.length || 0,
-          completed: submission.peerReviews?.length || 0,
-          pending: Math.max(0, (submission.reviewAssignments?.length || 0) - (submission.peerReviews?.length || 0))
+          assigned: expectedReviews,
+          completed: completedReviewsCount,
+          pending: pendingReviewsCount
         }
       }
     }
