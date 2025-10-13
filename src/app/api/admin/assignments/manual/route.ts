@@ -76,6 +76,13 @@ export const POST = withPermission('admin_access')(async (request: Authenticated
     const existingReviewerIds = existingAssignments?.map(a => a.reviewerId) || []
     const newReviewerIds = reviewerIds.filter((id: string) => !existingReviewerIds.includes(id))
 
+    if (existingReviewerIds.length + newReviewerIds.length < 3) {
+      return NextResponse.json(
+        { message: 'Total assigned reviewers must be at least 3 per submission' },
+        { status: 400 }
+      )
+    }
+
     if (newReviewerIds.length === 0) {
       return NextResponse.json(
         { message: 'All specified reviewers are already assigned to this submission' },
@@ -120,7 +127,19 @@ export const POST = withPermission('admin_access')(async (request: Authenticated
     }
 
     // Update submission status and review count
-    const totalReviewers = existingReviewerIds.length + newReviewerIds.length
+    const { count: liveAssignmentCount, error: countError } = await supabase
+      .from('ReviewAssignment')
+      .select('id', { count: 'exact', head: true })
+      .eq('submissionId', submissionId)
+      .not('status', 'eq', 'REASSIGNED')
+
+    if (countError) {
+      console.error('Failed to recalc assignment count:', countError)
+    }
+
+    const totalReviewers = typeof liveAssignmentCount === 'number'
+      ? liveAssignmentCount
+      : existingReviewerIds.length + newReviewerIds.length
     const { error: submissionUpdateError } = await supabase
       .from('Submission')
       .update({

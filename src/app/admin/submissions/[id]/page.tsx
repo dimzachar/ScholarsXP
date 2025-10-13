@@ -92,6 +92,7 @@ export default function AdminSubmissionDetailPage() {
   const [submission, setSubmission] = useState<SubmissionDetail | null>(null)
   const [loadingSubmission, setLoadingSubmission] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [assigning, setAssigning] = useState(false)
 
   const fetchSubmissionDetails = useCallback(async () => {
     try {
@@ -142,6 +143,36 @@ export default function AdminSubmissionDetailPage() {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString()
   }
+
+  const handleAutoAssign = useCallback(async () => {
+    if (!submissionId || assigning) return
+    try {
+      setAssigning(true)
+      setError(null)
+      const response = await fetch('/api/admin/assignments/auto', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ submissionId })
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        const message = data?.message || `Failed to assign reviewers: ${response.status}`
+        setError(message)
+        return
+      }
+
+      await fetchSubmissionDetails()
+    } catch (autoError) {
+      console.error('Error auto-assigning reviewers:', autoError)
+      setError('Unable to assign reviewers automatically. Please try again.')
+    } finally {
+      setAssigning(false)
+    }
+  }, [submissionId, assigning, fetchSubmissionDetails])
 
   if (loading || loadingSubmission) {
     return (
@@ -249,6 +280,13 @@ export default function AdminSubmissionDetailPage() {
               <CardContent>
                 {submission.reviewAssignments.length > 0 ? (
                   <div className="space-y-4">
+                    {submission.reviewAssignments.length < 3 && (
+                      <div className="flex justify-end">
+                        <Button size="sm" onClick={handleAutoAssign} disabled={assigning}>
+                          {assigning ? 'Assigning…' : 'Re-assign reviewers'}
+                        </Button>
+                      </div>
+                    )}
                     {submission.reviewAssignments.map((assignment) => (
                       <div key={assignment.id} className="flex items-center justify-between p-4 border rounded-lg">
                         <div>
@@ -265,8 +303,15 @@ export default function AdminSubmissionDetailPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No review assignments found
+                  <div className="space-y-4">
+                    <div className="flex justify-end">
+                      <Button size="sm" onClick={handleAutoAssign} disabled={assigning}>
+                        {assigning ? 'Assigning…' : 'Assign reviewers'}
+                      </Button>
+                    </div>
+                    <div className="text-center py-8 text-muted-foreground">
+                      No review assignments found
+                    </div>
                   </div>
                 )}
               </CardContent>

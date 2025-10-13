@@ -17,18 +17,13 @@ export async function ensureReviewAssignments(
   options: ReviewerPoolOptions = {}
 ): Promise<EnsureReviewAssignmentsResult> {
   try {
-    const existingAssignments = await prisma.reviewAssignment.count({
-      where: { submissionId }
+    const existingAssignments = await prisma.reviewAssignment.findMany({
+      where: {
+        submissionId,
+        status: { not: 'REASSIGNED' }
+      },
+      select: { reviewerId: true }
     })
-
-    if (existingAssignments > 0) {
-      console.log(`[PeerReview] Skipping auto-assignment for ${submissionId}: ${existingAssignments} assignment(s) already exist`)
-      return {
-        success: true,
-        status: 'SKIPPED_ALREADY_ASSIGNED',
-        existingAssignments
-      }
-    }
 
     const mergedOptions: ReviewerPoolOptions = {
       ...options
@@ -51,6 +46,33 @@ export async function ensureReviewAssignments(
       const allowPartialEnv = (process.env.ALLOW_PARTIAL_REVIEW_ASSIGNMENTS || '').toLowerCase() === 'true'
       mergedOptions.allowPartialAssignment = allowPartialEnv || process.env.NODE_ENV !== 'production'
     }
+
+    const requiredReviewers = mergedOptions.minimumReviewers ?? 3
+
+    if (existingAssignments.length >= requiredReviewers) {
+      console.log(`[PeerReview] Skipping auto-assignment for ${submissionId}: already has ${existingAssignments.length} reviewer(s)`)
+      return {
+        success: true,
+        status: 'SKIPPED_ALREADY_ASSIGNED',
+        existingAssignments: existingAssignments.length
+      }
+    }
+
+    const remainingNeeded = requiredReviewers - existingAssignments.length
+
+    if (remainingNeeded <= 0) {
+      return {
+        success: true,
+        status: 'SKIPPED_ALREADY_ASSIGNED',
+        existingAssignments: existingAssignments.length
+      }
+    }
+
+    const excludeUserIds = new Set(mergedOptions.excludeUserIds ?? [])
+    existingAssignments.forEach(record => excludeUserIds.add(record.reviewerId))
+
+    mergedOptions.excludeUserIds = Array.from(excludeUserIds)
+    mergedOptions.minimumReviewers = remainingNeeded
 
     const assignmentResult = await reviewerPoolService.assignReviewers(
       submissionId,
@@ -96,6 +118,21 @@ export async function ensureReviewAssignments(
             )
           }
         })
+      }
+
+      if (assignmentResult.assignedReviewers.length < remainingNeeded) {
+        const shortfall = remainingNeeded - assignmentResult.assignedReviewers.length
+        const warningMessage = `Auto-assignment incomplete: needed ${remainingNeeded}, assigned ${assignmentResult.assignedReviewers.length} (short ${shortfall})`
+        if (!assignmentResult.warnings.includes(warningMessage)) {
+          assignmentResult.warnings.push(warningMessage)
+        }
+
+        return {
+          success: false,
+          status: 'FAILED',
+          assignmentResult,
+          error: warningMessage
+        }
       }
     } else {
       const errorMessage = assignmentResult.errors.join('; ') || 'Unknown error'

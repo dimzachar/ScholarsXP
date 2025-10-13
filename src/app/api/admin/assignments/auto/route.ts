@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { createServiceClient } from '@/lib/supabase-server'
-import { reviewerPoolService } from '@/lib/reviewer-pool'
-import { notifyReviewAssigned } from '@/lib/notifications'
+import { ensureReviewAssignments } from '@/lib/auto-review-assignment'
 
 export const POST = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
@@ -32,81 +31,36 @@ export const POST = withPermission('admin_access')(async (request: Authenticated
       )
     }
 
+    const allowedStatuses = new Set(['AI_REVIEWED', 'UNDER_PEER_REVIEW'])
+
     // Check if submission is in the correct status for assignment
-    if (submission.status !== 'AI_REVIEWED') {
+    if (!allowedStatuses.has(submission.status)) {
       return NextResponse.json(
-        { message: `Submission must be in AI_REVIEWED status. Current status: ${submission.status}` },
+        { message: `Submission must be in AI_REVIEWED or UNDER_PEER_REVIEW status. Current status: ${submission.status}` },
         { status: 400 }
       )
     }
 
-    // Check if reviewers are already assigned
-    const { data: existingAssignments } = await supabase
-      .from('ReviewAssignment')
-      .select('id')
-      .eq('submissionId', submissionId)
+    const result = await ensureReviewAssignments(submissionId, submission.userId, {
+      taskTypes: submission.taskTypes
+    })
 
-    if (existingAssignments && existingAssignments.length > 0) {
+    if (!result.success) {
       return NextResponse.json(
-        { message: 'Reviewers are already assigned to this submission' },
-        { status: 400 }
-      )
-    }
-
-    // Assign reviewers automatically
-    const assignmentResult = await reviewerPoolService.assignReviewers(
-      submissionId,
-      submission.userId,
-      {
-        taskTypes: submission.taskTypes
-      }
-    )
-
-    if (!assignmentResult.success) {
-      return NextResponse.json(
-        { 
-          message: 'Failed to assign reviewers',
-          errors: assignmentResult.errors,
-          warnings: assignmentResult.warnings
+        {
+          message: result.error || 'Failed to assign reviewers',
+          warnings: result.assignmentResult?.warnings
         },
         { status: 400 }
       )
     }
 
-    const submissionUrl = submission.url ?? null
-
-    const notificationResults = await Promise.allSettled(
-      assignmentResult.assignedReviewers.map(reviewer =>
-        notifyReviewAssigned(reviewer.id, submissionId, submissionUrl)
-      )
-    )
-
-    const notificationWarnings = notificationResults.reduce<string[]>((warnings, result, index) => {
-      if (result.status === 'rejected') {
-        const reviewer = assignmentResult.assignedReviewers[index]
-        console.error(
-          `Failed to notify reviewer ${reviewer.id} about assignment to submission ${submissionId}:`,
-          result.reason
-        )
-        warnings.push(`Failed to notify reviewer ${reviewer.username || reviewer.email}`)
-      }
-      return warnings
-    }, [])
-
-    const combinedWarnings = [
-      ...assignmentResult.warnings,
-      ...notificationWarnings
-    ]
-
     return NextResponse.json({
-      message: 'Reviewers assigned successfully',
-      assignedReviewers: assignmentResult.assignedReviewers.map(reviewer => ({
-        id: reviewer.id,
-        username: reviewer.username,
-        totalXp: reviewer.totalXp,
-        activeAssignments: reviewer.activeAssignments
-      })),
-      warnings: combinedWarnings
+      message: result.status === 'SKIPPED_ALREADY_ASSIGNED'
+        ? 'Submission already has the required number of reviewers'
+        : 'Reviewers assigned successfully',
+      assignedReviewers: result.assignmentResult?.assignedReviewers ?? [],
+      warnings: result.assignmentResult?.warnings ?? []
     })
 
   } catch (error) {

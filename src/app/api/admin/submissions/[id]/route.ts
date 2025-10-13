@@ -657,6 +657,24 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
               }
             })
           ])
+
+          try {
+            const activeAssignments = await prisma.reviewAssignment.count({
+              where: {
+                submissionId,
+                NOT: {
+                  status: 'REASSIGNED'
+                }
+              }
+            })
+
+            await prisma.submission.update({
+              where: { id: submissionId },
+              data: { reviewCount: activeAssignments }
+            })
+          } catch (countError) {
+            console.warn('Failed to refresh review count after reassignment:', countError)
+          }
         }
 
         result = { message: 'Review reassigned successfully' }

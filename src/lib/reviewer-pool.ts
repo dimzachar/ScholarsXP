@@ -219,13 +219,26 @@ export class ReviewerPoolService {
         return result
       }
 
+      let liveAssignmentCount: number | null = null
+      const { count: assignmentCount, error: countError } = await supabase
+        .from('ReviewAssignment')
+        .select('id', { count: 'exact', head: true })
+        .eq('submissionId', submissionId)
+        .not('status', 'eq', 'REASSIGNED')
+
+      if (countError) {
+        result.warnings.push(`Failed to recalc assignment count: ${countError.message}`)
+      } else if (typeof assignmentCount === 'number') {
+        liveAssignmentCount = assignmentCount
+      }
+
       // Update submission status and deadline
       const { error: submissionError } = await supabase
         .from('Submission')
         .update({
           status: 'UNDER_PEER_REVIEW',
           reviewDeadline: deadline.toISOString(),
-          reviewCount: selectedReviewers.length
+          reviewCount: liveAssignmentCount ?? selectedReviewers.length
         })
         .eq('id', submissionId)
 

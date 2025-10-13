@@ -40,7 +40,21 @@ export interface ReviewerReliability {
 export class ConsensusCalculatorService {
   private readonly AI_BASE_WEIGHT = 0.0 // AI disabled for consensus (peer-only)
   private readonly PEER_BASE_WEIGHT = 1.0 // 100% weight for peer reviews
-  private readonly MIN_REVIEWS_FOR_CONSENSUS = 2
+  private readonly MIN_REVIEWS_FOR_CONSENSUS = (() => {
+    const envValue = parseInt(
+      process.env.REQUIRED_REVIEWS_FOR_FINALIZATION ||
+      process.env.REVIEWER_MINIMUM_REQUIRED ||
+      process.env.MIN_REVIEWERS_REQUIRED ||
+      '',
+      10
+    )
+
+    if (!Number.isNaN(envValue) && envValue > 0) {
+      return envValue
+    }
+
+    return 3
+  })()
   private readonly OUTLIER_THRESHOLD = 2.0 // Standard deviations
   private readonly HIGH_CONFIDENCE_THRESHOLD = 0.8
   private readonly MEDIUM_CONFIDENCE_THRESHOLD = 0.6

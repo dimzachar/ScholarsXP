@@ -227,7 +227,9 @@ export class DeadlineMonitorService {
         assignment.submission.userId,
         {
           excludeUserIds: [assignment.reviewerId], // Exclude the reviewer who missed
-          maxActiveAssignments: 5
+          maxActiveAssignments: 5,
+          minimumReviewers: 1,
+          allowPartialAssignment: false
         }
       )
 
