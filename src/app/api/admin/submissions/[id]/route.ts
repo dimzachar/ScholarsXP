@@ -638,7 +638,7 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
               data: {
                 submissionId,
                 reviewerId: data.newReviewerId,
-                deadline: new Date(Date.now() + 72 * 60 * 60 * 1000), // 72 hours from now
+                deadline: new Date(Date.now() + 48 * 60 * 60 * 1000), // 48 hours from now
                 status: 'PENDING'
               }
             }),

@@ -39,11 +39,11 @@ export interface ReviewerPerformance {
  * Service for managing review incentives and penalties
  */
 export class ReviewIncentivesService {
-  private readonly BASE_REVIEW_REWARD = 10
+  private readonly BASE_REVIEW_REWARD = 50
   private readonly QUALITY_BONUS_THRESHOLD = 4.0 // Quality rating threshold for bonus
   private readonly QUALITY_BONUS_AMOUNT = 2
   private readonly TIMELINESS_BONUS_HOURS = 24 // Complete within 24 hours for bonus
-  private readonly TIMELINESS_BONUS_AMOUNT = 1
+  private readonly TIMELINESS_BONUS_AMOUNT = 5
   private readonly STREAK_BONUS_AMOUNT = 1 // Per week of streak
   private readonly MISSED_REVIEW_PENALTY = -10
   private readonly LATE_REVIEW_PENALTY = -2

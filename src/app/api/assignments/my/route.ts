@@ -107,7 +107,7 @@ export const GET = withPermission('review_content')(
         if (assignment.assignedAt) {
           const assignedAt = new Date(assignment.assignedAt)
           const baseDeadline = new Date(assignedAt)
-          baseDeadline.setHours(baseDeadline.getHours() + 72)
+          baseDeadline.setHours(baseDeadline.getHours() + 48)
 
           const weekendAdjusted = new Date(baseDeadline)
           const baseDay = weekendAdjusted.getDay()

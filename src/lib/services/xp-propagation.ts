@@ -53,11 +53,12 @@ export async function propagateXpChanges(
     }
 
     const xpDifference = newXp - oldXp
-    const currentWeek = getWeekNumber(new Date())
+    const currentWeekNumber = getWeekNumber(new Date())
+    const submissionWeekNumber = submission.weekNumber ?? getWeekNumber(submission.createdAt ?? new Date())
 
     // Track applied diffs to communicate accurate changes
     let appliedTotalChange = xpDifference
-    let appliedWeekChange = xpDifference
+    let affectedWeekNumber = submissionWeekNumber
 
     // Execute all updates in a transaction
     await prisma.$transaction(async (tx) => {
@@ -78,11 +79,23 @@ export async function propagateXpChanges(
       }
 
       // 3. Read current weekly stats (if any) for precise clamping
+      const originalSubmissionReward = await tx.xpTransaction.findFirst({
+        where: {
+          sourceId: submissionId,
+          type: 'SUBMISSION_REWARD'
+        },
+        orderBy: { createdAt: 'asc' },
+        select: { weekNumber: true }
+      })
+
+      const targetWeekNumber = originalSubmissionReward?.weekNumber ?? submissionWeekNumber
+      affectedWeekNumber = targetWeekNumber
+
       const existingWeekly = await tx.weeklyStats.findUnique({
         where: {
           userId_weekNumber: {
             userId: submission.userId,
-            weekNumber: currentWeek
+            weekNumber: targetWeekNumber
           }
         },
         select: { xpTotal: true }
@@ -94,17 +107,21 @@ export async function propagateXpChanges(
         : -Math.min(currentUser.totalXp, Math.abs(xpDifference))
 
       const currentWeekUserXp = currentUser.currentWeekXp || 0
-      const currentWeekStatsXp = existingWeekly?.xpTotal || 0
-      const appliedWeekDiff = xpDifference >= 0
+      const targetWeekStatsXp = existingWeekly?.xpTotal || 0
+      const appliedWeeklyDiff = xpDifference >= 0
         ? xpDifference
-        : -Math.min(currentWeekUserXp, Math.abs(xpDifference))
+        : -Math.min(targetWeekStatsXp, Math.abs(xpDifference))
+      const appliedCurrentWeekDiff = targetWeekNumber === currentWeekNumber
+        ? (xpDifference >= 0
+            ? xpDifference
+            : -Math.min(currentWeekUserXp, Math.abs(xpDifference)))
+        : 0
 
       const newTotalXp = Math.max(0, currentUser.totalXp + appliedTotalDiff)
-      const newWeekXp = Math.max(0, currentWeekUserXp + appliedWeekDiff)
-      const newWeeklyStatsTotal = Math.max(0, currentWeekStatsXp + xpDifference)
+      const newWeekXp = Math.max(0, currentWeekUserXp + appliedCurrentWeekDiff)
+      const newWeeklyStatsTotal = Math.max(0, targetWeekStatsXp + appliedWeeklyDiff)
 
       appliedTotalChange = appliedTotalDiff
-      appliedWeekChange = appliedWeekDiff
 
       // 4. Update user totals with clamped values
       await tx.user.update({
@@ -124,7 +141,7 @@ export async function propagateXpChanges(
           type: 'ADMIN_ADJUSTMENT',
           sourceId: submissionId,
           description: `Admin XP modification: ${reason}`,
-          weekNumber: currentWeek
+          weekNumber: targetWeekNumber
         }
       })
 
@@ -133,7 +150,7 @@ export async function propagateXpChanges(
         where: {
           userId_weekNumber: {
             userId: submission.userId,
-            weekNumber: currentWeek
+            weekNumber: targetWeekNumber
           }
         },
         update: {
@@ -141,8 +158,8 @@ export async function propagateXpChanges(
         },
         create: {
           userId: submission.userId,
-          weekNumber: currentWeek,
-          xpTotal: Math.max(0, xpDifference),
+          weekNumber: targetWeekNumber,
+          xpTotal: Math.max(0, appliedWeeklyDiff),
           reviewsDone: 0,
           reviewsMissed: 0
         }
@@ -161,7 +178,7 @@ export async function propagateXpChanges(
             newXp,
             difference: xpDifference,
             appliedTotalDiff,
-            appliedWeekDiff,
+            appliedWeekDiff: appliedWeeklyDiff,
             reason
           }
         }
@@ -171,7 +188,7 @@ export async function propagateXpChanges(
     // 6. Post-transaction updates (non-critical)
     try {
       // Update leaderboard rankings
-      await updateLeaderboardRankings(currentWeek)
+      await updateLeaderboardRankings(affectedWeekNumber)
       result.updatedEntities.leaderboard = true
 
       // Check achievement triggers

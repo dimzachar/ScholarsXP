@@ -589,7 +589,7 @@ sequenceDiagram
     S->>AI: Queue AI Evaluation
     AI-->>S: Return AI Score
     S->>R: Assign 3 Reviewers
-    R-->>S: Submit Reviews (72h)
+    R-->>S: Submit Reviews (48h)
     S->>S: Aggregate Final XP
     S->>N: Notify User of XP Award
     N-->>U: Real-time Notification
@@ -604,7 +604,7 @@ flowchart TD
     C -->|No| D[Queue for Later]
     C -->|Yes| E[Assign 3 Reviewers]
     E --> F[Send Review Notifications]
-    F --> G[Start 72h Timer]
+    F --> G[Start 48h Timer]
     G --> H{All Reviews Complete?}
     H -->|No| I[Send Reminders]
     H -->|Yes| J[Trigger XP Aggregation]

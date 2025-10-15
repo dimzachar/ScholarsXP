@@ -193,9 +193,9 @@ export async function generateWeeklyLeaderboard(weekNumber: number): Promise<boo
 
 export async function checkMissedReviews(): Promise<number> {
   try {
-    // Find submissions that have been waiting for peer review for more than 72 hours
+    // Find submissions that have been waiting for peer review for more than 48 hours
     const cutoffDate = new Date()
-    cutoffDate.setHours(cutoffDate.getHours() - 72)
+    cutoffDate.setHours(cutoffDate.getHours() - 48)
 
     const overdueSubmissions = await prisma.submission.findMany({
       where: {

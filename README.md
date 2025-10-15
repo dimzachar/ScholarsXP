@@ -180,7 +180,7 @@ Visit `http://localhost:3002` to access the application.
    - Provide constructive feedback
 
 2. **Earn Review XP**:
-   - +10 XP per completed review
+   - +50 XP base per completed review (+5 XP timeliness bonus)
    - Bonus XP for high-quality reviews
    - Penalties for missed deadlines
 
@@ -224,7 +224,7 @@ The platform supports 6 distinct task types, each with specific XP ranges and we
    - Task type classification
    - Originality detection (0-1 score)
    - Content validation
-3. **Peer Review**: 3 community reviewers evaluate within 72 hours
+3. **Peer Review**: 3 community reviewers evaluate within 48 hours
 4. **XP Aggregation**: Final score calculated using weighted average
 5. **Weekly Caps**: Applied per task type to prevent gaming
 
@@ -233,7 +233,7 @@ The platform supports 6 distinct task types, each with specific XP ranges and we
 - **Duplicate Detection**: Content fingerprinting prevents resubmissions
 - **AI Content Detection**: Flags potentially generated content
 - **Spam Prevention**: Pattern analysis for promotional content
-- **Review Incentives**: +10 XP per completed review, penalties for missed reviews
+- **Review Incentives**: +50 XP per completed review (+5 XP timeliness bonus), penalties for missed reviews
 - **Streak System**: Bonus XP every 4 weeks for consistent activity
 
 ## 🔧 API Endpoints

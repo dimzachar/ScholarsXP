@@ -393,7 +393,7 @@ const originalHandler = withPermission('authenticated')(async (request: Authenti
       return acc
     }, {} as Record<string, number>)
 
-    const reviewXp = (transactionsByType['REVIEW_REWARD'] || 0) + (totalReviews * 10) // Transaction XP + base review XP
+    const reviewXp = (transactionsByType['REVIEW_REWARD'] || 0) + (totalReviews * 50) // Transaction XP + base review XP
     const achievementXp = ENABLE_ACHIEVEMENTS
       ? (transactionsByType['ACHIEVEMENT_REWARD'] || 0) +
         (transactionsByType['ACHIEVEMENT_BONUS'] || 0) +
