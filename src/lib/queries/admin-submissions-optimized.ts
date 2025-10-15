@@ -273,14 +273,32 @@ export async function getOptimizedAdminSubmissions(
 
       const query = PaginationHelper.createSubmissionQuery(queryParams)
       console.log('Generated query where clause:', JSON.stringify(query.where, null, 2))
-      
-      // Get submissions and count in parallel for better performance
-      const [regularSubmissions, regularCount, legacySubmissions, legacyCount, stats] = await Promise.all([
-        getOptimizedSubmissions(query),
-        getSubmissionCount(query.where || {}),
-        getOptimizedLegacySubmissions(query, cleanedFilters),
+
+      const baseWhere = query.where || {}
+      const orderBy = query.orderBy
+      const offset = typeof query.skip === 'number' ? query.skip : (pagination.page - 1) * pagination.limit
+      const limit = typeof query.take === 'number' ? query.take : pagination.limit
+
+      const [regularCount, legacyCount, stats] = await Promise.all([
+        getSubmissionCount(baseWhere),
         getLegacySubmissionCount(cleanedFilters),
-        getSubmissionStats(query.where || {}, cleanedFilters)
+        getSubmissionStats(baseWhere, cleanedFilters)
+      ])
+
+      const regularSkip = Math.min(offset, regularCount)
+      const remainingRegular = Math.max(regularCount - regularSkip, 0)
+      const regularTake = Math.min(limit, remainingRegular)
+      const remainingSlots = Math.max(limit - regularTake, 0)
+      const legacySkip = Math.max(0, offset - regularCount)
+      const legacyTake = remainingSlots
+
+      const [regularSubmissions, legacySubmissions] = await Promise.all([
+        regularTake > 0
+          ? getOptimizedSubmissions({ ...query, where: baseWhere, orderBy, skip: regularSkip, take: regularTake })
+          : Promise.resolve([]),
+        legacyTake > 0
+          ? getOptimizedLegacySubmissions({ ...query, skip: legacySkip, take: legacyTake }, cleanedFilters)
+          : Promise.resolve([])
       ])
 
       // Combine regular and legacy submissions
@@ -365,8 +383,8 @@ async function getOptimizedSubmissions(query: any) {
  * Get optimized legacy submissions with proper formatting
  */
 async function getOptimizedLegacySubmissions(query: any, filters: any = {}) {
-  const legacyLimit = Math.max(0, query.take - 0) // Get remaining slots after regular submissions
-  const legacyOffset = query.skip || 0 // Use the same offset as regular submissions
+  const legacyLimit = Math.max(0, query.take ?? 0)
+  const legacyOffset = Math.max(0, query.skip ?? 0)
 
   if (legacyLimit <= 0) {
     return []
