@@ -46,6 +46,7 @@ interface PendingReview {
   assignment: {
     id: string
     deadline: string
+    status?: 'PENDING' | 'IN_PROGRESS' | 'MISSED' | 'COMPLETED'
     timeRemaining?: { hours: number; minutes: number }
     isOverdue?: boolean
     weekendExtension?: boolean
@@ -56,6 +57,7 @@ interface AssignmentResponse {
   assignments: Array<{
     id: string
     deadline: string
+    status?: 'PENDING' | 'IN_PROGRESS' | 'MISSED' | 'COMPLETED'
     timeRemaining?: { hours: number; minutes: number }
     isOverdue?: boolean
     weekendExtension?: boolean
@@ -182,6 +184,7 @@ export default function ReviewPage() {
             assignment: {
               id: assignment.id,
               deadline: assignment.deadline,
+              status: assignment.status,
               timeRemaining: assignment.timeRemaining,
               isOverdue: assignment.isOverdue,
               weekendExtension: assignment.weekendExtension

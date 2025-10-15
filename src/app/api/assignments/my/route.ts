@@ -47,7 +47,7 @@ export const GET = withPermission('review_content')(
 
     // Apply status filter
     if (status === 'pending') {
-      query = query.in('status', ['PENDING', 'IN_PROGRESS'])
+      query = query.in('status', ['PENDING', 'IN_PROGRESS', 'MISSED'])
     } else if (status === 'completed') {
       query = query.eq('status', 'COMPLETED')
     } else if (status === 'missed') {
@@ -72,7 +72,7 @@ export const GET = withPermission('review_content')(
       .eq('reviewerId', reviewerId)
 
     if (status === 'pending') {
-      countQuery = countQuery.in('status', ['PENDING', 'IN_PROGRESS'])
+      countQuery = countQuery.in('status', ['PENDING', 'IN_PROGRESS', 'MISSED'])
     } else if (status === 'completed') {
       countQuery = countQuery.eq('status', 'COMPLETED')
     } else if (status === 'missed') {
@@ -124,6 +124,8 @@ export const GET = withPermission('review_content')(
             weekendExtension = Math.abs(actualDeadline - adjustedTime) <= 5 * 60 * 1000
           }
         }
+      } else if (assignment.status === 'MISSED') {
+        isOverdue = true
       }
 
       return {
@@ -151,7 +153,7 @@ export const GET = withPermission('review_content')(
         hasMore: (count || 0) > offset + limit
       },
       summary: {
-        pending: enrichedAssignments.filter(a => ['PENDING', 'IN_PROGRESS'].includes(a.status)).length,
+        pending: enrichedAssignments.filter(a => ['PENDING', 'IN_PROGRESS', 'MISSED'].includes(a.status)).length,
         overdue: enrichedAssignments.filter(a => a.isOverdue).length
       }
     })

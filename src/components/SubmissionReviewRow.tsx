@@ -4,6 +4,7 @@ import { useMemo } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
+  AlertTriangle,
   ChevronDown,
   ChevronRight,
   Clock,
@@ -48,6 +49,7 @@ interface AssignmentMeta {
   timeRemaining?: { hours: number; minutes: number }
   isOverdue?: boolean
   weekendExtension?: boolean
+  status?: "PENDING" | "IN_PROGRESS" | "MISSED" | "COMPLETED"
 }
 
 interface ReviewSubmissionPayload {
@@ -121,7 +123,12 @@ export default function SubmissionReviewRow({
 }: SubmissionReviewRowProps) {
   const deadlineLabel = useMemo(() => {
     if (!assignment) return null
-    if (assignment.isOverdue) return { text: "Overdue", tone: "destructive" as const }
+    if (assignment.status === "MISSED") {
+      return { text: "Missed deadline", tone: "destructive" as const, isMissed: true as const }
+    }
+    if (assignment.isOverdue) {
+      return { text: "Overdue", tone: "destructive" as const }
+    }
     if (assignment.timeRemaining) {
       const { hours, minutes } = assignment.timeRemaining
       const weekendSuffix = assignment.weekendExtension ? " (due to weekend)" : ""
@@ -150,15 +157,18 @@ export default function SubmissionReviewRow({
     [submission.assignedReviewers]
   )
 
+  const isMissedAssignment = assignment?.status === "MISSED"
+  const DeadlineIcon = deadlineLabel?.isMissed ? AlertTriangle : Clock
+
   return (
-    <Card className="border-0 shadow-sm">
+    <Card className={cn("border-0 shadow-sm", isMissedAssignment && "ring-1 ring-destructive/40 bg-destructive/5")}>
       <CardContent className="p-0">
         {/* Row summary */}
         <button
           type="button"
           className={cn(
-            "w-full flex items-center gap-3 px-4 py-3 text-left",
-            "hover:bg-muted/50 transition-colors"
+            "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
+            isMissedAssignment ? "bg-destructive/5 hover:bg-destructive/10" : "hover:bg-muted/50"
           )}
           aria-expanded={open}
           onClick={() => onOpenChange?.(!open)}
@@ -183,6 +193,12 @@ export default function SubmissionReviewRow({
               >
                 {displayUrl}
               </span>
+              {isMissedAssignment && (
+                <span className="mt-1 inline-flex items-center gap-1 self-start rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-destructive">
+                  <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                  Missed
+                </span>
+              )}
               {assignedReviewers.length > 0 && (
                 <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground sm:hidden">
                   <Users className="h-3 w-3 text-muted-foreground/80" aria-hidden="true" />
@@ -255,7 +271,7 @@ export default function SubmissionReviewRow({
                 deadlineLabel.tone === "warning" && "text-warning border-warning/30",
                 deadlineLabel.tone === "secondary" && "text-foreground/70 border-border/60"
               )}>
-                <Clock className="h-3 w-3" aria-hidden="true" /> {deadlineLabel.text}
+                <DeadlineIcon className="h-3 w-3" aria-hidden="true" /> {deadlineLabel.text}
               </span>
             )}
           </div>
