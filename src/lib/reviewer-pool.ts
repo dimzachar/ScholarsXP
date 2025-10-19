@@ -32,6 +32,7 @@ export interface AssignmentResult {
   assignedReviewers: ReviewerCandidate[]
   errors: string[]
   warnings: string[]
+  errorCode?: string
 }
 
 /**
@@ -39,7 +40,7 @@ export interface AssignmentResult {
  * Implements workload balancing and conflict detection
  */
 export class ReviewerPoolService {
-  private readonly MAX_ACTIVE_ASSIGNMENTS = 5
+  private readonly MAX_ACTIVE_ASSIGNMENTS = 7
   private readonly MIN_REVIEWERS_REQUIRED = 3
   private readonly REVIEWER_ROLES = ['REVIEWER', 'ADMIN']
 
@@ -181,11 +182,13 @@ export class ReviewerPoolService {
 
       if (availableReviewers.length < minimumReviewers) {
         if (availableReviewers.length === 0) {
+          result.errorCode = 'NO_REPLACEMENT_AVAILABLE'
           result.errors.push(`No eligible reviewers available. Need at least ${minimumReviewers}`)
           return result
         }
 
         if (!options.allowPartialAssignment) {
+          result.errorCode = 'INSUFFICIENT_REVIEWERS'
           result.errors.push(`Insufficient reviewers available. Found ${availableReviewers.length}, need ${minimumReviewers}`)
           return result
         }

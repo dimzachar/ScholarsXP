@@ -61,6 +61,7 @@ next-env.d.ts
 # augment
 .augment/
 supabase/migrations/*
+!supabase/migrations/20251016_reviewer_reshuffle_mvp.sql
 # IDE
 .vscode/
 .idea/

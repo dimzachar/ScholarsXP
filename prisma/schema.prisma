@@ -134,6 +134,8 @@ model ReviewAssignment {
   deadline       DateTime
   status         ReviewAssignmentStatus @default(PENDING)
   completedAt    DateTime?
+  releasedAt     DateTime?
+  releaseReason  String?
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
 

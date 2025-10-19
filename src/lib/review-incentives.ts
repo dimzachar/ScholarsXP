@@ -42,11 +42,13 @@ export class ReviewIncentivesService {
   private readonly BASE_REVIEW_REWARD = 50
   private readonly QUALITY_BONUS_THRESHOLD = 4.0 // Quality rating threshold for bonus
   private readonly QUALITY_BONUS_AMOUNT = 2
-  private readonly TIMELINESS_BONUS_HOURS = 24 // Complete within 24 hours for bonus
+  private readonly TIMELINESS_BONUS_HOURS = 12 // Complete within 12 hours for bonus
   private readonly TIMELINESS_BONUS_AMOUNT = 5
+  private readonly REVIEW_DEADLINE_HOURS = 48
+  private readonly RESHUFFLE_TRIGGER_HOURS = 50
+  private readonly LATE_SALVAGE_BONUS = 2
   private readonly STREAK_BONUS_AMOUNT = 1 // Per week of streak
   private readonly MISSED_REVIEW_PENALTY = -10
-  private readonly LATE_REVIEW_PENALTY = -2
   private readonly POOR_QUALITY_PENALTY = -3 // For consistently poor reviews
 
   /**
@@ -75,16 +77,20 @@ export class ReviewIncentivesService {
       reward.qualityBonus = 0
 
       // Calculate timeliness bonus
-      const completionTime = Date.now() - assignedAt.getTime()
+      const completionTime = Math.max(0, Date.now() - assignedAt.getTime())
       const hoursToComplete = completionTime / (1000 * 60 * 60)
-      
-      if (!isLate && hoursToComplete <= this.TIMELINESS_BONUS_HOURS) {
-        reward.timelinessBonus = this.TIMELINESS_BONUS_AMOUNT
-      }
+      const effectiveHours = Math.max(hoursToComplete, isLate ? this.REVIEW_DEADLINE_HOURS : hoursToComplete)
 
-      // Calculate late penalty
-      if (isLate) {
-        reward.penalties += this.LATE_REVIEW_PENALTY
+      if (effectiveHours <= this.TIMELINESS_BONUS_HOURS) {
+        reward.timelinessBonus = this.TIMELINESS_BONUS_AMOUNT
+      } else if (effectiveHours <= this.REVIEW_DEADLINE_HOURS) {
+        // Within deadline window, no extra adjustments needed
+      } else if (effectiveHours <= this.RESHUFFLE_TRIGGER_HOURS) {
+        reward.penalties += this.MISSED_REVIEW_PENALTY
+        reward.timelinessBonus += this.LATE_SALVAGE_BONUS
+      } else {
+        reward.baseReward = 0
+        reward.penalties += this.MISSED_REVIEW_PENALTY
       }
 
       // Calculate streak bonus

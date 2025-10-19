@@ -173,12 +173,77 @@ export type Database = {
           updatedAt?: string
         }
       }
+      ReviewAssignment: {
+        Row: {
+          id: string
+          submissionId: string
+          reviewerId: string
+          assignedAt: string
+          deadline: string
+          status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'MISSED' | 'REASSIGNED' | 'ASSIGNED' | 'OVERDUE' | 'CANCELLED'
+          completedAt: string | null
+          releasedAt: string | null
+          releaseReason: string | null
+          createdAt: string
+          updatedAt: string
+        }
+        Insert: {
+          id?: string
+          submissionId: string
+          reviewerId: string
+          assignedAt?: string
+          deadline: string
+          status?: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'MISSED' | 'REASSIGNED' | 'ASSIGNED' | 'OVERDUE' | 'CANCELLED'
+          completedAt?: string | null
+          releasedAt?: string | null
+          releaseReason?: string | null
+          createdAt?: string
+          updatedAt?: string
+        }
+        Update: {
+          id?: string
+          submissionId?: string
+          reviewerId?: string
+          assignedAt?: string
+          deadline?: string
+          status?: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'MISSED' | 'REASSIGNED' | 'ASSIGNED' | 'OVERDUE' | 'CANCELLED'
+          completedAt?: string | null
+          releasedAt?: string | null
+          releaseReason?: string | null
+          createdAt?: string
+          updatedAt?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      reshuffle_single_assignment: {
+        Args: {
+          p_assignment_id: string
+          p_reason: string
+          p_dry_run?: boolean
+        }
+        Returns: Record<string, unknown>
+      }
+      auto_reshuffle_stale_reviewers: {
+        Args: {
+          p_pending_cutoff_hours?: number
+          p_in_progress_cutoff_hours?: number
+          p_limit?: number
+        }
+        Returns: Record<string, unknown>
+      }
+      select_reviewer_for_submission: {
+        Args: {
+          p_submission_id: string
+          p_excluded_reviewers?: string[] | null
+        }
+        Returns: {
+          reviewerId: string
+        }[]
+      }
     }
     Enums: {
       SubmissionStatus: 'PENDING' | 'AI_REVIEWED' | 'UNDER_PEER_REVIEW' | 'FINALIZED' | 'FLAGGED' | 'REJECTED'
