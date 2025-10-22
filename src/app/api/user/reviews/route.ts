@@ -23,7 +23,7 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
       request.user.refresh_token || request.cookies.get('sb-refresh-token')?.value
     )
 
-    let reviews = []
+    let reviews: any[] = []
     let totalCount = 0
 
     if (type === 'given') {
@@ -143,11 +143,48 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
         : 0
 
       if (type === 'given') {
-        // For given reviews, calculate XP earned from reviewing
-        stats.totalXpFromReviews = reviews.length * 5 // Base assumption, could be more sophisticated
+        // For given reviews, we'll replace this with real XP from XpTransaction below
+        stats.totalXpFromReviews = 0
       } else {
-        // For received reviews, sum up the XP scores
+        // For received reviews, sum up the XP scores from peer reviews
         stats.totalXpFromReviews = scores.reduce((sum, score) => sum + score, 0)
+      }
+    }
+
+    // If type is 'given', pull review reward XP from XpTransaction (type=REVIEW_REWARD)
+    let reviewXpBySubmissionId: Record<string, number> = {}
+    if (type === 'given') {
+      const submissionIds = reviews
+        .map((r: any) => r?.submission?.id)
+        .filter((id: any): id is string => Boolean(id))
+
+      if (submissionIds.length > 0) {
+        const { data: xpRows, error: xpErr } = await supabase
+          .from('XpTransaction')
+          .select('sourceId, amount, type, createdAt')
+          .eq('userId', userId)
+          .eq('type', 'REVIEW_REWARD')
+          .in('sourceId', submissionIds)
+
+        if (!xpErr && xpRows) {
+          // If multiple transactions exist for same submission, take the latest
+          const latestBySource: Record<string, { amount: number; createdAt: string }> = {}
+          for (const row of xpRows) {
+            const sid = row.sourceId as string
+            const prev = latestBySource[sid]
+            if (!prev || new Date(row.createdAt) > new Date(prev.createdAt)) {
+              latestBySource[sid] = { amount: row.amount, createdAt: row.createdAt }
+            }
+          }
+          reviewXpBySubmissionId = Object.fromEntries(
+            Object.entries(latestBySource).map(([k, v]) => [k, v.amount])
+          )
+
+          // Update stats.totalXpFromReviews using transactions sum (positive rewards only)
+          stats.totalXpFromReviews = Object.values(reviewXpBySubmissionId).reduce((sum, amt) => sum + (amt || 0), 0)
+        } else {
+          console.warn('Failed to load review reward XP transactions:', xpErr)
+        }
       }
     }
 
@@ -163,6 +200,10 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
         enriched.submissionAuthor = review.submission?.user?.username
         enriched.submissionPlatform = review.submission?.platform
         enriched.submissionTaskTypes = review.submission?.taskTypes
+        const sid = review?.submission?.id
+        if (sid && reviewXpBySubmissionId[sid] !== undefined) {
+          enriched.reviewRewardXp = reviewXpBySubmissionId[sid]
+        }
       } else {
         enriched.reviewerName = review.reviewer?.username
       }

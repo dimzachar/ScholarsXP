@@ -145,3 +145,4 @@ supabase/.temp/
 scripts/*
 tmp_*
 backup/*
+*.png
