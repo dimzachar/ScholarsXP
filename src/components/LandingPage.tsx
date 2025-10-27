@@ -1,264 +1,367 @@
-'use client'
+"use client"
 
-import Image from 'next/image'
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { ThemeToggle } from '@/components/ui/theme-toggle'
-import {
-  ArrowRight,
-  BookOpen,
-  Compass,
-  Palette,
-  Shield,
-  Sparkles,
-  Telescope,
-  Zap,
-} from 'lucide-react'
-
-const noiseTexture =
-  'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iOCIgaGVpZ2h0PSI4IiB2aWV3Qm94PSIwIDAgOCA4IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiMwMDAiLz48Y2lyY2xlIGN4PSIxIiBjeT0iMyIgcj0iMC4zIiBmaWxsPSIjZmZmIiBvcGFjaXR5PSIwLjA1Ii8+PGNpcmNsZSBjeD0iNCIgY3k9IjEiIHI9IjAuNCIgZmlsbD0iI2ZmZDgzMiIgb3BhY2l0eT0iMC4wMyIvPjxjaXJjbGUgY3g9IjciIGN5PSI2IiByPSIwLjQiIGZpbGw9IiNmZmYiIG9wYWNpdHk9IjAuMDYiLz48L3N2Zz4='
+import React, { useEffect, useRef, useState } from "react"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { ArrowRight, BookOpen, Compass, Palette, Shield, Telescope, Zap } from "lucide-react"
 
 const guilds = [
-  {
-    name: 'Spartans',
-    description: 'Stress Testing & Security Reviews',
-    accent: String.fromCodePoint(0x2694, 0xfe0f),
-    icon: Shield,
-  },
-  {
-    name: 'Pathfinders',
-    description: 'Community Building & Onboarding',
-    accent: String.fromCodePoint(0x1f9ed),
-    icon: Compass,
-  },
-  {
-    name: 'Explorers',
-    description: 'Ecosystem Discovery & Growth',
-    accent: String.fromCodePoint(0x1f50d),
-    icon: Telescope,
-  },
-  {
-    name: 'Scholars',
-    description: 'Technical Documentation & Research',
-    accent: String.fromCodePoint(0x1f4da),
-    icon: BookOpen,
-  },
-  {
-    name: 'Creators',
-    description: 'Content & Creative Contributions',
-    accent: String.fromCodePoint(0x1f3a8),
-    icon: Palette,
-  },
+  { name: "Spartans", description: "Stress Testing & Security Reviews", accent: String.fromCodePoint(0x2694, 0xfe0f), icon: Shield },
+  { name: "Pathfinders", description: "Community Building & Onboarding", accent: String.fromCodePoint(0x1f9ed), icon: Compass },
+  { name: "Explorers", description: "Ecosystem Discovery & Growth", accent: String.fromCodePoint(0x1f50d), icon: Telescope },
+  { name: "Scholars", description: "Technical Documentation & Research", accent: String.fromCodePoint(0x1f4da), icon: BookOpen },
+  { name: "Creators", description: "Content & Creative Contributions", accent: String.fromCodePoint(0x1f3a8), icon: Palette },
 ]
 
 export default function LandingPage() {
+  // Preloader
+  const [showPreloader, setShowPreloader] = useState(true)
+  const preloaderRef = useRef<HTMLDivElement | null>(null)
+  const progressRef = useRef<HTMLDivElement | null>(null)
+  const imageRefs = useRef<HTMLDivElement[]>([])
+
+  // Hero refs
+  const heroTitleRef = useRef<HTMLHeadingElement | null>(null)
+  const heroSectionRef = useRef<HTMLElement | null>(null)
+  const heroOverlayRef = useRef<SVGSVGElement | null>(null)
+  const heroMaskGroupRef = useRef<SVGGElement | null>(null)
+  const heroPlateRef = useRef<SVGRectElement | null>(null)
+  const heroStatsRef = useRef<HTMLDivElement | null>(null)
+  const marqueeRef = useRef<HTMLDivElement | null>(null)
+  const journeyRef = useRef<HTMLDivElement | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const videoOverlayRef = useRef<HTMLDivElement | null>(null)
+  const [soundOn, setSoundOn] = useState(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  const preloadImages = [
+    "https://images.unsplash.com/photo-1517816428104-797678c7cf0d?q=80&w=1200&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?q=80&w=1200&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=1200&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?q=80&w=1200&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=1200&auto=format&fit=crop",
+  ]
+
+  // Preloader timeline + hero intro
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      const { gsap } = await import("gsap")
+      if (!preloaderRef.current || !progressRef.current) return
+      const ctx = gsap.context(() => {
+        gsap.set(progressRef.current, { scaleX: 0, transformOrigin: "left center" })
+        gsap.set(imageRefs.current, { height: 0 })
+        gsap.set(imageRefs.current.map((w) => w.querySelector("img")), { scale: 1.2, willChange: "transform" })
+
+        // prepare SVG mask text lines
+        const lineSpans = Array.from(
+          (heroMaskGroupRef.current?.querySelectorAll(".hero-line") as unknown as NodeListOf<HTMLElement>) || []
+        )
+        gsap.set(lineSpans, { yPercent: 120 })
+        gsap.set(preloaderRef.current, { clipPath: "inset(0% 0% 0% 0%)" })
+
+        const tl = gsap.timeline({ defaults: { ease: "power3.out" } })
+        tl.to(progressRef.current, { duration: 1.2, scaleX: 1, ease: "power2.out" })
+        imageRefs.current.forEach((wrap, i) => {
+          const img = wrap.querySelector("img")
+          tl.to(wrap, { duration: 0.6, height: "100%", ease: "power3.out" }, i === 0 ? ">-0.1" : ">-0.25")
+          tl.to(img, { duration: 0.9, scale: 1, ease: "power2.out" }, "<")
+        })
+        tl.to({}, { duration: 0.25 })
+        tl.addLabel("revealStart")
+        tl.to(
+          preloaderRef.current,
+          {
+            duration: 0.9,
+            clipPath: "inset(100% 0% 0% 0%)",
+            ease: "power3.inOut",
+            onComplete: () => {
+              if (mounted) setShowPreloader(false)
+            },
+          },
+          "revealStart"
+        )
+        tl.to(lineSpans, { duration: 0.7, yPercent: 0, stagger: 0.06, ease: "power3.out" }, "revealStart+=0.15")
+      }, preloaderRef)
+      return () => ctx.revert()
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  // Scroll effects: hero out, layers parallax, video overlay dim
+  useEffect(() => {
+    ;(async () => {
+      const { gsap } = await import("gsap")
+      const { ScrollTrigger } = await import("gsap/ScrollTrigger")
+      gsap.registerPlugin(ScrollTrigger)
+      if (!heroSectionRef.current) return
+
+      const titleEl = heroOverlayRef.current
+      const plate = heroPlateRef.current
+      const overlay = videoOverlayRef.current
+
+      if (plate) {
+        // Animate the white plate itself upward to reveal the video
+        gsap.set(plate, { transformOrigin: "center top", transformBox: "fill-box", yPercent: 0 })
+        gsap.to(plate, {
+          yPercent: -100,
+          ease: "none",
+          scrollTrigger: {
+            trigger: heroSectionRef.current,
+            start: "top top",
+            end: "bottom top",
+            scrub: true,
+          },
+        })
+      }
+
+      // no extra layers
+
+      if (overlay) {
+        gsap.to(overlay, {
+          opacity: 0,
+          ease: "none",
+          scrollTrigger: {
+            trigger: heroSectionRef.current,
+            start: "top top",
+            end: "+=100%",
+            scrub: true,
+          },
+        })
+      }
+    })()
+  }, [])
+
+  // In-view reveals
+  useEffect(() => {
+    let io: IntersectionObserver | null = null
+    let cancelled = false
+    ;(async () => {
+      const { gsap } = await import("gsap")
+      if (cancelled) return
+      const els = Array.from(document.querySelectorAll<HTMLElement>("[data-animate]"))
+      gsap.set(els, { autoAlpha: 0, y: 20 })
+      io = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            gsap.to(entry.target, { duration: 0.6, y: 0, autoAlpha: 1, ease: "power3.out" })
+            io?.unobserve(entry.target)
+          }
+        })
+      }, { threshold: 0.2 })
+      els.forEach((el) => io?.observe(el))
+    })()
+    return () => { cancelled = true; io?.disconnect() }
+  }, [])
+
+  // Marquee motion
+  useEffect(() => {
+    ;(async () => {
+      const { gsap } = await import("gsap")
+      if (!marqueeRef.current) return
+      gsap.to(marqueeRef.current, { xPercent: -50, ease: "none", duration: 20, repeat: -1 })
+    })()
+  }, [])
+
+  // Journey pinning (ScrollTrigger)
+  useEffect(() => {
+    ;(async () => {
+      const { gsap } = await import("gsap")
+      const { ScrollTrigger } = await import("gsap/ScrollTrigger")
+      gsap.registerPlugin(ScrollTrigger)
+      if (!journeyRef.current) return
+      const steps = Array.from(journeyRef.current.querySelectorAll<HTMLElement>("[data-step]"))
+      gsap.set(steps, { autoAlpha: 0, y: 40 })
+      gsap.timeline({
+        scrollTrigger: {
+          trigger: journeyRef.current,
+          start: "top top",
+          end: "+=300%",
+          scrub: true,
+          pin: true,
+        },
+      })
+        .to(steps[0], { autoAlpha: 1, y: 0, duration: 0.5 })
+        .to(steps[1], { autoAlpha: 1, y: 0, duration: 0.5 }, "+=0.8")
+        .to(steps[2], { autoAlpha: 1, y: 0, duration: 0.5 }, "+=0.8")
+    })()
+  }, [])
+
+  // Ensure background video starts (autoplay policies) and stays muted
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v) return
+    v.muted = true
+    const tryPlay = () => v.play().catch(() => {})
+    if (v.readyState >= 2) {
+      tryPlay()
+    } else {
+      v.addEventListener('canplay', tryPlay, { once: true })
+    }
+    return () => {
+      v.removeEventListener('canplay', tryPlay as any)
+    }
+  }, [])
+
   return (
-    <div className="relative min-h-screen overflow-hidden bg-stone-50 text-stone-900 dark:bg-neutral-900 dark:text-neutral-100">
-      <div className="hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-black via-[#050505] to-[#0D0D0D]" />
-        <div
-          className="absolute inset-0 opacity-40 mix-blend-soft-light"
-          style={{ backgroundImage: `url(${noiseTexture})` }}
-        />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,216,50,0.18),_transparent_65%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(0,0,0,0),_rgba(13,13,13,0.9)_65%)]" />
-
-        <div className="absolute -left-24 top-24 hidden xl:block">
-          <div className="relative h-72 w-48 -rotate-6 overflow-hidden rounded-[36px] bg-gradient-to-b from-white via-[#F7F7F7] to-[#C4C4C4] shadow-[0_30px_60px_rgba(0,0,0,0.45)]">
-            <div className="absolute inset-0 rounded-[36px] border-[3px] border-[#FFD832]/70" />
-            <div className="absolute inset-x-8 top-10 h-3 rounded-full bg-[#FFD832]/70 blur-[6px]" />
-            <div className="absolute inset-x-12 bottom-10 h-2 rounded-full bg-gradient-to-r from-[#FFD832]/60 via-white/80 to-[#FFD832]/60 blur-[4px]" />
-          </div>
-        </div>
-
-        <div className="absolute -right-28 top-10 hidden lg:block">
-          <div className="relative h-80 w-52 rotate-6 overflow-hidden rounded-[40px] bg-gradient-to-b from-white via-[#F2F2F2] to-[#D1D1D1] shadow-[0_40px_80px_rgba(0,0,0,0.5)]">
-            <div className="absolute inset-0 rounded-[40px] border-[3px] border-[#FFD832]/60" />
-            <div className="absolute inset-x-10 top-12 h-3 rounded-full bg-[#FFD832]/60 blur-[5px]" />
-            <div className="absolute inset-x-14 bottom-12 h-2 rounded-full bg-white/70 blur-[6px]" />
-          </div>
-        </div>
-
-        <div className="absolute left-1/4 top-16 hidden md:block">
-          <div className="h-32 w-32 rounded-full bg-[#FFD832]/40 blur-3xl" />
-        </div>
-        <div className="absolute right-1/4 bottom-24 hidden md:block">
-          <div className="h-28 w-28 rounded-full bg-[#FFD832]/30 blur-3xl" />
-        </div>
-
-        <div className="absolute left-8 top-1/3 hidden lg:block">
-          <div className="h-px w-72 bg-gradient-to-r from-transparent via-white/35 to-transparent" />
-          <div className="absolute left-1/3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-white" />
-          <div className="absolute left-2/3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-[#FFD832] shadow-[0_0_10px_rgba(255,216,50,0.8)]" />
-        </div>
-
-        <div className="absolute right-20 top-1/2 hidden lg:block">
-          <div className="h-px w-60 bg-gradient-to-l from-transparent via-white/30 to-transparent" />
-          <div className="absolute right-16 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-white" />
-          <div className="absolute right-28 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-[#FFD832] shadow-[0_0_10px_rgba(255,216,50,0.8)]" />
-        </div>
-
-        <div className="absolute left-[18%] bottom-[22%] hidden lg:flex items-center gap-2">
-          <div className="h-10 w-10 rounded-full border border-white/30 bg-black/60 shadow-[0_0_25px_rgba(255,216,50,0.35)] flex items-center justify-center">
-            <Shield className="h-5 w-5 text-[#FFD832]" />
-          </div>
-          <span className="text-xs uppercase tracking-[0.4em] text-white/60">Guild XP</span>
-        </div>
-
-        <div className="absolute right-[18%] top-[22%] hidden lg:flex items-center gap-2">
-          <div className="h-10 w-10 rounded-full border border-[#408783]/50 bg-black/60 shadow-[0_0_20px_rgba(64,135,131,0.45)] flex items-center justify-center">
-            <div className="h-3 w-3 rounded-full bg-[#408783]" />
-          </div>
-          <span className="text-xs uppercase tracking-[0.4em] text-white/60">Movement</span>
-        </div>
+    <div className="relative z-0 min-h-screen overflow-hidden bg-neutral-900 text-neutral-100">
+      {/* Persistent video background */}
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
+        <video
+          ref={videoRef}
+          className="h-full w-full object-cover"
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          poster=""
+        >
+          <source src="/video.webm" type="video/webm" />
+          <source src="/video.mp4" type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
+        <div ref={videoOverlayRef} className="pointer-events-none absolute inset-0 bg-black/0" />
       </div>
+      {showPreloader && (
+        <div ref={preloaderRef} className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-neutral-900 text-neutral-100">
+          <div className="pointer-events-none absolute left-0 right-0 top-0 h-[2px] w-full bg-neutral-700/40">
+            <div ref={progressRef} className="h-[2px] w-full bg-amber-400" />
+          </div>
+          <div className="relative w-[min(65vmin,520px)]">
+            <div className="relative aspect-square">
+              <div className="absolute inset-0">
+                {preloadImages.map((src, i) => (
+                  <div
+                    key={i}
+                    ref={(el) => el && (imageRefs.current[i] = el)}
+                    className="absolute inset-x-0 bottom-0 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900"
+                    style={{ height: 0 }}
+                  >
+                    <img src={src} alt="Preloader visual" className="h-full w-full object-cover opacity-90" loading="eager" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <p className="pointer-events-none absolute bottom-10 text-xs uppercase tracking-[0.35em] text-neutral-300">Preparing your Guild XP experience</p>
+        </div>
+      )}
 
-      <div className="relative z-10">
-        <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 pt-8 md:px-12">
-          <Link href="/" className="flex items-center space-x-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-stone-300 bg-white text-stone-700 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200">
-              <Zap className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.35em] text-stone-500 dark:text-neutral-400">Movement</p>
-              <span className="text-xl font-medium">Guild XP</span>
-            </div>
+      {/* Header */}
+      <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-6 pt-8 md:px-12">
+        <Link href="/" className="flex items-center space-x-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-700 bg-neutral-900 text-neutral-200">
+            <Zap className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-[0.35em] text-neutral-400">Movement</p>
+            <span className="text-xl font-medium text-neutral-100">Guild XP</span>
+          </div>
+        </Link>
+        <nav className="flex items-center space-x-6">
+          <Link href="#journey" className="text-sm text-neutral-300 hover:text-white">Journey</Link>
+          <Link href="#guilds" className="text-sm text-neutral-300 hover:text-white">Guilds</Link>
+          <Link href="#press" className="hidden text-sm text-neutral-300 hover:text-white md:inline">Press</Link>
+          <Link href="/login">
+            <Button size="sm" className="rounded-full border border-neutral-700 bg-neutral-800 px-5 text-sm font-medium text-white hover:bg-neutral-700">Sign In</Button>
           </Link>
-          <div className="flex items-center space-x-3">
-            <ThemeToggle />
-            <Link href="/login">
-              <Button
-                size="sm"
-                className="rounded-full border border-stone-300 bg-white px-5 text-sm font-medium text-stone-900 hover:bg-stone-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:hover:bg-neutral-800"
-              >
-                Sign In
-              </Button>
-            </Link>
-          </div>
-        </header>
+        </nav>
+      </header>
 
-        <main className="mx-auto flex min-h-[70vh] w-full max-w-5xl flex-col items-center justify-center px-6 pb-24 pt-24 md:px-12">
-          <div className="mb-6 flex items-center gap-3 rounded-full border border-stone-300 bg-white px-4 py-2 text-xs uppercase tracking-[0.35em] text-stone-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-200 text-amber-800">
-              <Sparkles className="h-3 w-3" />
-            </span>
-            Movement Blockchain • Scholar Reputation
-          </div>
+      {/* Typographic Hero with layered cards over video */}
+      <section ref={heroSectionRef} id="hero" className="relative z-10 flex min-h-[120vh] items-center justify-center px-0 md:px-0">
+        {/* Knockout text overlay using SVG mask (full hero height) */}
+        <svg
+          ref={heroOverlayRef}
+          className="pointer-events-none absolute inset-0 z-0 block h-full w-full"
+          viewBox="0 0 1000 600"
+          preserveAspectRatio="xMidYMid slice"
+        >
+          <defs>
+            <mask
+              id="heroTextMask"
+              maskUnits="userSpaceOnUse"
+              maskContentUnits="userSpaceOnUse"
+              // Use luminance so black text punches holes through the white plate
+              style={{ maskType: 'luminance' as any }}
+            >
+              <rect x="0" y="0" width="1000" height="600" fill="white" />
+              <g ref={heroMaskGroupRef} fill="black" fontFamily="inherit" fontWeight="700" textAnchor="middle">
+                <text className="hero-line" x="500" y="220" fontSize="140">THE CRAFT</text>
+                <text className="hero-line" x="500" y="350" fontSize="140">OF SCHOLAR</text>
+                <text className="hero-line" x="500" y="480" fontSize="140">REPUTATION</text>
+              </g>
+            </mask>
+          </defs>
+          {/* White plate with text knocked out so the video shows through */}
+          <rect ref={heroPlateRef} x="0" y="0" width="1000" height="600" fill="#ffffff" mask="url(#heroTextMask)" />
+        </svg>
+        <div className="relative w-full">
+          {/* Decorative layers removed to keep focus on knockout text */}
+          <h1 ref={heroTitleRef} className="sr-only">The craft of scholar reputation</h1>
+        </div>
+      </section>
 
-          <h1 className="text-center text-4xl font-medium leading-tight tracking-tight sm:text-5xl lg:text-6xl">
-            Elevate your scholarly work with intention
-          </h1>
-
-          <p className="mt-6 max-w-2xl text-center text-lg text-stone-600 dark:text-neutral-300 sm:text-xl">
-            Join a guild, contribute thoughtfully, and earn recognition for work that advances the Movement ecosystem.
-          </p>
-
-          <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row">
-            <Link href="/login?intent=guild">
-              <Button
-                size="lg"
-                className="min-w-[12rem] rounded-full bg-amber-600 px-8 py-6 text-base font-medium text-white transition-colors hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600"
-              >
-                Join a Guild
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-            </Link>
-            <Link href="/login?intent=submit">
-              <Button
-                size="lg"
-                variant="outline"
-                className="min-w-[12rem] rounded-full border border-stone-300 bg-white px-8 py-6 text-base font-medium text-stone-900 transition-colors hover:bg-stone-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:hover:bg-neutral-800"
-              >
-                Submit Your Work
-              </Button>
-            </Link>
-          </div>
-
-          <div className="mt-14 grid w-full gap-6 rounded-3xl border border-stone-200 bg-white p-6 dark:border-neutral-800 dark:bg-neutral-900 sm:grid-cols-3">
-            <div className="rounded-2xl border border-stone-200 bg-white p-4 text-center dark:border-neutral-800 dark:bg-neutral-900">
-              <p className="text-sm uppercase tracking-[0.25em] text-stone-500 dark:text-neutral-400">Guilds Live</p>
-              <p className="mt-3 text-2xl font-medium text-amber-700 dark:text-amber-400">5 Core Paths</p>
-            </div>
-            <div className="rounded-2xl border border-stone-200 bg-white p-4 text-center dark:border-neutral-800 dark:bg-neutral-900">
-              <p className="text-sm uppercase tracking-[0.25em] text-stone-500 dark:text-neutral-400">XP Earned</p>
-              <p className="mt-3 text-2xl font-medium text-stone-900 dark:text-neutral-100">1.2M+</p>
-            </div>
-            <div className="rounded-2xl border border-stone-200 bg-white p-4 text-center dark:border-neutral-800 dark:bg-neutral-900">
-              <p className="text-sm uppercase tracking-[0.25em] text-stone-500 dark:text-neutral-400">Recognition</p>
-              <p className="mt-3 text-2xl font-medium text-amber-700 dark:text-amber-400">Top Scholars</p>
-            </div>
-          </div>
-        </main>
-      </div>
-
-      <section className="relative z-10 border-y border-neutral-200 bg-transparent py-20 dark:border-neutral-800">
-        
-        <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-12 px-6 md:px-12 lg:flex-row lg:items-center">
-          <div className="max-w-xl space-y-6">
-            <p className="text-xs uppercase tracking-[0.35em] text-stone-500 dark:text-neutral-400">Movement Atlas</p>
-            <h2 className="text-3xl font-semibold text-stone-900 dark:text-neutral-100 sm:text-4xl">
-              Navigate the ecosystems powering Guild XP achievements
-            </h2>
-            <p className="text-base text-stone-600 dark:text-neutral-300">
-              Explore the Movement landscape where guilds scout talent, stress test protocols, and guide creators.
-              Use the atlas to uncover expansion zones and align your contributions with the missions that matter most.
-            </p>
-            <div className="flex flex-col gap-3 text-sm text-stone-600 dark:text-neutral-300 sm:flex-row sm:items-center">
-              <div className="flex items-center gap-2 rounded-full border border-stone-300 bg-white px-4 py-2 dark:border-neutral-700 dark:bg-neutral-900">
-                <span className="h-2 w-2 rounded-full bg-amber-500" />
-                Live Guild Territories
-              </div>
-              <div className="flex items-center gap-2 rounded-full border border-stone-300 bg-white px-4 py-2 dark:border-neutral-700 dark:bg-neutral-900">
-                <span className="h-2 w-2 rounded-full bg-teal-500" />
-                Movement Growth Corridors
-              </div>
-            </div>
-          </div>
-
-          <div className="relative flex w-full max-w-3xl flex-1 flex-col">
-            
-            <div className="relative overflow-hidden rounded-2xl border border-stone-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-              <div className="relative aspect-[4/3] w-full">
-                <Image
-                  src="/MOVEMENTMAP3.png"
-                  alt="Illustrated map showing the Movement blockchain lands and guild territories."
-                  fill
-                  priority
-                  className="object-contain"
-                />
-              </div>
-            </div>
-            <p className="mt-4 text-center text-xs uppercase tracking-[0.35em] text-stone-500 dark:text-neutral-400">
-              Updated for Movement Season • Tap zones to plan submissions (coming soon)
-            </p>
+      {/* Marquee */}
+      <section className="relative z-10 border-y border-neutral-800 bg-transparent py-10">
+        <div className="overflow-hidden">
+          <div ref={marqueeRef} className="whitespace-nowrap text-center text-4xl font-medium uppercase tracking-[0.4em] text-neutral-200 opacity-80 md:text-5xl">
+            <span className="mr-12">Through the Movement —</span>
+            <span className="mr-12">Guild XP —</span>
+            <span className="mr-12">Scholarship —</span>
+            <span className="mr-12">Recognition —</span>
+            <span className="mr-12">Through the Movement —</span>
+            <span className="mr-12">Guild XP —</span>
+            <span className="mr-12">Scholarship —</span>
+            <span className="mr-12">Recognition —</span>
           </div>
         </div>
       </section>
 
-      <section className="relative z-10 border-t border-neutral-200 bg-transparent py-20 dark:border-neutral-800">
+      {/* Journey (pinned) */}
+      <section id="journey" ref={journeyRef} className="relative z-10 bg-transparent py-24">
+        <div className="mx-auto w-full max-w-6xl px-6 md:px-12">
+          <div className="min-h-[60vh]">
+            <div data-step className="space-y-4">
+              <p className="text-xs uppercase tracking-[0.35em] text-neutral-400">Chapter 1</p>
+              <h2 className="text-4xl font-semibold text-neutral-100 sm:text-5xl">On-chain contributions</h2>
+              <p className="max-w-2xl text-neutral-300">Stress tests, audits, deployments, protocol experiments — contributions that move the Movement.</p>
+            </div>
+            <div data-step className="mt-16 space-y-4">
+              <p className="text-xs uppercase tracking-[0.35em] text-neutral-400">Chapter 2</p>
+              <h2 className="text-4xl font-semibold text-neutral-100 sm:text-5xl">Off-chain impact</h2>
+              <p className="max-w-2xl text-neutral-300">Docs, workshops, community onboarding, content that elevates the ecosystem.</p>
+            </div>
+            <div data-step className="mt-16 space-y-4">
+              <p className="text-xs uppercase tracking-[0.35em] text-neutral-400">Chapter 3</p>
+              <h2 className="text-4xl font-semibold text-neutral-100 sm:text-5xl">Recognition</h2>
+              <p className="max-w-2xl text-neutral-300">Your Guild XP becomes your reputation — visible, verifiable, and celebrated.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Guilds */}
+      <section id="guilds" className="relative z-10 border-t border-neutral-800 bg-transparent py-20">
         <div className="relative mx-auto flex w-full max-w-6xl flex-col px-6 md:px-12">
           <div className="mx-auto max-w-3xl text-center">
-            <p className="text-xs uppercase tracking-[0.35em] text-stone-500 dark:text-neutral-400">Guild Network</p>
-            <h2 className="mt-4 text-3xl font-semibold text-stone-900 dark:text-neutral-100 sm:text-4xl">
-              Choose your guild, master your craft, boost your Guild XP
-            </h2>
+            <p data-animate className="text-xs uppercase tracking-[0.35em] text-neutral-400">Guild Network</p>
+            <h2 data-animate className="mt-4 text-3xl font-semibold text-neutral-100 sm:text-4xl">Choose your guild, master your craft, boost your Guild XP</h2>
           </div>
-
           <div className="relative mt-14">
-            
             <div className="relative grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
               {guilds.map(({ name, description, accent, icon: Icon }) => (
-                <div
-                  key={name}
-                  className="relative overflow-hidden rounded-2xl border border-stone-200 bg-white p-6 transition-transform hover:-translate-y-1 dark:border-neutral-800 dark:bg-neutral-900"
-                >
+                <div key={name} data-animate className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900 p-6 transition-transform hover:-translate-y-1">
                   <div className="relative flex h-full flex-col items-center text-center">
                     <span className="mb-3 text-2xl" aria-hidden>{accent}</span>
-                    <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-stone-300 bg-white dark:border-neutral-700 dark:bg-neutral-900">
-                      <Icon className="h-8 w-8 text-stone-900 dark:text-neutral-100" />
+                    <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-neutral-700 bg-neutral-800">
+                      <Icon className="h-8 w-8 text-neutral-100" />
                     </div>
-                    <h3 className="text-xl font-semibold text-stone-900 dark:text-neutral-100">{name}</h3>
-                    <p className="mt-2 text-sm text-stone-600 dark:text-neutral-300">{description}</p>
+                    <h3 className="text-xl font-semibold text-neutral-100">{name}</h3>
+                    <p className="mt-2 text-sm text-neutral-300">{description}</p>
                   </div>
                 </div>
               ))}
@@ -267,8 +370,9 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <footer className="relative z-10 border-t border-neutral-200 bg-transparent py-10 dark:border-neutral-800">
-        <div className="relative mx-auto flex w-full max-w-5xl flex-col items-center gap-4 px-6 text-center text-sm text-stone-500 dark:text-neutral-400 md:flex-row md:justify-between">
+      {/* Footer */}
+      <footer className="relative z-10 border-t border-neutral-800 bg-transparent py-10">
+        <div className="relative mx-auto flex w-full max-w-5xl flex-col items-center gap-4 px-6 text-center text-sm text-neutral-400 md:flex-row md:justify-between">
           <p>&copy; {new Date().getFullYear()} Guild XP - Built on Movement.</p>
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-amber-500" />
