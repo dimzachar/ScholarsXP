@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, BookOpen, Compass, Palette, Shield, Telescope, Zap } from "lucide-react"
+import LandingFooter from "@/components/LandingFooter"
 
 const guilds = [
   { name: "Spartans", description: "Stress Testing & Security Reviews", accent: String.fromCodePoint(0x2694, 0xfe0f), icon: Shield },
@@ -45,28 +46,41 @@ export default function LandingPage() {
   // Preloader timeline + hero intro
   useEffect(() => {
     let mounted = true
+    let ctx: any = null
     ;(async () => {
       const { gsap } = await import("gsap")
       if (!preloaderRef.current || !progressRef.current) return
-      const ctx = gsap.context(() => {
+      
+      ctx = gsap.context(() => {
+        if (!progressRef.current || !preloaderRef.current) return
+        
         gsap.set(progressRef.current, { scaleX: 0, transformOrigin: "left center" })
-        gsap.set(imageRefs.current, { height: 0 })
-        gsap.set(imageRefs.current.map((w) => w.querySelector("img")), { scale: 1.2, willChange: "transform" })
+        
+        // Safely handle image refs
+        const validImages = imageRefs.current.filter(w => w && w.querySelector("img"))
+        if (validImages.length > 0) {
+          gsap.set(validImages, { height: 0 })
+          gsap.set(validImages.map((w) => w.querySelector("img")).filter(Boolean), { scale: 1.2, willChange: "transform" })
+        }
 
         // prepare SVG mask text lines
-        const lineSpans = Array.from(
-          (heroMaskGroupRef.current?.querySelectorAll(".hero-line") as unknown as NodeListOf<HTMLElement>) || []
-        )
-        gsap.set(lineSpans, { yPercent: 120 })
+        const lineSpans = heroMaskGroupRef.current?.querySelectorAll(".hero-line")
+        if (lineSpans) {
+          gsap.set(Array.from(lineSpans), { yPercent: 120 })
+        }
         gsap.set(preloaderRef.current, { clipPath: "inset(0% 0% 0% 0%)" })
 
         const tl = gsap.timeline({ defaults: { ease: "power3.out" } })
         tl.to(progressRef.current, { duration: 1.2, scaleX: 1, ease: "power2.out" })
-        imageRefs.current.forEach((wrap, i) => {
+        
+        validImages.forEach((wrap, i) => {
           const img = wrap.querySelector("img")
-          tl.to(wrap, { duration: 0.6, height: "100%", ease: "power3.out" }, i === 0 ? ">-0.1" : ">-0.25")
-          tl.to(img, { duration: 0.9, scale: 1, ease: "power2.out" }, "<")
+          if (img) {
+            tl.to(wrap, { duration: 0.6, height: "100%", ease: "power3.out" }, i === 0 ? ">-0.1" : ">-0.25")
+            tl.to(img, { duration: 0.9, scale: 1, ease: "power2.out" }, "<")
+          }
         })
+        
         tl.to({}, { duration: 0.25 })
         tl.addLabel("revealStart")
         tl.to(
@@ -81,31 +95,33 @@ export default function LandingPage() {
           },
           "revealStart"
         )
-        tl.to(lineSpans, { duration: 0.7, yPercent: 0, stagger: 0.06, ease: "power3.out" }, "revealStart+=0.15")
+        
+        if (lineSpans && lineSpans.length > 0) {
+          tl.to(Array.from(lineSpans), { duration: 0.7, yPercent: 0, stagger: 0.06, ease: "power3.out" }, "revealStart+=0.15")
+        }
       }, preloaderRef)
-      return () => ctx.revert()
     })()
     return () => {
       mounted = false
+      if (ctx) ctx.revert()
     }
   }, [])
 
   // Scroll effects: hero out, layers parallax, video overlay dim
   useEffect(() => {
+    const triggers: any[] = []
     ;(async () => {
       const { gsap } = await import("gsap")
       const { ScrollTrigger } = await import("gsap/ScrollTrigger")
       gsap.registerPlugin(ScrollTrigger)
       if (!heroSectionRef.current) return
 
-      const titleEl = heroOverlayRef.current
       const plate = heroPlateRef.current
       const overlay = videoOverlayRef.current
 
-      if (plate) {
-        // Animate the white plate itself upward to reveal the video
+      if (plate && heroSectionRef.current) {
         gsap.set(plate, { transformOrigin: "center top", transformBox: "fill-box", yPercent: 0 })
-        gsap.to(plate, {
+        const anim = gsap.to(plate, {
           yPercent: -100,
           ease: "none",
           scrollTrigger: {
@@ -115,12 +131,11 @@ export default function LandingPage() {
             scrub: true,
           },
         })
+        if (anim.scrollTrigger) triggers.push(anim.scrollTrigger)
       }
 
-      // no extra layers
-
-      if (overlay) {
-        gsap.to(overlay, {
+      if (overlay && heroSectionRef.current) {
+        const anim = gsap.to(overlay, {
           opacity: 0,
           ease: "none",
           scrollTrigger: {
@@ -130,8 +145,12 @@ export default function LandingPage() {
             scrub: true,
           },
         })
+        if (anim.scrollTrigger) triggers.push(anim.scrollTrigger)
       }
     })()
+    return () => {
+      triggers.forEach(t => t.kill())
+    }
   }, [])
 
   // In-view reveals
@@ -150,7 +169,7 @@ export default function LandingPage() {
             io?.unobserve(entry.target)
           }
         })
-      }, { threshold: 0.2 })
+      }, { threshold: 0.1, rootMargin: "50px" })
       els.forEach((el) => io?.observe(el))
     })()
     return () => { cancelled = true; io?.disconnect() }
@@ -167,26 +186,36 @@ export default function LandingPage() {
 
   // Journey pinning (ScrollTrigger)
   useEffect(() => {
+    let st: any = null
     ;(async () => {
       const { gsap } = await import("gsap")
       const { ScrollTrigger } = await import("gsap/ScrollTrigger")
       gsap.registerPlugin(ScrollTrigger)
       if (!journeyRef.current) return
+      
       const steps = Array.from(journeyRef.current.querySelectorAll<HTMLElement>("[data-step]"))
+      if (steps.length === 0) return
+      
       gsap.set(steps, { autoAlpha: 0, y: 40 })
-      gsap.timeline({
+      
+      const tl = gsap.timeline({
         scrollTrigger: {
           trigger: journeyRef.current,
-          start: "top top",
-          end: "+=300%",
-          scrub: true,
+          start: "top center",
+          end: "+=150%",
+          scrub: 1,
           pin: true,
+          onEnter: () => st = tl.scrollTrigger,
         },
       })
-        .to(steps[0], { autoAlpha: 1, y: 0, duration: 0.5 })
-        .to(steps[1], { autoAlpha: 1, y: 0, duration: 0.5 }, "+=0.8")
-        .to(steps[2], { autoAlpha: 1, y: 0, duration: 0.5 }, "+=0.8")
+      
+      if (steps[0]) tl.to(steps[0], { autoAlpha: 1, y: 0, duration: 0.3 })
+      if (steps[1]) tl.to(steps[1], { autoAlpha: 1, y: 0, duration: 0.3 }, "+=0.3")
+      if (steps[2]) tl.to(steps[2], { autoAlpha: 1, y: 0, duration: 0.3 }, "+=0.3")
     })()
+    return () => {
+      if (st) st.kill()
+    }
   }, [])
 
   // Ensure background video starts (autoplay policies) and stays muted
@@ -272,7 +301,7 @@ export default function LandingPage() {
       </header>
 
       {/* Typographic Hero with layered cards over video */}
-      <section ref={heroSectionRef} id="hero" className="relative z-10 flex min-h-[120vh] items-center justify-center px-0 md:px-0">
+      <section ref={heroSectionRef} id="hero" className="relative z-10 flex min-h-[100vh] items-center justify-center px-0 md:px-0">
         {/* Knockout text overlay using SVG mask (full hero height) */}
         <svg
           ref={heroOverlayRef}
@@ -306,7 +335,7 @@ export default function LandingPage() {
       </section>
 
       {/* Marquee */}
-      <section className="relative z-10 border-y border-neutral-800 bg-transparent py-10">
+      <section className="relative z-10 border-y border-neutral-800 bg-neutral-900/70 backdrop-blur-sm py-10">
         <div className="overflow-hidden">
           <div ref={marqueeRef} className="whitespace-nowrap text-center text-4xl font-medium uppercase tracking-[0.4em] text-neutral-200 opacity-80 md:text-5xl">
             <span className="mr-12">Through the Movement —</span>
@@ -322,9 +351,9 @@ export default function LandingPage() {
       </section>
 
       {/* Journey (pinned) */}
-      <section id="journey" ref={journeyRef} className="relative z-10 bg-transparent py-24">
+      <section id="journey" ref={journeyRef} className="relative z-10 bg-neutral-900/80 backdrop-blur-sm py-24">
         <div className="mx-auto w-full max-w-6xl px-6 md:px-12">
-          <div className="min-h-[60vh]">
+          <div className="min-h-[50vh]">
             <div data-step className="space-y-4">
               <p className="text-xs uppercase tracking-[0.35em] text-neutral-400">Chapter 1</p>
               <h2 className="text-4xl font-semibold text-neutral-100 sm:text-5xl">On-chain contributions</h2>
@@ -345,7 +374,7 @@ export default function LandingPage() {
       </section>
 
       {/* Guilds */}
-      <section id="guilds" className="relative z-10 border-t border-neutral-800 bg-transparent py-20">
+      <section id="guilds" className="relative z-10 border-t border-neutral-800 bg-neutral-900/90 backdrop-blur-sm py-20">
         <div className="relative mx-auto flex w-full max-w-6xl flex-col px-6 md:px-12">
           <div className="mx-auto max-w-3xl text-center">
             <p data-animate className="text-xs uppercase tracking-[0.35em] text-neutral-400">Guild Network</p>
@@ -371,15 +400,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-neutral-800 bg-transparent py-10">
-        <div className="relative mx-auto flex w-full max-w-5xl flex-col items-center gap-4 px-6 text-center text-sm text-neutral-400 md:flex-row md:justify-between">
-          <p>&copy; {new Date().getFullYear()} Guild XP - Built on Movement.</p>
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-amber-500" />
-            <span>Elevate scholarship. Earn recognition.</span>
-          </div>
-        </div>
-      </footer>
+      <LandingFooter />
     </div>
   )
 }
