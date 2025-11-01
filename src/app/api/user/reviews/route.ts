@@ -153,6 +153,7 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
 
     // If type is 'given', pull review reward XP from XpTransaction (type=REVIEW_REWARD)
     let reviewXpBySubmissionId: Record<string, number> = {}
+    let reviewXpPartsBySubmissionId: Record<string, { base: number; bonus: number }> = {}
     if (type === 'given') {
       const submissionIds = reviews
         .map((r: any) => r?.submission?.id)
@@ -161,27 +162,37 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
       if (submissionIds.length > 0) {
         const { data: xpRows, error: xpErr } = await supabase
           .from('XpTransaction')
-          .select('sourceId, amount, type, createdAt')
+          .select('sourceId, amount, type, createdAt, description')
           .eq('userId', userId)
           .eq('type', 'REVIEW_REWARD')
           .in('sourceId', submissionIds)
 
         if (!xpErr && xpRows) {
-          // If multiple transactions exist for same submission, take the latest
-          const latestBySource: Record<string, { amount: number; createdAt: string }> = {}
+          // Compute base and bonus per submission by parsing description
+          const partsBySource: Record<string, { base: number; bonus: number }> = {}
           for (const row of xpRows) {
             const sid = row.sourceId as string
-            const prev = latestBySource[sid]
-            if (!prev || new Date(row.createdAt) > new Date(prev.createdAt)) {
-              latestBySource[sid] = { amount: row.amount, createdAt: row.createdAt }
-            }
+            if (!sid) continue
+            const desc = (row as any)?.description?.toLowerCase?.() || ''
+            const isBonus = desc.startsWith('quality bonus')
+            const isBase = desc.startsWith('review reward')
+            const entry = partsBySource[sid] || { base: 0, bonus: 0 }
+            if (isBonus) entry.bonus += row.amount || 0
+            else if (isBase) entry.base += row.amount || 0
+            else entry.base += row.amount || 0 // fallback: count as base
+            partsBySource[sid] = entry
           }
+
+          // Total per submission = base + bonus
           reviewXpBySubmissionId = Object.fromEntries(
-            Object.entries(latestBySource).map(([k, v]) => [k, v.amount])
+            Object.entries(partsBySource).map(([k, v]) => [k, (v.base || 0) + (v.bonus || 0)])
           )
 
-          // Update stats.totalXpFromReviews using transactions sum (positive rewards only)
-          stats.totalXpFromReviews = Object.values(reviewXpBySubmissionId).reduce((sum, amt) => sum + (amt || 0), 0)
+          // Update stats.totalXpFromReviews using totals
+          stats.totalXpFromReviews = Object.values(partsBySource).reduce((sum, v) => sum + (v.base || 0) + (v.bonus || 0), 0)
+
+          // Keep parts map for later enrichment
+          reviewXpPartsBySubmissionId = partsBySource
         } else {
           console.warn('Failed to load review reward XP transactions:', xpErr)
         }
@@ -203,6 +214,11 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
         const sid = review?.submission?.id
         if (sid && reviewXpBySubmissionId[sid] !== undefined) {
           enriched.reviewRewardXp = reviewXpBySubmissionId[sid]
+          const parts = reviewXpPartsBySubmissionId[sid]
+          if (parts) {
+            enriched.reviewRewardXpBase = parts.base || 0
+            enriched.reviewRewardXpBonus = parts.bonus || 0
+          }
         }
       } else {
         enriched.reviewerName = review.reviewer?.username

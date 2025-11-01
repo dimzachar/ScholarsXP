@@ -111,6 +111,8 @@ interface UserReview {
   submissionTaskTypes?: string[] | null
   reviewerName?: string | null
   reviewRewardXp?: number | null
+  reviewRewardXpBase?: number | null
+  reviewRewardXpBonus?: number | null
 }
 
 interface UserReviewStats {
@@ -721,7 +723,14 @@ export default function ReviewPage() {
                               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Review XP</div>
                               <div className="flex items-center justify-end gap-1 text-sm font-semibold text-foreground">
                                 <Medal className="h-3.5 w-3.5 text-primary" aria-hidden />
-                                {r.reviewRewardXp ?? '—'}
+                                {(() => {
+                                  const base = r.reviewRewardXpBase ?? null
+                                  const bonus = r.reviewRewardXpBonus ?? null
+                                  if (base && base > 0 && bonus && bonus > 0) return `${base}+${bonus}`
+                                  if (r.reviewRewardXp != null) return r.reviewRewardXp
+                                  if (base != null) return base
+                                  return '-'
+                                })()}
                               </div>
                             </div>
                             <div className="rounded-md bg-muted/30 px-2 py-1.5">
