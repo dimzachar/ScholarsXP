@@ -22,6 +22,9 @@ interface ReviewerRecord {
   username: string | null
   email: string
   role: string
+  lastActiveAt?: string | null
+  lastLoginAt?: string | null
+  createdAt?: string
   reviewerOptOut?: boolean
   reviewerOptOutUntil?: string | null
   reviewerOptOutActive?: boolean
@@ -35,6 +38,8 @@ export default function ReviewerAvailabilityPage() {
   const { session } = useAuth()
   const [reviewers, setReviewers] = useState<ReviewerRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [sortBy, setSortBy] = useState<string>('username')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedReviewer, setSelectedReviewer] = useState<ReviewerRecord | null>(null)
@@ -47,9 +52,18 @@ export default function ReviewerAvailabilityPage() {
 
       const params = new URLSearchParams({
         limit: '200',
-        sortBy: 'username',
-        sortOrder: 'asc'
+        includeLogin: '1'
       })
+
+      const serverSortable = new Set(['username', 'role', 'lastActiveAt', 'createdAt'])
+      if (serverSortable.has(sortBy)) {
+        params.set('sortBy', sortBy)
+        params.set('sortOrder', sortOrder)
+      } else {
+        // Default server order; client will sort afterwards
+        params.set('sortBy', 'username')
+        params.set('sortOrder', 'asc')
+      }
 
       const response = await fetch(`/api/admin/users?${params.toString()}`, {
         credentials: 'include',
@@ -64,9 +78,23 @@ export default function ReviewerAvailabilityPage() {
       }
 
       const data = await response.json()
-      const reviewerCandidates: ReviewerRecord[] = (data.users || []).filter(
+      let reviewerCandidates: ReviewerRecord[] = (data.users || []).filter(
         (user: ReviewerRecord) => user && ['REVIEWER', 'ADMIN'].includes(user.role)
       )
+
+      // Client-side sort for unsupported keys
+      if (!serverSortable.has(sortBy)) {
+        const getVal = (u: ReviewerRecord) => {
+          if (sortBy === 'reviews') return u.metrics?.totalReviews ?? 0
+          if (sortBy === 'lastLoginAt') return u.lastLoginAt ? new Date(u.lastLoginAt).getTime() : 0
+          return 0
+        }
+        reviewerCandidates = reviewerCandidates.sort((a, b) => {
+          const va = getVal(a) as number
+          const vb = getVal(b) as number
+          return sortOrder === 'asc' ? va - vb : vb - va
+        })
+      }
 
       setReviewers(reviewerCandidates)
     } catch (error) {
@@ -75,7 +103,7 @@ export default function ReviewerAvailabilityPage() {
     } finally {
       setLoading(false)
     }
-  }, [session?.access_token])
+  }, [session?.access_token, sortBy, sortOrder])
 
   useEffect(() => {
     fetchReviewers()
@@ -237,6 +265,27 @@ export default function ReviewerAvailabilityPage() {
     return <Badge variant="secondary">Auto-assign enabled</Badge>
   }
 
+  const formatLastActive = (isoDate?: string | null) => {
+    if (!isoDate) return '-'
+    const d = new Date(isoDate)
+    if (Number.isNaN(d.getTime())) return '-'
+    const diffMs = Date.now() - d.getTime()
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+    if (diffDays <= 0) return 'Today'
+    if (diffDays === 1) return '1 day ago'
+    if (diffDays < 30) return `${diffDays} days ago`
+    return d.toLocaleDateString()
+  }
+
+  const onSort = (key: string) => {
+    if (sortBy === key) {
+      setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortBy(key)
+      setSortOrder('asc')
+    }
+  }
+
   return (
     <AuthGuard>
       <AdminGuard>
@@ -281,8 +330,38 @@ export default function ReviewerAvailabilityPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Reviewer</TableHead>
-                      <TableHead>Role</TableHead>
+                      <TableHead>
+                        <button className="flex items-center gap-1" onClick={() => onSort('username')}>
+                          Reviewer
+                          {sortBy === 'username' ? (
+                            <span className="text-xs text-muted-foreground">{sortOrder === 'asc' ? '▲' : '▼'}</span>
+                          ) : null}
+                        </button>
+                      </TableHead>
+                      <TableHead>
+                        <button className="flex items-center gap-1" onClick={() => onSort('role')}>
+                          Role
+                          {sortBy === 'role' ? (
+                            <span className="text-xs text-muted-foreground">{sortOrder === 'asc' ? '▲' : '▼'}</span>
+                          ) : null}
+                        </button>
+                      </TableHead>
+                      <TableHead className="hidden md:table-cell">
+                        <button className="flex items-center gap-1" onClick={() => onSort('reviews')}>
+                          Reviews
+                          {sortBy === 'reviews' ? (
+                            <span className="text-xs text-muted-foreground">{sortOrder === 'asc' ? '▲' : '▼'}</span>
+                          ) : null}
+                        </button>
+                      </TableHead>
+                      <TableHead className="hidden md:table-cell">
+                        <button className="flex items-center gap-1" onClick={() => onSort('lastLoginAt')}>
+                          Last Login
+                          {sortBy === 'lastLoginAt' ? (
+                            <span className="text-xs text-muted-foreground">{sortOrder === 'asc' ? '▲' : '▼'}</span>
+                          ) : null}
+                        </button>
+                      </TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="hidden md:table-cell">Notes</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -291,14 +370,14 @@ export default function ReviewerAvailabilityPage() {
                   <TableBody>
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="py-10 text-center">
+                        <TableCell colSpan={7} className="py-10 text-center">
                           <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
                           <p className="mt-2 text-sm text-muted-foreground">Loading reviewer availability…</p>
                         </TableCell>
                       </TableRow>
                     ) : reviewers.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                        <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                           No reviewers found.
                         </TableCell>
                       </TableRow>
@@ -318,6 +397,12 @@ export default function ReviewerAvailabilityPage() {
                                 <Shield className="h-3.5 w-3.5" />
                                 {reviewer.role}
                               </Badge>
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell">
+                              {reviewer.metrics?.totalReviews ?? 0}
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell">
+                              {formatLastActive(reviewer.lastLoginAt ?? reviewer.lastActiveAt ?? null)}
                             </TableCell>
                             <TableCell>{renderStatusBadge(reviewer)}</TableCell>
                             <TableCell className="hidden text-sm text-muted-foreground md:table-cell">

@@ -24,6 +24,7 @@ export const GET = withAdminOptimization(withPermission('admin_access')(async (r
     const sortBy = searchParams.get('sortBy') || 'createdAt'
     const sortOrder = searchParams.get('sortOrder') || 'desc'
     const status = searchParams.get('status') // 'active', 'inactive', 'suspended'
+    const includeLogin = searchParams.get('includeLogin') === '1'
 
     // Create cache key based on all parameters
     const cacheKey = `${EnhancedCacheKeys.userMetrics(page, limit)}:${role || ''}:${search || ''}:${xpMin || ''}:${xpMax || ''}:${lastActiveFrom || ''}:${lastActiveTo || ''}:${sortBy}:${sortOrder}:${status || ''}`
@@ -38,7 +39,7 @@ export const GET = withAdminOptimization(withPermission('admin_access')(async (r
         cacheKey,
         60, // Reduced from 300 to 60 seconds for admin operations
         async () => {
-          return await fetchUserMetricsData(page, limit, offset, role, search, xpMin, xpMax, lastActiveFrom, lastActiveTo, sortBy, sortOrder, status)
+          return await fetchUserMetricsData(page, limit, offset, role, search, xpMin, xpMax, lastActiveFrom, lastActiveTo, sortBy, sortOrder, status, includeLogin)
         },
         { fallbackToOldCache: false } // Don't fallback to old cache for admin data
       )
@@ -55,7 +56,7 @@ export const GET = withAdminOptimization(withPermission('admin_access')(async (r
       // Always fetch fresh data for admin users table
       responseData = await fetchUserMetricsData(
         page, limit, offset, role, search, xpMin, xpMax,
-        lastActiveFrom, lastActiveTo, sortBy, sortOrder, status
+        lastActiveFrom, lastActiveTo, sortBy, sortOrder, status, includeLogin
       )
 
       return NextResponse.json(responseData, {
@@ -99,7 +100,8 @@ async function fetchUserMetricsData(
   lastActiveTo?: string | null,
   sortBy: string = 'createdAt',
   sortOrder: string = 'desc',
-  status?: string | null
+  status?: string | null,
+  includeLogin: boolean = false
 ) {
   // Build where clause
   const where: any = {}
@@ -156,13 +158,13 @@ async function fetchUserMetricsData(
   }
 
   // Build orderBy clause
-  const orderBy: any = {}
+  let orderBy: any
   if (sortBy === 'submissions') {
-    orderBy._count = { submissions: sortOrder }
+    orderBy = { submissions: { _count: sortOrder as 'asc' | 'desc' } }
   } else if (sortBy === 'reviews') {
-    orderBy._count = { peerReviews: sortOrder }
+    orderBy = { peerReviews: { _count: sortOrder as 'asc' | 'desc' } }
   } else {
-    orderBy[sortBy] = sortOrder
+    orderBy = { [sortBy]: sortOrder }
   }
 
   // Calculate week start for XP transactions
@@ -303,7 +305,7 @@ async function fetchUserMetricsData(
   }
 
   // Calculate additional metrics for each user - Optimized in-memory processing
-  const usersWithMetrics = users.map((user) => {
+  let usersWithMetrics = users.map((user) => {
     // Calculate weekly XP from included transactions
     const weeklyXp = user.xpTransactions.reduce((sum, tx) => sum + tx.amount, 0)
 
@@ -366,6 +368,50 @@ async function fetchUserMetricsData(
       }
     }
   })
+
+  // Optionally enrich with last login date from Supabase auth, when requested
+  if (includeLogin) {
+    try {
+      const { createServiceClient } = await import('@/lib/supabase-server')
+      const supabaseAdmin = createServiceClient()
+
+      const targetIds = new Set(userIds)
+      const lastLoginMap = new Map<string, string | null>()
+
+      let pageNum = 1
+      const perPage = 1000
+      // Iterate pages until we've found all target users or no more users
+      // Guard with a hard cap to avoid infinite loops
+      for (let i = 0; i < 10 && lastLoginMap.size < targetIds.size; i++) {
+        const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page: pageNum, perPage })
+        if (error) break
+        if (!data || !Array.isArray(data.users) || data.users.length === 0) break
+
+        for (const au of data.users) {
+          if (targetIds.has(au.id) && !lastLoginMap.has(au.id)) {
+            // Supabase returns last_sign_in_at as string | null
+            // Normalize to ISO if present
+            const last = (au.last_sign_in_at as string | null) || null
+            lastLoginMap.set(au.id, last)
+          }
+        }
+
+        if (data.users.length < perPage) {
+          break
+        }
+        pageNum++
+      }
+
+      usersWithMetrics = usersWithMetrics.map(u => ({
+        ...u,
+        lastLoginAt: lastLoginMap.get(u.id) || null
+      }))
+    } catch (e) {
+      // If auth enrichment fails, proceed without lastLoginAt
+      console.warn('Auth enrichment for last login failed:', e)
+    }
+  }
+
 
   // Get summary statistics
   const roleStats = await prisma.user.groupBy({
