@@ -105,7 +105,7 @@ export default function AdminSubmissionsPage() {
     dateFrom: '',
     dateTo: '',
     search: '',
-    flagged: false,
+    lowReviews: false,
     // Seed from URL search params on first render to avoid an initial unfiltered fetch
     userId: initialUserId
   })
@@ -148,15 +148,18 @@ export default function AdminSubmissionsPage() {
       })
 
       // Add filters
+      console.log('Current filters state:', filters)
       Object.entries(filters).forEach(([key, value]) => {
         if (value && value !== 'all') {
-          if (key === 'flagged') {
+          console.log('Adding filter to URL params:', key, value, typeof value)
+          if (key === 'lowReviews') {
             params.append(key, value.toString())
           } else {
             params.append(key, value as string)
           }
         }
       })
+      console.log('Final URL params:', params.toString())
 
       const apiUrl = `/api/admin/submissions?${params.toString()}`
 
@@ -298,6 +301,55 @@ export default function AdminSubmissionsPage() {
     }
 
     await handleBulkAction('updateXp', { xpAwarded: xp, reason: reason.trim() })
+  }
+
+  // Handle bulk reshuffle of missed reviewers
+  const handleBulkReshuffle = async () => {
+    if (selectedSubmissions.length === 0) return
+
+    const reason = typeof window !== 'undefined'
+      ? window.prompt('Enter reason for reshuffling missed reviewers (required, min 5 chars):') || ''
+      : ''
+    if (!reason || reason.trim().length < 5) {
+      if (typeof window !== 'undefined') {
+        window.alert('Reason is required and must be at least 5 characters long.')
+      }
+      return
+    }
+
+    try {
+      const response = await fetch('/api/admin/bulk-reshuffle', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({
+          submissionIds: selectedSubmissions,
+          reason: reason.trim()
+        })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        if (typeof window !== 'undefined') {
+          window.alert(`Successfully reshuffled ${result.message || 'submissions'}`)
+        }
+        fetchSubmissions()
+        setSelectedSubmissions([])
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        if (typeof window !== 'undefined') {
+          window.alert(`Failed to reshuffle submissions: ${errorData.error || 'Please try again.'}`)
+        }
+      }
+    } catch (error) {
+      console.error('Error performing bulk reshuffle:', error)
+      if (typeof window !== 'undefined') {
+        window.alert('Error occurred while reshuffling submissions.')
+      }
+    }
   }
 
   const getStatusColor = (status: string) => {
@@ -551,11 +603,14 @@ export default function AdminSubmissionsPage() {
 
             <div className="flex items-center space-x-2 mt-4">
               <Checkbox
-                id="flagged"
-                checked={filters.flagged}
-                onCheckedChange={(checked) => handleFilterChange('flagged', checked)}
+                id="lowReviews"
+                checked={filters.lowReviews}
+                onCheckedChange={(checked) => {
+                  console.log('Checkbox changed to:', checked);
+                  handleFilterChange('lowReviews', checked);
+                }}
               />
-              <Label htmlFor="flagged">Show only flagged content</Label>
+              <Label htmlFor="lowReviews">Show only submissions with less than 3 reviews</Label>
             </div>
           </CardContent>
         </Card>
@@ -584,6 +639,15 @@ export default function AdminSubmissionsPage() {
                   >
                     <Award className="h-4 w-4 mr-2" />
                     Modify XP
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleBulkReshuffle}
+                    title="Reshuffle missed reviewers for selected submissions under peer review"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Reshuffle Missed
                   </Button>
                   <Button
                     variant="outline"

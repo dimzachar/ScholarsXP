@@ -196,7 +196,7 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
           </div>
           
           <div className="text-center p-4 rounded-lg border border-orange-200/60 bg-orange-50 dark:bg-amber-900/40 dark:border-amber-500/30">
-            <div className="text-2xl font-bold text-orange-600 dark:text-amber-200">
+            <div className={`text-2xl font-bold text-orange-600 dark:text-amber-200`}>
               {submission.reviewCount}
             </div>
             <div className="text-sm text-muted-foreground">Reviews</div>

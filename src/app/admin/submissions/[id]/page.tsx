@@ -8,11 +8,12 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { 
-  ArrowLeft, 
-  ExternalLink, 
+import {
+  ArrowLeft,
+  ExternalLink,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  Shuffle
 } from 'lucide-react'
 import Link from 'next/link'
 import { sanitizeUrl } from '@/lib/url-sanitizer'
@@ -93,6 +94,9 @@ export default function AdminSubmissionDetailPage() {
   const [loadingSubmission, setLoadingSubmission] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [assigning, setAssigning] = useState(false)
+  const [reshuffling, setReshuffling] = useState(false)
+  const [reshuffleNotice, setReshuffleNotice] = useState<string | null>(null)
+  const [reshuffleError, setReshuffleError] = useState<string | null>(null)
 
   const fetchSubmissionDetails = useCallback(async () => {
     try {
@@ -173,6 +177,57 @@ export default function AdminSubmissionDetailPage() {
       setAssigning(false)
     }
   }, [submissionId, assigning, fetchSubmissionDetails])
+
+  const handleManualReshuffle = useCallback(async (assignmentId?: string) => {
+    if (!submissionId || reshuffling) return
+    
+    try {
+      setReshuffling(true)
+      setReshuffleNotice(null)
+      setReshuffleError(null)
+
+      const body: any = { reason: 'manual:admin' }
+      if (assignmentId) {
+        body.assignmentIds = [assignmentId]
+      }
+
+      const response = await fetch(`/api/admin/submissions/${submissionId}/manual-reshuffle`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        setReshuffleError(data?.message || 'Failed to reshuffle. Please try again.')
+        return
+      }
+
+      await fetchSubmissionDetails()
+
+      if (data.reshuffledCount > 0) {
+        if (assignmentId) {
+          setReshuffleNotice(
+            `Successfully reshuffled reviewer! New reviewer assigned.`
+          )
+        } else {
+          setReshuffleNotice(
+            `Bulk reshuffle completed! Reshuffled ${data.reshuffledCount} out of ${data.totalProcessed} assignments.`
+          )
+        }
+      } else {
+        setReshuffleNotice(data?.message || 'No assignments were reshuffled.')
+      }
+    } catch (reshuffleError) {
+      console.error('Error performing reshuffle:', reshuffleError)
+      setReshuffleError('Unable to perform reshuffle. Please try again.')
+    } finally {
+      setReshuffling(false)
+    }
+  }, [submissionId, reshuffling, fetchSubmissionDetails])
 
   if (loading || loadingSubmission) {
     return (
@@ -278,15 +333,45 @@ export default function AdminSubmissionDetailPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                {reshuffleNotice && (
+                  <Alert className="mb-4 border-green-200 bg-green-50 text-green-900">
+                    <AlertDescription>{reshuffleNotice}</AlertDescription>
+                  </Alert>
+                )}
+
+                {reshuffleError && (
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertDescription>{reshuffleError}</AlertDescription>
+                  </Alert>
+                )}
+
                 {submission.reviewAssignments.length > 0 ? (
                   <div className="space-y-4">
-                    {submission.reviewAssignments.length < 3 && (
-                      <div className="flex justify-end">
+                    <div className="flex justify-end gap-2">
+                      {submission.reviewAssignments.filter(a => a.status !== 'REASSIGNED').length < 3 && (
                         <Button size="sm" onClick={handleAutoAssign} disabled={assigning}>
                           {assigning ? 'Assigning…' : 'Re-assign reviewers'}
                         </Button>
-                      </div>
-                    )}
+                      )}
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => handleManualReshuffle()}
+                        disabled={reshuffling || submission.reviewAssignments.filter(a => a.status === 'PENDING' || a.status === 'MISSED').length === 0}
+                      >
+                        {reshuffling ? (
+                          <>
+                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                            Reshuffling...
+                          </>
+                        ) : (
+                          <>
+                            <Shuffle className="h-4 w-4 mr-2" />
+                            Bulk Reshuffle
+                          </>
+                        )}
+                      </Button>
+                    </div>
                     {submission.reviewAssignments.map((assignment) => (
                       <div key={assignment.id} className="flex items-center justify-between p-4 border rounded-lg">
                         <div>
@@ -296,9 +381,21 @@ export default function AdminSubmissionDetailPage() {
                             Deadline: {formatDate(assignment.deadline)}
                           </div>
                         </div>
-                        <Badge className={getStatusColor(assignment.status)}>
-                          {assignment.status.replace('_', ' ')}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge className={getStatusColor(assignment.status)}>
+                            {assignment.status.replace('_', ' ')}
+                          </Badge>
+                          {(assignment.status === 'PENDING' || assignment.status === 'MISSED') && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => handleManualReshuffle(assignment.id)}
+                              disabled={reshuffling}
+                            >
+                              Reshuffle
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

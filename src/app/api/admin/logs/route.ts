@@ -62,13 +62,25 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
                 ? `SYSTEM_CONFIG:${det.subAction}`
                 : row.action
               let summary = `${actionLabel} on ${row.targetType} ${row.targetId}`
+              
+              // Handle different review action types with specific summaries
               if (row.action === 'SYSTEM_CONFIG' && det?.newStatus) {
                 summary = `Status -> ${det.newStatus}`
               } else if (row.action === 'REVIEW_REASSIGN' && det?.newReviewerId) {
                 summary = `Review reassigned ${det.oldReviewerId} -> ${det.newReviewerId}`
+              } else if (row.action === 'REVIEW_AUTO_ASSIGN' && det?.reviewerCount) {
+                summary = `Auto-assigned ${det.reviewerCount} reviewer(s)`
+              } else if (row.action === 'REVIEW_MANUAL_RESHUFFLE' && det?.reshuffledCount) {
+                summary = `Manual reshuffle: ${det.reshuffledCount} assignment(s) reshuffled`
+              } else if (row.action === 'REVIEW_BULK_RESHUFFLE' && det?.reshuffleResults) {
+                const totalReshuffled = det.reshuffleResults.reduce((sum: number, r: any) => sum + (r.newAssignments || 0), 0)
+                summary = `Bulk reshuffle: ${totalReshuffled} reviewer(s) assigned`
+              } else if (row.action === 'REVIEW_DEADLINE_REASSIGN' && det?.reason) {
+                summary = `Deadline reassignment: ${det.reason}`
               } else if (row.action === 'CONTENT_FLAG' && det?.subAction) {
                 summary = `Flag ${det.subAction}`
               }
+              
               return {
                 id: `admin_action:${row.id}`,
                 eventType: 'admin_action',

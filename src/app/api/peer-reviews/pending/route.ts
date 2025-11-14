@@ -42,6 +42,14 @@ export const GET = withPermission('review_content')(async (request: Authenticate
       .in('status', ['PENDING', 'AI_REVIEWED', 'UNDER_PEER_REVIEW'])
       .order('createdAt', { ascending: false })
 
+    // Filter out reassigned review assignments to show only current/active ones
+    const filteredSubmissions = submissions?.map(submission => ({
+      ...submission,
+      reviewAssignments: (submission.reviewAssignments || []).filter(
+        (assignment: any) => assignment.status !== 'REASSIGNED'
+      )
+    })) || []
+
     if (error) {
       console.error('Error fetching pending submissions:', error)
       return NextResponse.json({
@@ -57,7 +65,7 @@ export const GET = withPermission('review_content')(async (request: Authenticate
     return NextResponse.json({
       success: true,
       data: {
-        submissions: submissions || []
+        submissions: filteredSubmissions
       }
     })
 
@@ -73,4 +81,3 @@ export const GET = withPermission('review_content')(async (request: Authenticate
     }, { status: 500 })
   }
 })
-

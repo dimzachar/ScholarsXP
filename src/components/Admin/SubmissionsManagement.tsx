@@ -42,7 +42,8 @@ import {
   Eye,
   ArrowUpDown,
   Award,
-  FileText
+  FileText,
+  AlertTriangle
 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Pagination } from '@/components/ui/pagination'
@@ -94,6 +95,15 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
   const [selectedSubmissions, setSelectedSubmissions] = useState<string[]>([])
   const [bulkLoading, setBulkLoading] = useState(false)
   const [bulkMessage, setBulkMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+  const [bulkReshuffleModal, setBulkReshuffleModal] = useState({ open: false, reason: '' })
+  const [bulkReshuffleProgress, setBulkReshuffleProgress] = useState({ 
+    open: false, 
+    status: 'pending', 
+    processed: 0, 
+    total: 0, 
+    message: 'Initializing bulk reshuffle...',
+    errors: [] as string[]
+  })
   const [modifyXpModal, setModifyXpModal] = useState({ open: false })
   const [modifyXpForm, setModifyXpForm] = useState({ xpAwarded: '', reason: '' })
   const [modifyXpLoading, setModifyXpLoading] = useState(false)
@@ -492,6 +502,116 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
     }
   }
 
+  // Handle bulk reshuffle of missed reviewers for ALL submissions
+  const handleBulkReshuffle = async () => {
+    setBulkReshuffleModal({ open: true, reason: '' })
+  }
+
+  const handleBulkReshuffleConfirm = async (reason: string) => {
+    if (!reason || reason.trim().length < 5) {
+      setBulkMessage({ 
+        text: 'Reason is required and must be at least 5 characters long.', 
+        type: 'error' 
+      })
+      return
+    }
+
+    // Close initial modal and open progress modal
+    setBulkReshuffleModal({ open: false, reason: '' })
+    
+    // Initialize progress modal
+    setBulkReshuffleProgress({
+      open: true,
+      status: 'processing',
+      processed: 0,
+      total: 0,
+      message: 'Initializing bulk reshuffle...',
+      errors: []
+    })
+
+    try {
+      console.log('🔄 Starting bulk reshuffle with reason:', reason.trim())
+
+      // Perform the bulk reshuffle directly - the API will return count information
+      const response = await fetch('/api/admin/bulk-reshuffle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reason: reason.trim()
+        })
+      })
+
+      console.log('📊 Bulk reshuffle response status:', response.status)
+
+      const result = await response.json()
+      console.log('📊 Bulk reshuffle result:', result)
+
+      if (response.ok) {
+        console.log('✅ Bulk reshuffle successful, refreshing submissions...')
+        
+        // Update progress modal with completion message
+        setBulkReshuffleProgress(prev => ({
+          ...prev,
+          status: 'completed',
+          processed: result.count || 0,
+          total: result.count || 0,
+          message: `Successfully reshuffled ${result.count || 'all'} submissions!`,
+          errors: result.errors || []
+        }))
+
+        // Wait a moment to show completion message, then close
+        setTimeout(() => {
+          setBulkReshuffleProgress({ 
+            open: false, 
+            status: 'pending', 
+            processed: 0, 
+            total: 0, 
+            message: '', 
+            errors: [] 
+          })
+          fetchSubmissions(true)
+        }, 3000)
+
+        setBulkMessage({ 
+          text: result.message || `Successfully reshuffled missed reviewers for ${result.count || 'multiple'} submissions`, 
+          type: 'success' 
+        })
+        setTimeout(() => setBulkMessage(null), 5000) // Extended to 5 seconds for bulk operations
+      } else {
+        console.error('❌ Bulk reshuffle failed:', result)
+        
+        // Update progress modal with error
+        setBulkReshuffleProgress(prev => ({
+          ...prev,
+          status: 'error',
+          message: result.error || 'Failed to reshuffle submissions',
+          errors: [...prev.errors, result.error || 'Unknown error occurred']
+        }))
+
+        setBulkMessage({ 
+          text: result.error || 'Failed to reshuffle submissions', 
+          type: 'error' 
+        })
+        setTimeout(() => setBulkMessage(null), 7000) // Extended timeout for error messages
+      }
+    } catch (error) {
+      console.error('💥 Network error performing bulk reshuffle:', error)
+      
+      // Update progress modal with error
+      setBulkReshuffleProgress(prev => ({
+        ...prev,
+        status: 'error',
+        message: 'Network error occurred',
+        errors: [...prev.errors, error instanceof Error ? error.message : 'Network error: Unable to perform bulk reshuffle. Please check your connection and try again.']
+      }))
+
+      const errorMsg = 'Network error: Unable to perform bulk reshuffle. Please check your connection and try again.'
+      setBulkMessage({ text: errorMsg, type: 'error' })
+      setTimeout(() => setBulkMessage(null), 7000)
+    }
+    // Note: Not setting bulkLoading to false here as we're using the progress modal instead
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -775,7 +895,109 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
           </CardContent>
         </Card>
       )}
+
+      {/* Global Actions */}
+      {/* <Card className="mb-6">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-sm text-muted-foreground">
+                Global actions for all submissions
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBulkReshuffle}
+                disabled={bulkLoading}
+                title="Reshuffle missed reviewers for ALL submissions under peer review (no selection needed)"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Reshuffle All Missed
+              </Button>
+            </div>
+          </div>
+          {bulkMessage && (
+            <div className={`mt-2 p-2 rounded-md ${
+              bulkMessage.type === 'success'
+                ? 'bg-green-100 border border-green-200 text-green-800'
+                : 'bg-red-100 border border-red-200 text-red-800'
+            } text-sm`}
+            >
+              {bulkMessage.text}
+            </div>
+          )}
+        </CardContent>
+      </Card> */}
     
+      {/* Bulk Reshuffle Modal */}
+          <Dialog open={bulkReshuffleModal.open} onOpenChange={(open) => !open && setBulkReshuffleModal(prev => ({ ...prev, open }))}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5" />
+              Bulk Reshuffle Missed Reviewers
+            </DialogTitle>
+            <DialogDescription>
+              Reshuffle all missed reviewers for submissions under peer review. This will replace inactive reviewers with new eligible reviewers across ALL submissions.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-3 bg-warning/10 border border-warning/20 rounded-lg">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-muted-foreground">
+                  This action will process <strong>ALL submissions</strong> under peer review status. Only reviewers with missed deadlines will be reshuffled. The operation cannot be undone.
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reshuffleReason">Reason for Reshuffling (Required)</Label>
+              <Textarea
+                id="reshuffleReason"
+                placeholder="Enter reason for reshuffling missed reviewers (minimum 5 characters)..."
+                value={bulkReshuffleModal.reason || ''}
+                onChange={(e) => setBulkReshuffleModal(prev => ({ ...prev, reason: e.target.value }))}
+                rows={4}
+                className="resize-none"
+              />
+              <p className="text-xs text-muted-foreground">
+                This reason will be logged in the audit trail and helps track administrative actions.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setBulkReshuffleModal(prev => ({ ...prev, open: false, reason: '' }))}
+              disabled={bulkLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                const reason = bulkReshuffleModal.reason?.trim() || ''
+                if (!reason || reason.length < 5) {
+                  setBulkMessage({ 
+                    text: 'Reason is required and must be at least 5 characters long.', 
+                    type: 'error' 
+                  })
+                  return
+                }
+                setBulkReshuffleModal({ open: false })
+                await handleBulkReshuffleConfirm(reason)
+              }}
+              disabled={bulkLoading || !bulkReshuffleModal.reason?.trim()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {bulkLoading && <RefreshCw className="h-4 w-4 mr-2 animate-spin" />}
+              Reshuffle All Missed Reviewers
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Modify XP Modal */}
       <Dialog open={modifyXpModal.open} onOpenChange={(open) => !open && setModifyXpModal({ open: false })}>
         <DialogContent className="sm:max-w-[500px]">
@@ -1026,6 +1248,93 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
           />
         </div>
       )}
+      {/* Bulk Reshuffle Progress Modal */}
+      <Dialog open={bulkReshuffleProgress.open} onOpenChange={(open) => !open && setBulkReshuffleProgress(prev => ({ ...prev, open }))}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5 animate-spin" />
+              Bulk Reshuffle Progress
+            </DialogTitle>
+            <DialogDescription>
+              Reshuffling missed reviewers across all submissions. Please wait while the process completes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Progress Bar */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Progress</span>
+                <span>{bulkReshuffleProgress.processed} of {bulkReshuffleProgress.total} submissions processed</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ 
+                    width: bulkReshuffleProgress.total > 0 
+                      ? `${(bulkReshuffleProgress.processed / bulkReshuffleProgress.total) * 100}%` 
+                      : '0%' 
+                  }}
+                ></div>
+              </div>
+            </div>
+
+            {/* Current Status */}
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-start gap-2">
+                <div className="h-4 w-4 bg-blue-100 rounded-full mt-0.5 flex-shrink-0"></div>
+                <div className="text-sm">
+                  <span className="font-medium">Status: </span>
+                  <span className="text-blue-700 capitalize">{bulkReshuffleProgress.message}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Processing Details */}
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Processing Details:</div>
+              <div className="text-sm text-muted-foreground space-y-1">
+                <div>• Processing submissions under peer review status</div>
+                <div>• Reassigning missed reviewers to new eligible reviewers</div>
+                <div>• Updating submission review progress</div>
+                <div>• Refreshing admin dashboard after completion</div>
+              </div>
+            </div>
+
+            {/* Error Messages */}
+            {bulkReshuffleProgress.errors.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-destructive">Errors ({bulkReshuffleProgress.errors.length}):</div>
+                <div className="max-h-32 overflow-y-auto space-y-1">
+                  {bulkReshuffleProgress.errors.map((error, index) => (
+                    <div key={index} className="text-xs text-destructive/80 bg-destructive/5 p-2 rounded">
+                      {error}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Estimated Time */}
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="text-xs text-yellow-700">
+                <span className="font-medium">Note: </span>
+                This process may take several minutes depending on the number of submissions. Please keep this window open.
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setBulkReshuffleProgress({ open: false, status: 'pending', processed: 0, total: 0, message: '', errors: [] })}
+              disabled={bulkReshuffleProgress.status === 'processing'}
+            >
+              {bulkReshuffleProgress.status === 'processing' ? 'Processing...' : 'Cancel'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Quick Edit Modal */}
       <Dialog open={quickEditModal.open} onOpenChange={(open) => !open && closeQuickEdit()}>
         <DialogContent className="sm:max-w-[500px]">

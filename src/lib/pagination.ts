@@ -1,4 +1,5 @@
 import { PaginationDTO } from '@/types/api-responses'
+import { Prisma } from '@prisma/client'
 
 /**
  * Simple offset-based pagination utilities
@@ -127,7 +128,7 @@ function parseFilters(searchParams: URLSearchParams): Record<string, any> {
   // Common filter parameters
   const filterParams = [
     'status', 'platform', 'taskType', 'role', 'search', 
-    'dateFrom', 'dateTo', 'minXp', 'maxXp', 'flagged'
+    'dateFrom', 'dateTo', 'minXp', 'maxXp', 'lowReviews'
   ]
   
   filterParams.forEach(param => {
@@ -135,7 +136,7 @@ function parseFilters(searchParams: URLSearchParams): Record<string, any> {
     if (value !== null && value !== '') {
       // Handle special cases
       switch (param) {
-        case 'flagged':
+        case 'lowReviews':
           filters[param] = value === 'true'
           break
         case 'minXp':
@@ -243,8 +244,24 @@ export class PaginationHelper {
       if (filters.dateTo) where.createdAt.lte = filters.dateTo
     }
 
-    if (filters.flagged) {
-      where.flagCount = { gt: 0 }
+    if (filters.lowReviews) {
+      console.log('🔍 Applying lowReviews filter - filtering submissions with less than 3 review assignments')
+      // Filter submissions where assigned review count is less than 3
+      // This filters based on active review assignments (excluding REASSIGNED)
+      // We need to use a raw SQL query to count the review assignments
+      where.id = {
+        in: Prisma.sql`(
+          SELECT s.id 
+          FROM "Submission" s 
+          LEFT JOIN (
+            SELECT submissionId, COUNT(*) as assignment_count 
+            FROM "ReviewAssignment" 
+            WHERE status != 'REASSIGNED'
+            GROUP BY submissionId
+          ) ra ON s.id = ra.submissionId 
+          WHERE ra.assignment_count IS NULL OR ra.assignment_count < 3
+        )`
+      }
     }
 
     if (filters.userId) {

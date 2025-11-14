@@ -50,18 +50,20 @@ const optimizedSubmissionsHandler = withPermission('admin_access')(async (reques
         : null
 
       const filters = {
-        status: normalizedStatus,
-        platform: searchParams.get('platform'),
-        taskType: searchParams.get('taskType'),
-        dateFrom: searchParams.get('dateFrom'),
-        dateTo: searchParams.get('dateTo'),
-        search: searchParams.get('search'),
-        flagged: searchParams.get('flagged') === 'true',
-        userId: searchParams.get('userId')
+        status: normalizedStatus || undefined,
+        platform: searchParams.get('platform') || undefined,
+        taskType: searchParams.get('taskType') || undefined,
+        dateFrom: searchParams.get('dateFrom') || undefined,
+        dateTo: searchParams.get('dateTo') || undefined,
+        search: searchParams.get('search') || undefined,
+        // Handle both old 'flagged' parameter and new 'lowReviews' parameter for backward compatibility
+        lowReviews: searchParams.get('lowReviews') === 'true' || searchParams.get('flagged') === 'true',
+        userId: searchParams.get('userId') || undefined
       }
 
       console.log('Admin submissions API - Received filters:', filters)
       console.log('Admin submissions API - URL search params:', Object.fromEntries(searchParams.entries()))
+      console.log('Admin submissions API - lowReviews filter:', filters.lowReviews)
 
       // Bypass cache on explicit request or no-cache header
       const bypassCache = searchParams.get('bypassCache') === '1' ||
@@ -173,7 +175,7 @@ const originalGetHandler = withPermission('admin_access')(async (request: Authen
     const search = searchParams.get('search')
     const sortBy = searchParams.get('sortBy') || 'createdAt'
     const sortOrder = searchParams.get('sortOrder') || 'desc'
-    const flagged = searchParams.get('flagged')
+    const lowReviews = searchParams.get('lowReviews') || searchParams.get('flagged')
 
     // Build where clause with safer filtering
     const where: any = {}
@@ -209,8 +211,8 @@ const originalGetHandler = withPermission('admin_access')(async (request: Authen
       ]
     }
 
-    if (flagged === 'true') {
-      where.flagCount = { gt: 0 }
+    if (lowReviews === 'true') {
+      where.reviewCount = { lt: 3 }
     }
 
     const userId = searchParams.get('userId')
@@ -335,7 +337,7 @@ const originalGetHandler = withPermission('admin_access')(async (request: Authen
         : submission.completedReviewCount
           ?? submission.reviewCount
           ?? 0
-      const assignmentCount = submission.reviewAssignments?.length
+      const assignmentCount = submission.reviewAssignments?.filter((a: any) => a.status !== 'REASSIGNED')?.length
         ?? submission._count?.reviewAssignments
         ?? submission.reviewAssignmentsCount
         ?? 0
@@ -406,7 +408,7 @@ const originalGetHandler = withPermission('admin_access')(async (request: Authen
           dateFrom,
           dateTo,
           search,
-          flagged
+          lowReviews
         },
         stats: {
           statusCounts,
@@ -598,5 +600,3 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
     )
   }
 })
-
-

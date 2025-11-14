@@ -235,9 +235,8 @@ async function createLegacyWhereClause(filters: any = {}): Promise<Prisma.Legacy
 }
 
 /**
- * Optimized admin submissions query
- * Target: 6.1s → 1.5s (75% improvement)
- * Reduces N+1 problems and optimizes database queries with proper indexing
+ * Optimized admin submissions query - Main Branch Compatible
+ * Simplified version that works with existing schema without releasedAt field
  */
 export async function getOptimizedAdminSubmissions(
   filters: {
@@ -247,7 +246,7 @@ export async function getOptimizedAdminSubmissions(
     dateFrom?: string
     dateTo?: string
     search?: string
-    flagged?: boolean
+    lowReviews?: boolean
     userId?: string
   },
   pagination: PaginationParams,
@@ -265,6 +264,7 @@ export async function getOptimizedAdminSubmissions(
       // Build optimized query using pagination helper
       const cleanedFilters = cleanFilters(filters)
       console.log('Cleaned filters:', cleanedFilters)
+      console.log('LowReviews filter value:', cleanedFilters.lowReviews)
 
       const queryParams = {
         ...pagination,
@@ -328,7 +328,7 @@ function cleanFilters(filters: any): Record<string, any> {
   Object.entries(filters).forEach(([key, value]) => {
     if (value !== null && value !== undefined && value !== '') {
       switch (key) {
-        case 'flagged':
+        case 'lowReviews':
           cleaned[key] = value === 'true' || value === true
           break
         case 'dateFrom':
@@ -346,6 +346,8 @@ function cleanFilters(filters: any): Record<string, any> {
 
 /**
  * Get optimized submissions with minimal includes for better performance
+ * Main Branch Compatible - no releasedAt field
+ * FIXED: Now properly excludes REASSIGNED reviewers from review count
  */
 async function getOptimizedSubmissions(query: any) {
   return await prisma.submission.findMany({
@@ -366,12 +368,18 @@ async function getOptimizedSubmissions(query: any) {
           xpScore: true
         }
       },
-      _count: {
+      reviewAssignments: {
+        where: {
+          status: {
+            not: 'REASSIGNED'
+          }
+        },
         select: {
-          reviewAssignments: true
+          id: true
         }
       }
-      // Removed: reviewAssignments, detailed metrics, timeline data
+      // Removed: detailed metrics, timeline data
+      // Removed: releasedAt field that doesn't exist in main branch
     },
     orderBy: query.orderBy,
     take: query.take,
@@ -554,7 +562,6 @@ async function getOptimizedLegacySubmissions(query: any, filters: any = {}) {
 
 /**
  * Format legacy submissions to match regular submission format
- to match regular submission format
  * Now includes conditional user data and feedback loop logging
  */
 function formatLegacySubmissions(legacySubmissions: LegacySubmissionWithUser[]) {
@@ -654,11 +661,10 @@ async function getLegacyStatusCounts(filters: any = {}): Promise<Record<string, 
     const status = normalizeStatusInput(entry.adminStatus) || LEGACY_DEFAULT_STATUS
     acc[status] = (acc[status] || 0) + entry._count
     return acc
-  }, {})
+  }, {} as Record<string, number>)
 }
 
 /**
-
  * Get regular submission count efficiently with caching
  * Note: Legacy submissions are counted separately by getLegacySubmissionCount()
  */
@@ -670,7 +676,28 @@ async function getSubmissionCount(whereClause: any): Promise<number> {
     CacheTTL.SUBMISSIONS_LIST,
     async () => {
       // Only count regular submissions - legacy submissions are counted separately
-      return await prisma.submission.count({ where: whereClause })
+      // Check if whereClause contains raw SQL (for lowReviews filter)
+      if (whereClause && whereClause.id && whereClause.id.in && whereClause.id.in.strings) {
+        // Use raw SQL for counting when using subquery
+        const result = await prisma.$queryRaw<{ count: bigint }[]>`
+          SELECT COUNT(*) as count 
+          FROM "Submission" s 
+          WHERE s.id IN (
+            SELECT s2.id 
+            FROM "Submission" s2 
+            LEFT JOIN (
+              SELECT submissionId, COUNT(*) as assignment_count 
+              FROM "ReviewAssignment" 
+              WHERE status != 'REASSIGNED'
+              GROUP BY submissionId
+            ) ra ON s2.id = ra.submissionId 
+            WHERE ra.assignment_count IS NULL OR ra.assignment_count < 3
+          )`
+        return Number(result[0]?.count || 0)
+      } else {
+        // Use regular count for simple where clauses
+        return await prisma.submission.count({ where: whereClause })
+      }
     }
   )
 }
@@ -732,10 +759,16 @@ async function getSubmissionStats(whereClause: any, filters: any = {}) {
  */
 export async function bulkUpdateSubmissions(
   submissionIds: string[],
-  action: 'updateStatus' | 'updateXp' | 'delete',
+  action: 'updateStatus' | 'updateXp' | 'delete' | 'bulkReshuffle',
   data: any,
   adminId?: string
-): Promise<{ success: boolean; count: number; message: string }> {
+): Promise<{
+  success: boolean;
+  count: number;
+  message: string;
+  totalMissedReviewers?: number;
+  reshuffleResults?: Array<{ submissionId: string; missedReviewers: string[]; newAssignments: number }>;
+}> {
   const startTime = Date.now()
   
   try {
@@ -750,7 +783,7 @@ export async function bulkUpdateSubmissions(
         const requested = String(data.status)
         const normalized = normalizeStatusInput(requested)
 
-        if (!normalized || (!REGULAR_ALLOWED_STATUSES.has(normalized) && normalized !== LEGACY_DEFAULT_STATUS)) {
+        if (!normalized || (!REGULAR_ALLOWED_STATUSES.has(normalized!) && normalized !== LEGACY_DEFAULT_STATUS)) {
           throw new Error(`Unsupported status: ${requested.toUpperCase()}`)
         }
 
@@ -777,7 +810,7 @@ export async function bulkUpdateSubmissions(
           let regularUpdated = 0
           let legacyUpdated = 0
 
-          if (regularIds.length > 0) {
+        if (regularIds.length > 0) {
             const update = await tx.submission.updateMany({
               where: { id: { in: regularIds } },
               data: { status: normalized, updatedAt: timestamp }
@@ -791,7 +824,7 @@ export async function bulkUpdateSubmissions(
             if (supportsAdminFields) {
               legacyUpdateData.adminStatus = normalized === LEGACY_DEFAULT_STATUS ? null : normalized
               legacyUpdateData.adminUpdatedAt = timestamp
-              legacyUpdateData.adminUpdatedBy = adminId ?? null
+              legacyUpdateData.adminUpdatedBy = adminId ?? undefined
 
               if (trimmedReason) {
                 legacyUpdateData.adminNotes = trimmedReason
@@ -1069,6 +1102,177 @@ export async function bulkUpdateSubmissions(
         }
         break
         
+      case 'bulkReshuffle': {
+        // Bulk reshuffle for submissions under peer review status
+        // This will reshuffle all missed/inactive reviewers across all selected submissions
+        const timestamp = new Date()
+        const supportsAdminFields = await supportsLegacyAdminFields()
+        
+        // First, get submissions and prepare reshuffle data
+        const submissions = await prisma.submission.findMany({
+          where: { 
+            id: { in: submissionIds },
+            status: 'UNDER_PEER_REVIEW'
+          },
+          include: {
+            reviewAssignments: {
+              where: { status: 'MISSED' },
+              include: { reviewer: true }
+            }
+          }
+        })
+
+        let reshuffledCount = 0
+        let totalMissedReviewers = 0
+        const reshuffleResults: Array<{ submissionId: string; missedReviewers: string[]; newAssignments: number }> = []
+        const adminActionLogs: Array<{
+          submissionId: string;
+          missedReviewerIds: string[];
+          newReviewerIds: string[];
+        }> = []
+
+        // Import reviewer pool service for reassignment
+        const { reviewerPoolService } = await import('@/lib/reviewer-pool')
+
+        // Process submissions one at a time to avoid transaction timeout
+        for (const submission of submissions) {
+          if (submission.reviewAssignments.length === 0) {
+            continue // No missed reviewers for this submission
+          }
+
+          const missedReviewerIds = submission.reviewAssignments.map(ra => ra.reviewerId)
+          
+          try {
+            // Process each submission in its own small transaction
+            await prisma.$transaction(async (tx) => {
+              // Mark missed assignments as reassigned
+              await tx.reviewAssignment.updateMany({
+                where: {
+                  submissionId: submission.id,
+                  reviewerId: { in: missedReviewerIds },
+                  status: 'MISSED'
+                },
+                data: { status: 'REASSIGNED' }
+              })
+
+            }, { timeout: 5000 }) // 5 second timeout for individual operations
+
+            totalMissedReviewers += missedReviewerIds.length
+
+            // Get new reviewers excluding the missed ones (outside transaction)
+            console.log(`🔄 Attempting to assign new reviewers for submission ${submission.id}, excluding:`, missedReviewerIds)
+            
+            const assignmentResult = await reviewerPoolService.assignReviewers(
+              submission.id,
+              submission.userId,
+              {
+                excludeUserIds: missedReviewerIds,
+                minimumReviewers: missedReviewerIds.length, // Replace same number
+                allowPartialAssignment: true
+              }
+            )
+
+            console.log(`📊 Assignment result for submission ${submission.id}:`, {
+              success: assignmentResult.success,
+              assignedCount: assignmentResult.assignedReviewers?.length || 0,
+              errors: assignmentResult.errors
+            })
+
+            if (assignmentResult.success && assignmentResult.assignedReviewers && assignmentResult.assignedReviewers.length > 0) {
+              reshuffledCount++
+              const newReviewerIds = assignmentResult.assignedReviewers.map(r => r.id)
+              
+              // Update submission review count to reflect new assignments
+              await prisma.submission.update({
+                where: { id: submission.id },
+                data: { reviewCount: assignmentResult.assignedReviewers.length }
+              })
+              
+              reshuffleResults.push({
+                submissionId: submission.id,
+                missedReviewers: missedReviewerIds,
+                newAssignments: assignmentResult.assignedReviewers.length
+              })
+
+              // Collect admin action data for later logging
+              adminActionLogs.push({
+                submissionId: submission.id,
+                missedReviewerIds: missedReviewerIds,
+                newReviewerIds: newReviewerIds
+              })
+              
+              console.log(`✅ Successfully reassigned ${assignmentResult.assignedReviewers.length} reviewers for submission ${submission.id}`)
+            } else {
+              console.warn(`⚠️ Failed to assign new reviewers for submission ${submission.id}:`, {
+                errors: assignmentResult.errors,
+                assignedReviewers: assignmentResult.assignedReviewers
+              })
+            }
+
+            // Small delay between submissions to prevent overwhelming the database
+            await new Promise(resolve => setTimeout(resolve, 100))
+          } catch (error) {
+            console.warn(`Failed to reshuffle submission ${submission.id}:`, error instanceof Error ? error.message : String(error))
+            continue // Skip this submission and continue with others
+          }
+        }
+
+        // Log admin actions outside of the main transactions to avoid timeout
+        if (adminId && adminActionLogs.length > 0) {
+          try {
+            // Log individual submission reshuffles
+            for (const logData of adminActionLogs) {
+              await prisma.adminAction.create({
+                data: {
+                  adminId,
+                  action: 'REVIEW_BULK_RESHUFFLE' as const,
+                  targetType: 'submission',
+                  targetId: logData.submissionId,
+                  details: {
+                    subAction: 'BULK_RESHUFFLE',
+                    missedReviewerIds: logData.missedReviewerIds,
+                    newReviewerIds: logData.newReviewerIds,
+                    reason: data?.reason || 'Bulk reshuffle of missed reviewers',
+                    timestamp: timestamp.toISOString(),
+                    count: logData.missedReviewerIds.length
+                  }
+                }
+              })
+            }
+
+            // Log bulk reshuffle summary
+            await prisma.adminAction.create({
+              data: {
+                adminId,
+                action: 'REVIEW_BULK_RESHUFFLE' as const,
+                targetType: 'system',
+                targetId: '00000000-0000-0000-0000-000000000000', // System target
+                details: {
+                  subAction: 'BULK_RESHUFFLE_SUMMARY',
+                  submissionsProcessed: reshuffledCount,
+                  totalMissedReviewers: totalMissedReviewers,
+                  totalNewAssignments: reshuffleResults.reduce((sum, r) => sum + r.newAssignments, 0),
+                  reason: data?.reason || 'Bulk reshuffle of missed reviewers',
+                  timestamp: timestamp.toISOString(),
+                  reshuffleResults: reshuffleResults
+                }
+              }
+            })
+          } catch (error) {
+            console.warn('Failed to log admin actions for bulk reshuffle:', error)
+          }
+        }
+
+        result = {
+          count: reshuffledCount,
+          totalMissedReviewers,
+          reshuffleResults,
+          message: `Successfully reshuffled ${reshuffledCount} submissions with ${totalMissedReviewers} missed reviewers`
+        }
+        
+        break
+      }
+
       case 'delete': {
         // Deleting submissions: adjust user XP and cleanup transactions
         result = await prisma.$transaction(async (tx) => {
@@ -1254,6 +1458,7 @@ async function invalidateSubmissionCaches(): Promise<void> {
 
 /**
  * Get individual submission details (optimized)
+ * Main Branch Compatible - no releasedAt field
  */
 export async function getOptimizedSubmissionDetails(submissionId: string) {
   const cacheKey = QueryCache.createKey('submission_details', { submissionId })
@@ -1295,6 +1500,10 @@ export async function getOptimizedSubmissionDetails(submissionId: string) {
                   email: true
                 }
               }
+              // Removed: releasedAt field that doesn't exist in main branch
+            },
+            orderBy: {
+              assignedAt: 'desc'
             }
           },
           xpTransactions: {
@@ -1313,16 +1522,17 @@ export async function getOptimizedSubmissionDetails(submissionId: string) {
       }
       
       // Calculate metrics
+      const activeAssignments = submission.reviewAssignments.filter((a: any) => a.status !== 'REASSIGNED')
       const metrics = {
         avgPeerScore: submission.peerReviews.length > 0
           ? submission.peerReviews.reduce((sum, review) => sum + (review.xpScore || 0), 0) / submission.peerReviews.length
           : null,
         consensusScore: submission.consensusScore,
         reviewProgress: {
-          assigned: submission.reviewAssignments.length,
+          assigned: activeAssignments.length,
           completed: submission.peerReviews.length,
-          pending: submission.reviewAssignments.length - submission.peerReviews.length,
-          overdue: submission.reviewAssignments.filter(
+          pending: activeAssignments.length - submission.peerReviews.length,
+          overdue: activeAssignments.filter(
             assignment => assignment.deadline < new Date() && assignment.status === 'PENDING'
           ).length
         }
@@ -1389,6 +1599,3 @@ export class AdminSubmissionsPerformanceMonitor {
     }
   }
 }
-
-
-

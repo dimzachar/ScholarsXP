@@ -231,9 +231,9 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
         : null,
       consensusScore: submission.consensusScore,
       reviewProgress: {
-        assigned: submission.reviewAssignments?.length || 0,
+        assigned: submission.reviewAssignments?.filter((a: any) => a.status !== 'REASSIGNED')?.length || 0,
         completed: submission.peerReviews?.length || 0,
-        pending: (submission.reviewAssignments?.length || 0) - (submission.peerReviews?.length || 0),
+        pending: (submission.reviewAssignments?.filter((a: any) => a.status !== 'REASSIGNED')?.length || 0) - (submission.peerReviews?.length || 0),
         overdue: submission.reviewAssignments?.filter(
           (assignment: any) => assignment.deadline < new Date() && assignment.status === 'PENDING'
         ).length || 0
