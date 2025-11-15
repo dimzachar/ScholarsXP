@@ -31,6 +31,7 @@ interface ReviewerRecord {
   metrics?: {
     totalReviews?: number
     submissionSuccessRate?: number
+    reliabilityScore?: number | null
   }
 }
 
@@ -87,6 +88,7 @@ export default function ReviewerAvailabilityPage() {
         const getVal = (u: ReviewerRecord) => {
           if (sortBy === 'reviews') return u.metrics?.totalReviews ?? 0
           if (sortBy === 'lastLoginAt') return u.lastLoginAt ? new Date(u.lastLoginAt).getTime() : 0
+          if (sortBy === 'reliability') return u.metrics?.reliabilityScore ?? 0
           return 0
         }
         reviewerCandidates = reviewerCandidates.sort((a, b) => {
@@ -362,6 +364,14 @@ export default function ReviewerAvailabilityPage() {
                           ) : null}
                         </button>
                       </TableHead>
+                      <TableHead className="hidden md:table-cell">
+                        <button className="flex items-center gap-1" onClick={() => onSort('reliability')}>
+                          Reliability
+                          {sortBy === 'reliability' ? (
+                            <span className="text-xs text-muted-foreground">{sortOrder === 'asc' ? '▲' : '▼'}</span>
+                          ) : null}
+                        </button>
+                      </TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="hidden md:table-cell">Notes</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -403,6 +413,12 @@ export default function ReviewerAvailabilityPage() {
                             </TableCell>
                             <TableCell className="hidden md:table-cell">
                               {formatLastActive(reviewer.lastLoginAt ?? reviewer.lastActiveAt ?? null)}
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell">
+                              {reviewer.metrics?.reliabilityScore !== null && reviewer.metrics?.reliabilityScore !== undefined
+                                ? `${Math.round(reviewer.metrics.reliabilityScore * 100)}%`
+                                : '-'
+                              }
                             </TableCell>
                             <TableCell>{renderStatusBadge(reviewer)}</TableCell>
                             <TableCell className="hidden text-sm text-muted-foreground md:table-cell">

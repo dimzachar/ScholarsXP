@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { CacheKeys, CacheTTL } from '@/lib/cache'
 import { withEnhancedCache, EnhancedCacheKeys, EnhancedCacheTTL } from '@/lib/cache/enhanced-utils'
 import { withAdminOptimization } from '@/middleware/api-optimization'
+import { createClient } from '@supabase/supabase-js'
 
 export const GET = withAdminOptimization(withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
@@ -291,7 +292,7 @@ async function fetchUserMetricsData(
       optOutUntilFuture = untilValue.getTime() > Date.now()
     } else if (typeof untilValue === 'string' && untilValue) {
       const untilDate = new Date(untilValue)
-      if (!Number.isNaN(untilDate.getTime())) {
+      if (untilDate && !isNaN(untilDate.getTime())) {
         optOutUntilIso = untilDate.toISOString()
         optOutUntilFuture = untilDate.getTime() > Date.now()
       }
@@ -301,6 +302,74 @@ async function fetchUserMetricsData(
       reviewerOptOut: optOutFlag,
       reviewerOptOutUntil: optOutUntilIso,
       reviewerOptOutActive: optOutFlag || optOutUntilFuture
+    }
+  }
+
+  // Calculate reviewer reliability scores for users with review history
+  const reviewerIds = users.filter(u => u._count.peerReviews > 0).map(u => u.id)
+  const reliabilityScores = new Map<string, number>()
+
+  if (reviewerIds.length > 0) {
+    try {
+      // Create supabase client
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      )
+
+      // Get all peer reviews for these users to calculate reliability
+      const { data: allReviews } = await supabase
+        .from('PeerReview')
+        .select('reviewerId, qualityRating, isLate')
+        .in('reviewerId', reviewerIds)
+        .limit(5000) // Reasonable limit for batch processing
+
+      if (allReviews) {
+        // Group reviews by reviewer
+        const reviewsByReviewer = allReviews.reduce((acc: Record<string, any[]>, review: any) => {
+          if (!acc[review.reviewerId]) {
+            acc[review.reviewerId] = []
+          }
+          acc[review.reviewerId].push(review)
+          return acc
+        }, {})
+
+        // Calculate reliability for each reviewer using the same formula as consensus-calculator.ts:227-232
+        Object.entries(reviewsByReviewer).forEach(([reviewerId, reviewerReviews]) => {
+          const last50Reviews = reviewerReviews.slice(0, 50) // Take last 50 reviews
+          
+          // Calculate average quality rating
+          const qualityRatings = last50Reviews.filter((r: any) => r.qualityRating).map((r: any) => r.qualityRating)
+          const averageQuality = qualityRatings.length > 0 
+            ? qualityRatings.reduce((sum: number, rating: number) => sum + rating, 0) / qualityRatings.length
+            : 3.5
+
+          // Calculate timeliness score
+          const lateReviews = last50Reviews.filter((r: any) => r.isLate).length
+          const timelinessScore = 1 - (lateReviews / last50Reviews.length)
+          
+          // Calculate quality score (normalize 1-5 scale to 0-1)
+          const qualityScore = (averageQuality - 1) / 4
+          
+          // Calculate weighted reliability score (30% timeliness, 70% quality) - same as consensus-calculator.ts:227-232
+          const reliabilityScore = (timelinessScore * 0.3) + (qualityScore * 0.7)
+
+          reliabilityScores.set(reviewerId, Math.max(0.1, Math.min(1.0, reliabilityScore)))
+        })
+
+        // Add default reliability score for reviewers with no data
+        reviewerIds.forEach(reviewerId => {
+          if (!reliabilityScores.has(reviewerId)) {
+            reliabilityScores.set(reviewerId, 0.7) // New reviewer default
+          }
+        })
+      }
+    } catch (error) {
+      console.warn('Failed to calculate reliability scores:', error)
+      // Set default reliability for all reviewers
+      reviewerIds.forEach(reviewerId => {
+        reliabilityScores.set(reviewerId, 0.5) // Default fallback
+      })
     }
   }
 
@@ -320,6 +389,9 @@ async function fetchUserMetricsData(
 
     // Average review score given (by this user as reviewer)
     const avgReviewScore = avgReviewMap.get(user.id) || 0
+
+    // Get reliability score (calculated above)
+    const reliabilityScore = reliabilityScores.get(user.id) || (user._count.peerReviews > 0 ? 0.7 : null)
 
     // Determine activity status
     const daysSinceLastActive = user.lastActiveAt
@@ -364,7 +436,8 @@ async function fetchUserMetricsData(
         activityStatus,
         totalSubmissions: totalSubmissions, // Include legacy submissions
         totalReviews: user._count.peerReviews,
-        totalAchievements: user._count.userAchievements
+        totalAchievements: user._count.userAchievements,
+        reliabilityScore: reliabilityScore ? Math.round(reliabilityScore * 100) / 100 : null
       }
     }
   })
@@ -487,21 +560,21 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
           }
         })
 
-        // Create admin action audit for each user
-        for (const userId of userIds) {
-          await prisma.adminAction.create({
-            data: {
-              adminId: request.user.id,
-              action: 'USER_ROLE_CHANGE',
-              targetType: 'user',
-              targetId: userId,
-              details: {
-                newRole: data.role,
-                reason: data.reason
+          // Create admin action audit for each user
+          for (const userId of userIds) {
+            await prisma.adminAction.create({
+              data: {
+                adminId: request.user.id,
+                action: 'USER_ROLE_CHANGE',
+                targetType: 'user',
+                targetId: userId,
+                details: {
+                  newRole: data.role,
+                  reason: data.reason || null
+                } as any
               }
-            }
-          })
-        }
+            })
+          }
         break
 
       case 'adjustXp':
