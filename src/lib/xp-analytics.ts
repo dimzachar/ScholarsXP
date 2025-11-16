@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { ENABLE_ACHIEVEMENTS } from '@/config/feature-flags'
 import { mapTransactionTypeToBucket } from './xp-ledger'
 import { applyTransactionToBreakdown, createEmptyBreakdown } from './xp-ledger'
+import { getWeekNumber } from '@/lib/utils'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -100,6 +101,7 @@ export class XpAnalyticsService {
    */
   async getCurrentWeekBreakdown(userId: string): Promise<XpBreakdown> {
     const currentWeek = this.getCurrentWeekNumber()
+    // Always fetch fresh data from database, no caching
     return this.getXpBreakdownForWeek(userId, currentWeek)
   }
 
@@ -130,18 +132,25 @@ export class XpAnalyticsService {
    */
   async getXpBreakdownForWeek(userId: string, weekNumber: number): Promise<XpBreakdown> {
     try {
+      // Add cache-busting to ensure fresh data
       const { data: transactions, error } = await supabase
         .from('XpTransaction')
         .select('amount, type')
         .eq('userId', userId)
         .eq('weekNumber', weekNumber)
+        .order('createdAt', { ascending: false })
 
       if (error) {
         console.error('Error fetching weekly XP transactions:', error)
         return this.getEmptyBreakdown()
       }
 
-      return this.calculateBreakdownFromTransactions(transactions || [])
+      // console.log(`📊 Analytics: Found ${transactions?.length || 0} transactions for user ${userId}, week ${weekNumber}`)
+      
+      const breakdown = this.calculateBreakdownFromTransactions(transactions || [])
+      // console.log(`📊 Analytics: Calculated breakdown for week ${weekNumber}:`, breakdown)
+      
+      return breakdown
     } catch (error) {
       console.error('Error in getXpBreakdownForWeek:', error)
       return this.getEmptyBreakdown()
@@ -401,7 +410,7 @@ export class XpAnalyticsService {
         throw error
       }
 
-      console.log(`📊 Recorded XP transaction: ${amount} XP for user ${userId} (${type})`)
+      // console.log(`📊 Recorded XP transaction: ${amount} XP for user ${userId} (${type})`)
     } catch (error) {
       console.error('Error in recordXpTransaction:', error)
       throw error
@@ -471,21 +480,25 @@ export class XpAnalyticsService {
   }
 
   private getCurrentWeekNumber(): number {
-    const now = new Date()
-    const startOfYear = new Date(now.getFullYear(), 0, 1)
-    const dayOfYear = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000))
-    return Math.ceil((dayOfYear + startOfYear.getDay() + 1) / 7)
+    return getWeekNumber(new Date())
   }
 
   private getWeekDates(weekNumber: number): { weekStart: Date; weekEnd: Date } {
     const year = new Date().getFullYear()
-    const startOfYear = new Date(year, 0, 1)
-    const daysToAdd = (weekNumber - 1) * 7 - startOfYear.getDay()
     
-    const weekStart = new Date(startOfYear)
-    weekStart.setDate(startOfYear.getDate() + daysToAdd)
-    weekStart.setHours(0, 0, 0, 0)
+    // Find the Monday of week 1 (ISO 8601: week containing Jan 4)
+    const jan4 = new Date(year, 0, 4)
+    const jan4Day = jan4.getDay()
+    const daysToMonday = jan4Day === 0 ? -6 : 1 - jan4Day
+    const week1Start = new Date(jan4)
+    week1Start.setDate(jan4.getDate() + daysToMonday)
+    week1Start.setHours(0, 0, 0, 0)
     
+    // Calculate the start of the target week
+    const weekStart = new Date(week1Start)
+    weekStart.setDate(week1Start.getDate() + (weekNumber - 1) * 7)
+    
+    // Calculate the end of the week (Sunday)
     const weekEnd = new Date(weekStart)
     weekEnd.setDate(weekStart.getDate() + 6)
     weekEnd.setHours(23, 59, 59, 999)

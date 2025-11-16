@@ -11,10 +11,10 @@ export const GET = withPermission('admin_access')(async (
     const resolvedParams = await params
     const userId = resolvedParams.id
 
-    console.log(`Admin user profile API called for user ID: ${userId}`)
+    // console.log(`Admin user profile API called for user ID: ${userId}`)
 
     if (!userId) {
-      console.log('No user ID provided')
+      // console.log('No user ID provided')
       return NextResponse.json(
         { message: 'User ID is required' },
         { status: 400 }
@@ -39,6 +39,7 @@ export const GET = withPermission('admin_access')(async (
         totalXp: true,
         currentWeekXp: true,
         streakWeeks: true,
+        discordHandle: true,
         profileImageUrl: true,
         bio: true,
         joinedAt: true,
@@ -94,14 +95,14 @@ export const GET = withPermission('admin_access')(async (
     })
 
     if (!user) {
-      console.log(`User not found with ID: ${userId}`)
+      // console.log(`User not found with ID: ${userId}`)
       return NextResponse.json(
         { message: 'User not found', userId },
         { status: 404 }
       )
     }
 
-    console.log(`User found: ${user.username} (${user.email})`)
+    // console.log(`User found: ${user.username} (${user.email})`)
 
     // Fetch legacy submissions for this user (matching by discordHandle or username)
     const discordHandle = user.discordHandle || user.username
@@ -123,13 +124,19 @@ export const GET = withPermission('admin_access')(async (
       }
     })
 
-    console.log(`Found ${legacySubmissions.length} legacy submissions for user ${user.username}`)
+    // console.log(`Found ${legacySubmissions.length} legacy submissions for user ${user.username}`)
 
-    // Calculate metrics including legacy data
-    const weeklyXp = user.xpTransactions.reduce((sum, tx) => sum + tx.amount, 0)
+    // Calculate metrics including legacy data - use authoritative User.currentWeekXp
+    const weeklyXp = user.currentWeekXp || 0
+    
+    // Debug: Calculate from transactions for verification (remove in production if needed)
+    const weeklyXpFromTransactions = user.xpTransactions.reduce((sum, tx) => sum + tx.amount, 0)
+    if (weeklyXp !== weeklyXpFromTransactions && process.env.NODE_ENV === 'development') {
+      // console.warn(`Weekly XP mismatch for user ${user.id}: User table shows ${weeklyXp}, transactions show ${weeklyXpFromTransactions}`)
+    }
 
     // Calculate submission success rate (current submissions only, as legacy are already processed)
-    const completedSubmissions = user.submissions.filter(s => s.status === 'COMPLETED').length
+    const completedSubmissions = user.submissions.filter(s => s.status === 'FINALIZED').length
     const totalCurrentSubmissions = user._count.submissions
     const totalLegacySubmissions = legacySubmissions.length
     const totalSubmissions = totalCurrentSubmissions + totalLegacySubmissions
@@ -181,7 +188,7 @@ export const GET = withPermission('admin_access')(async (
     const recentLegacySubmissions = legacySubmissions
       .filter(legacy => {
         const submissionDate = legacy.submittedAt || legacy.importedAt
-        return submissionDate && new Date(submissionDate) >= thirtyDaysAgo
+        return submissionDate !== null && new Date(submissionDate.toString()) >= thirtyDaysAgo
       })
       .slice(0, 5) // Limit legacy submissions in recent view
       .map(legacy => ({

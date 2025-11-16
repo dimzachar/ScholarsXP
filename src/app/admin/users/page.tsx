@@ -41,6 +41,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import {
   Search,
   Filter,
   Download,
@@ -56,7 +62,7 @@ import {
   FileText,
   UserCheck,
   UserX,
-  
+  Info
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { Pagination } from '@/components/ui/pagination'
@@ -80,6 +86,8 @@ interface UserData {
     totalSubmissions: number
     totalReviews: number
     totalAchievements: number
+    transactionBreakdown?: Record<string, number>
+    submissionsXp?: number
   }
 }
 
@@ -414,18 +422,18 @@ export default function AdminUsersPage() {
         const pagination = data.pagination
         hasMorePages = pagination?.hasNextPage || false
 
-        console.log(`Export page ${currentPage}: fetched ${pageUsers.length} users, hasNextPage: ${hasMorePages}, total so far: ${allUsers.length}`)
+        // console.log(`Export page ${currentPage}: fetched ${pageUsers.length} users, hasNextPage: ${hasMorePages}, total so far: ${allUsers.length}`)
 
         currentPage++
 
         // Safety check to prevent infinite loops
         if (currentPage > 100) {
-          console.warn('Export stopped at page 100 to prevent infinite loop')
+          // console.warn('Export stopped at page 100 to prevent infinite loop')
           break
         }
       }
 
-      console.log(`Export fetched ${allUsers.length} users across ${currentPage - 1} pages`)
+      // console.log(`Export fetched ${allUsers.length} users across ${currentPage - 1} pages`)
 
       // Validate we got users
       if (allUsers.length === 0) {
@@ -499,7 +507,7 @@ export default function AdminUsersPage() {
       a.click()
       window.URL.revokeObjectURL(url)
 
-      console.log(`✅ Export completed: ${filename} with ${allUsers.length} users`)
+      // console.log(`✅ Export completed: ${filename} with ${allUsers.length} users`)
 
     } catch (error) {
       console.error('Error exporting users:', error)
@@ -1012,9 +1020,74 @@ export default function AdminUsersPage() {
                         {userData.totalXp.toLocaleString()}
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{userData.metrics.weeklyXp}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {userData.currentWeekXp} current
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{userData.metrics.weeklyXp}</span>
+                            <TooltipProvider delayDuration={100}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" className="w-80 max-h-64 overflow-y-auto p-4">
+                                  <div className="font-semibold mb-2">Weekly XP Breakdown</div>
+                                  <div className="space-y-1">
+                                    {/* Show detailed breakdown of all XP sources */}
+                                    {userData.metrics.transactionBreakdown && Object.entries(userData.metrics.transactionBreakdown).map(([type, amount]) => {
+                                      const typeLabels = {
+                                        // Submission types
+                                        'SUBMISSION_REWARD': 'Submission Reward',
+                                        'SUBMISSION': 'Submission',
+                                        'LEGACY_SUBMISSION': 'Legacy Submission',
+                                        'SUBMISSION_IMPORT': 'Submission Import',
+                                        
+                                        // Review types
+                                        'REVIEW_BASE_REWARD': 'Review Reward',
+                                        'REVIEW_QUALITY_BONUS': 'Quality Bonus',
+                                        'PEER_REVIEW': 'Peer Review',
+                                        'REVIEW': 'Review',
+                                        
+                                        // Admin adjustment types
+                                        'ADMIN_ADJUSTMENT': 'Admin Adjustment',
+                                        'LEGACY_ADJUSTMENT': 'Legacy Adjustment',
+                                        
+                                        // Achievement types
+                                        'ACHIEVEMENT_REWARD': 'Achievement Reward',
+                                        'ACHIEVEMENT_BONUS': 'Achievement Bonus',
+                                        'ACHIEVEMENT': 'Achievement',
+                                        'MONTHLY_WINNER_BONUS': 'Monthly Winner Bonus',
+                                        'MONTHLY_WINNER_BONUS_REVERSAL': 'Monthly Winner Bonus Reversal',
+                                        
+                                        // Other types
+                                        'STREAK_BONUS': 'Streak Bonus',
+                                        'PENALTY': 'Penalty',
+                                        'LEGACY_IMPORTED': 'Legacy Import',
+                                        'LEGACY_TRANSFER': 'Legacy Transfer'
+                                      };
+                                      
+                                      const label = typeLabels[type as keyof typeof typeLabels] || type;
+                                      const sign = amount >= 0 ? '+' : '';
+                                      
+                                      return (
+                                        <div key={type} className="flex justify-between">
+                                          <span className={amount < 0 ? "text-destructive" : "text-primary"}>
+                                            {label}:
+                                          </span>
+                                          <span className={`font-medium ${amount < 0 ? "text-destructive" : "text-primary"}`}>
+                                            {sign}{amount}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                    
+                                    <div className="border-t pt-1 text-xs text-muted-foreground mt-2">
+                                      Total this week: {userData.metrics.weeklyXp}
+                                    </div>
+                                    
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>

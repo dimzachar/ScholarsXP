@@ -3,13 +3,14 @@ import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { xpAnalyticsService } from '@/lib/xp-analytics'
 import { applyTransactionToBreakdown, createEmptyBreakdown } from '@/lib/xp-ledger'
 import { createServiceClient } from '@/lib/supabase-server'
+import { getWeekNumber } from '@/lib/utils'
 
 export const GET = withPermission('authenticated')(async (request: AuthenticatedRequest) => {
   try {
     const { searchParams } = new URL(request.url)
     const timeframe = searchParams.get('timeframe') || 'current_week' // 'current_week', 'all_time', 'last_12_weeks'
     const userId = request.user.id
-    const currentWeekNumber = getCurrentWeekNumber()
+    const currentWeekNumber = getWeekNumber(new Date())
 
 
 
@@ -164,6 +165,12 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
       ? Math.round(submissions.reduce((sum, s) => sum + (s.finalXp || s.aiXp || 0), 0) / completedSubmissions)
       : 0
 
+    // IMPORTANT: Use User.totalXp as the authoritative source for total XP to ensure consistency
+    // across all components. This prevents discrepancies between different data sources.
+    if (userProfile?.totalXp !== undefined) {
+      xpBreakdown.total = userProfile.totalXp
+    }
+
     // Calculate activity patterns for the last 12 weeks
     const activityHeatmap = weeklyTrends.map(week => ({
       week: week.week,
@@ -255,7 +262,13 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
       }
     }
 
-    return NextResponse.json(responseData)
+    // Set cache control headers to prevent caching
+    const response = NextResponse.json(responseData)
+    response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+    response.headers.set('Pragma', 'no-cache')
+    response.headers.set('Expires', '0')
+    
+    return response
 
   } catch (error) {
     console.error('Error fetching XP breakdown:', error)
@@ -454,23 +467,10 @@ function generateXpInsights(breakdown: any, weeklyTrends: any[], goalProgress: a
   }
 
   // Sort insights by priority (high -> medium -> low) and limit to top 5
-  const priorityOrder = { 'high': 3, 'medium': 2, 'low': 1 }
+  const priorityOrder: Record<string, number> = { 'high': 3, 'medium': 2, 'low': 1 }
   return insights
     .sort((a, b) => priorityOrder[b.priority] - priorityOrder[a.priority])
     .slice(0, 5)
-}
-
-function getCurrentWeekNumber(): number {
-  const now = new Date()
-  const startOfYear = new Date(now.getFullYear(), 0, 1)
-  const dayOfYear = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000))
-  return Math.ceil((dayOfYear + startOfYear.getDay() + 1) / 7)
-}
-
-function getWeekNumber(date: Date): number {
-  const startOfYear = new Date(date.getFullYear(), 0, 1)
-  const dayOfYear = Math.floor((date.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000))
-  return Math.ceil((dayOfYear + startOfYear.getDay() + 1) / 7)
 }
 
 function buildBreakdownFromTransactions(transactions: any[]) {

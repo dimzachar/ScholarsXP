@@ -35,12 +35,12 @@ export function ProgressTab({
   onRetryAnalytics
 }: ProgressTabProps) {
   // Debug logging for rank data
-  React.useEffect(() => {
+    React.useEffect(() => {
     if (profileData) {
-      console.log('🔍 Profile data received in ProgressTab:', {
-        statistics: profileData.statistics,
-        rank: profileData.statistics?.rank
-      })
+      // console.log('🔍 Profile data received in ProgressTab:', {
+      //   statistics: profileData.statistics,
+      //   rank: profileData.statistics?.rank
+      // })
     }
   }, [profileData])
 
@@ -124,8 +124,34 @@ export function ProgressTab({
               <div className="flex items-center space-x-2">
                 <BarChart3 className="h-4 w-4 text-blue-500" />
                 <div>
-                  <p className="text-sm font-medium">Total XP</p>
-                  <p className="text-2xl font-bold dark:text-accent">{analyticsData?.breakdown?.total || 0}</p>
+                  <p className="text-sm font-medium">
+                    {selectedTimeframe === 'current_week' 
+                      ? 'This Week XP' 
+                      : selectedTimeframe === 'last_12_weeks'
+                      ? 'Last 12 Weeks XP'
+                      : 'Total XP'}
+                  </p>
+                  <p className="text-2xl font-bold dark:text-accent">
+                    {(() => {
+                      // Show different XP based on timeframe
+                      if (selectedTimeframe === 'current_week') {
+                        // Try to get currentWeekXp from profile, but if it's not available or 0, 
+                        // check if we have current week data from analytics
+                        const currentWeekXp = profileData?.profile?.currentWeekXp
+                        if (currentWeekXp !== undefined && currentWeekXp > 0) {
+                          return currentWeekXp
+                        }
+                        // If currentWeekXp is not available or 0, use analytics breakdown total
+                        // but only if we have current week analytics data
+                        return analyticsData?.breakdown?.total || 0
+                      } else if (selectedTimeframe === 'last_12_weeks') {
+                        return analyticsData?.breakdown?.total || 0
+                      } else {
+                        // all_time - use authoritative User.totalXp
+                        return profileData?.profile?.totalXp || analyticsData?.breakdown?.total || 0
+                      }
+                    })()}
+                  </p>
                 </div>
               </div>
             </Card>
@@ -170,7 +196,28 @@ export function ProgressTab({
             <AnalyticsLoadingSkeleton variant="chart" />
           ) : (
             <XpBreakdownChart 
-              data={analyticsData?.breakdown}
+              data={{ 
+                ...analyticsData?.breakdown,
+                // Ensure total XP is consistent across all timeframes
+                total: (() => {
+                  if (selectedTimeframe === 'current_week') {
+                    // Try to get currentWeekXp from profile, but if it's not available or 0, 
+                    // check if we have current week data from analytics
+                    const currentWeekXp = profileData?.profile?.currentWeekXp
+                    if (currentWeekXp !== undefined && currentWeekXp > 0) {
+                      return currentWeekXp
+                    }
+                    // If currentWeekXp is not available or 0, use analytics breakdown total
+                    // but only if we have current week analytics data
+                    return analyticsData?.breakdown?.total || 0
+                  } else if (selectedTimeframe === 'last_12_weeks') {
+                    return analyticsData?.breakdown?.total || 0
+                  } else {
+                    // all_time - use authoritative User.totalXp
+                    return profileData?.profile?.totalXp || analyticsData?.breakdown?.total || 0
+                  }
+                })()
+              }}
               title="XP Breakdown"
               timeframe={analyticsData?.timeframe}
             />

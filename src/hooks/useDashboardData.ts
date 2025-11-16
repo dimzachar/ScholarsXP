@@ -103,6 +103,16 @@ export function useProfileData(userId?: string) {
         CACHE_TTL.profile,
         forceRefresh
       )
+      
+      // Ensure XP consistency across all data sources
+      // Use the authoritative User.totalXp as the source of truth
+      if (data && typeof data === 'object' && 'profile' in data && 'statistics' in data) {
+        const profileData = data as any
+        if (profileData?.profile?.totalXp && profileData?.statistics?.xpBreakdown) {
+          profileData.statistics.xpBreakdown.total = profileData.profile.totalXp
+        }
+      }
+      
       setState({ data, loading: false, error: null })
     } catch (error) {
       setState({
@@ -114,7 +124,7 @@ export function useProfileData(userId?: string) {
   }, [userId])
 
   const forceRefresh = useCallback(() => {
-    console.log('🔄 Force refreshing profile data for user:', userId)
+    // console.log('🔄 Force refreshing profile data for user:', userId)
     return fetchData(true)
   }, [fetchData, userId])
 
@@ -191,12 +201,12 @@ export function useAnalyticsData(timeframe = 'current_week', enabled = true) {
 
       // Use insights directly from API (no transformation needed)
       const combinedData = {
-        breakdown: xpBreakdownResponse.breakdown,
-        weeklyTrends: xpBreakdownResponse.weeklyTrends || [],
-        goalProgress: xpBreakdownResponse.goalProgress || [],
-        insights: xpBreakdownResponse.insights || [],
+        breakdown: (xpBreakdownResponse as any)?.breakdown || {},
+        weeklyTrends: (xpBreakdownResponse as any)?.weeklyTrends || [],
+        goalProgress: (xpBreakdownResponse as any)?.goalProgress || [],
+        insights: (xpBreakdownResponse as any)?.insights || [],
         achievements: achievementsResponse,
-        timeframe: xpBreakdownResponse.timeframe || timeframe
+        timeframe: (xpBreakdownResponse as any)?.timeframe || timeframe
       }
 
       setState({ data: combinedData, loading: false, error: null })
@@ -234,7 +244,7 @@ export function useDashboardData(userId?: string, activeTab = 'overview', timefr
   }, [profileData.refetch, analyticsData.refetch, activeTab])
 
   const forceRefreshAll = useCallback(() => {
-    console.log('🔄 Force refreshing all dashboard data')
+    // console.log('🔄 Force refreshing all dashboard data')
     profileData.forceRefresh?.()
     if (activeTab === 'progress') {
       analyticsData.refetch()

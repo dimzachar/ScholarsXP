@@ -6,7 +6,6 @@ import { getCurrentWeeklyProgress } from '@/lib/weekly-task-tracker'
 import { fetchContentFromUrl } from '@/lib/ai-evaluator'
 import {
   MultiTaskResult,
-  XPAggregationResult,
   ContentData
 } from '@/types/task-types'
 
@@ -20,9 +19,13 @@ const _WEEKLY_TASK_CAPS = {
   F: 225  // Strategies - max 225 XP per week (3 × 75)
 }
 
-export interface EnhancedXPAggregationResult extends XPAggregationResult {
+export interface EnhancedXPAggregationResult {
   multiTaskResult?: MultiTaskResult
   weeklyProgress: Record<string, { completions: number; xpEarned: number; remainingCapacity: number }>
+  finalXp: number
+  cappedXp: number
+  reasoning: string
+  weeklyTotals: Record<string, number>
 }
 
 export async function aggregateXP(submissionId: string): Promise<EnhancedXPAggregationResult> {
@@ -119,22 +122,37 @@ export async function aggregateXP(submissionId: string): Promise<EnhancedXPAggre
         }
       })
 
-      // Update user's total and weekly XP (atomic increment)
+      // Update user's total XP (atomic increment)
       await tx.user.update({
         where: { id: submission.userId },
         data: {
-          totalXp: { increment: cappedXp },
-          currentWeekXp: { increment: cappedXp }
+          totalXp: { increment: cappedXp }
+        }
+      })
+
+      // Recalculate currentWeekXp from transactions to ensure accuracy
+      const currentWeekNumber = getWeekNumber(new Date())
+      const transactions: Array<{ amount: number }> = await tx.$queryRaw`
+        SELECT amount FROM "XpTransaction"
+        WHERE "userId" = ${submission.userId}
+        AND "weekNumber" = ${currentWeekNumber}
+      `
+
+      const recalculatedCurrentWeekXp = transactions.reduce((sum, tx) => sum + tx.amount, 0)
+
+      await tx.user.update({
+        where: { id: submission.userId },
+        data: {
+          currentWeekXp: recalculatedCurrentWeekXp
         }
       })
 
       // Update weekly stats (atomic upsert)
-      const currentWeek = getWeekNumber(new Date())
       await tx.weeklyStats.upsert({
         where: {
           userId_weekNumber: {
             userId: submission.userId,
-            weekNumber: currentWeek
+            weekNumber: currentWeekNumber
           }
         },
         update: {
@@ -142,7 +160,7 @@ export async function aggregateXP(submissionId: string): Promise<EnhancedXPAggre
         },
         create: {
           userId: submission.userId,
-          weekNumber: currentWeek,
+          weekNumber: currentWeekNumber,
           xpTotal: cappedXp,
           reviewsDone: 0,
           reviewsMissed: 0
@@ -157,7 +175,7 @@ export async function aggregateXP(submissionId: string): Promise<EnhancedXPAggre
           type: 'SUBMISSION_REWARD',
           sourceId: submissionId,
           description: `XP awarded for submission: ${submission.url}`,
-          weekNumber: currentWeek
+          weekNumber: currentWeekNumber
         }
       })
 
@@ -220,4 +238,3 @@ export async function processReadySubmissions(): Promise<number> {
     throw new Error('Failed to process submissions')
   }
 }
-

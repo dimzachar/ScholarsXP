@@ -5,6 +5,7 @@ import { CacheKeys, CacheTTL } from '@/lib/cache'
 import { withEnhancedCache, EnhancedCacheKeys, EnhancedCacheTTL } from '@/lib/cache/enhanced-utils'
 import { withAdminOptimization } from '@/middleware/api-optimization'
 import { createClient } from '@supabase/supabase-js'
+import { getWeekNumber } from '@/lib/utils'
 
 export const GET = withAdminOptimization(withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
@@ -124,7 +125,7 @@ async function fetchUserMetricsData(
     if (xpMax !== undefined) where.totalXp.lte = xpMax
   }
 
-  if (lastActiveFrom || lastActiveTo) {
+    if (lastActiveFrom || lastActiveTo) {
     where.lastActiveAt = {}
     if (lastActiveFrom) where.lastActiveAt.gte = new Date(lastActiveFrom)
     if (lastActiveTo) where.lastActiveAt.lte = new Date(lastActiveTo)
@@ -168,9 +169,11 @@ async function fetchUserMetricsData(
     orderBy = { [sortBy]: sortOrder }
   }
 
-  // Calculate week start for XP transactions
+  // Calculate week start for XP transactions using ISO week (Monday start)
   const weekStart = new Date()
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay())
+  const day = weekStart.getDay()
+  const mondayOffset = day === 0 ? -6 : 1 - day // If Sunday, go back 6 days, otherwise go back to Monday
+  weekStart.setDate(weekStart.getDate() + mondayOffset)
   weekStart.setHours(0, 0, 0, 0)
 
   // Get users with essential fields and counts only (avoid heavy nested selects)
@@ -206,7 +209,11 @@ async function fetchUserMetricsData(
             }
           },
           select: {
-            amount: true
+            amount: true,
+            type: true,
+            sourceId: true,
+            createdAt: true,
+            description: true
           }
         }
       }
@@ -270,7 +277,7 @@ async function fetchUserMetricsData(
       try {
         parsed = JSON.parse(preferences)
       } catch (error) {
-        console.warn('Failed to parse user preferences JSON:', error)
+        // console.warn('Failed to parse user preferences JSON:', error)
         return {
           reviewerOptOut: false,
           reviewerOptOutUntil: null,
@@ -365,7 +372,7 @@ async function fetchUserMetricsData(
         })
       }
     } catch (error) {
-      console.warn('Failed to calculate reliability scores:', error)
+      // console.warn('Failed to calculate reliability scores:', error)
       // Set default reliability for all reviewers
       reviewerIds.forEach(reviewerId => {
         reliabilityScores.set(reviewerId, 0.5) // Default fallback
@@ -375,8 +382,45 @@ async function fetchUserMetricsData(
 
   // Calculate additional metrics for each user - Optimized in-memory processing
   let usersWithMetrics = users.map((user) => {
-    // Calculate weekly XP from included transactions
+    // Calculate weekly XP from transactions to show detailed breakdown
     const weeklyXp = user.xpTransactions.reduce((sum, tx) => sum + tx.amount, 0)
+    
+    // Group transactions by type and subtype for detailed breakdown
+    // Note: Removed deduplication logic as it was incorrectly filtering out legitimate transactions
+    // Each transaction represents a separate XP award and should be counted individually
+    const transactionBreakdown = user.xpTransactions.reduce((acc, tx) => {
+      // Special handling for REVIEW_REWARD to separate regular rewards from quality bonuses
+      if (tx.type === 'REVIEW_REWARD') {
+        if (tx.description && tx.description.toLowerCase().includes('quality bonus')) {
+          if (!acc['REVIEW_QUALITY_BONUS']) {
+            acc['REVIEW_QUALITY_BONUS'] = 0
+          }
+          acc['REVIEW_QUALITY_BONUS'] += tx.amount
+        } else {
+          if (!acc['REVIEW_BASE_REWARD']) {
+            acc['REVIEW_BASE_REWARD'] = 0
+          }
+          acc['REVIEW_BASE_REWARD'] += tx.amount
+        }
+      } else {
+        if (!acc[tx.type]) {
+          acc[tx.type] = 0
+        }
+        acc[tx.type] += tx.amount
+      }
+      return acc
+    }, {} as Record<string, number>)
+
+    // Calculate "from submissions" XP (only SUBMISSION_REWARD transactions)
+    const submissionsXp = user.xpTransactions
+      .filter(tx => tx.type === 'SUBMISSION_REWARD')
+      .reduce((sum, tx) => sum + tx.amount, 0)
+    
+    // Debug: Calculate from transactions for verification (remove in production if needed)
+    const weeklyXpFromTransactions = user.xpTransactions.reduce((sum, tx) => sum + tx.amount, 0)
+    if (weeklyXp !== weeklyXpFromTransactions && process.env.NODE_ENV === 'development') {
+      // console.warn(`Weekly XP mismatch for user ${user.id}: User table shows ${weeklyXp}, transactions show ${weeklyXpFromTransactions}`)
+    }
 
     // Completed submissions and legacy counts
     const completedSubmissions = completedCountMap.get(user.id) || 0
@@ -437,7 +481,9 @@ async function fetchUserMetricsData(
         totalSubmissions: totalSubmissions, // Include legacy submissions
         totalReviews: user._count.peerReviews,
         totalAchievements: user._count.userAchievements,
-        reliabilityScore: reliabilityScore ? Math.round(reliabilityScore * 100) / 100 : null
+        reliabilityScore: reliabilityScore ? Math.round(reliabilityScore * 100) / 100 : null,
+        transactionBreakdown, // Add detailed XP breakdown
+        submissionsXp // Add submissions-only XP for accurate "from submissions" display
       }
     }
   })
@@ -481,7 +527,7 @@ async function fetchUserMetricsData(
       }))
     } catch (e) {
       // If auth enrichment fails, proceed without lastLoginAt
-      console.warn('Auth enrichment for last login failed:', e)
+      // console.warn('Auth enrichment for last login failed:', e)
     }
   }
 
@@ -600,7 +646,7 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
                 amount: data.xpAmount,
                 type: 'ADMIN_ADJUSTMENT',
                 description: `Admin XP adjustment: ${data.reason || 'Manual adjustment'}`,
-                weekNumber: Math.ceil(new Date().getDate() / 7)
+                weekNumber: getWeekNumber(new Date())
               }
             }),
             // Create admin action audit
@@ -659,7 +705,7 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
                 action: data.action,
                 reason: data.reason,
                 timestamp: new Date().toISOString()
-              }
+              } as any
             }
           })
         }

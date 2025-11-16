@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { xpAnalyticsService } from './xp-analytics'
 import { achievementEngine } from './achievement-engine'
 import { prisma } from './prisma'
+import { getWeekNumber } from '@/lib/utils'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -103,7 +104,7 @@ export class ReviewIncentivesService {
       // Check for achievements
       await achievementEngine.evaluateAchievements(reviewerId, 'review')
 
-      console.log(`💰 Review XP awarded to ${reviewerId}: ${reward.netReward} XP (base: ${reward.baseReward}, quality: ${reward.qualityBonus}, timeliness: ${reward.timelinessBonus}, streak: ${reward.streakBonus}, penalties: ${reward.penalties})`)
+      // console.log(`💰 Review XP awarded to ${reviewerId}: ${reward.netReward} XP (base: ${reward.baseReward}, quality: ${reward.qualityBonus}, timeliness: ${reward.timelinessBonus}, streak: ${reward.streakBonus}, penalties: ${reward.penalties})`)
 
       return reward
 
@@ -139,7 +140,7 @@ export class ReviewIncentivesService {
       // Check if reviewer should be temporarily suspended
       await this.checkReviewerSuspension(reviewerId)
 
-      console.log(`⚠️ Missed review penalty applied to ${reviewerId}: ${this.MISSED_REVIEW_PENALTY} XP`)
+      // console.log(`⚠️ Missed review penalty applied to ${reviewerId}: ${this.MISSED_REVIEW_PENALTY} XP`)
 
     } catch (error) {
       console.error('Error applying missed review penalty:', error)
@@ -416,7 +417,7 @@ export class ReviewIncentivesService {
       // Temporarily suspend reviewer if they have missed too many reviews
       if (user.missedReviews >= 5 && user.role === 'REVIEWER') {
         // TODO: Implement temporary suspension logic
-        console.log(`⚠️ Reviewer ${reviewerId} should be temporarily suspended (${user.missedReviews} missed reviews)`)
+        // console.log(`⚠️ Reviewer ${reviewerId} should be temporarily suspended (${user.missedReviews} missed reviews)`)
       }
 
     } catch (error) {
@@ -437,10 +438,7 @@ export class ReviewIncentivesService {
   }
 
   private getCurrentWeekNumber(): number {
-    const now = new Date()
-    const startOfYear = new Date(now.getFullYear(), 0, 1)
-    const dayOfYear = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000))
-    return Math.ceil((dayOfYear + startOfYear.getDay() + 1) / 7)
+    return getWeekNumber(new Date())
   }
 
   private getWeekStartDate(weekNumber: number): Date {
