@@ -241,21 +241,29 @@ function StatCardsSection({ profileData }: { profileData: any }) {
     }
   )
 
-  // For now, show weekly rank as 0 since user has no current week activity
-  // All-time rank will be shown in leaderboard section
+  // Get weekly rank from statistics
+  const weeklyRank = profileData?.statistics?.rank?.weekly
+  const totalScholars = profileData?.statistics?.rank?.totalUsers || 0
+  const currentWeekXp = profileData?.profile?.currentWeekXp || 0
+  
   const rankData = createStatCardData(
     'Weekly Rank',
-    0, // Current week rank (user has no activity this week)
+    weeklyRank || 0,
     {
       color: 'accent',
       icon: Users,
       progress: {
-        current: 0,
-        max: 100,
+        current: weeklyRank || 0,
+        max: Math.max(totalScholars, 100),
         label: 'Community'
       },
-      subtitle: `of — scholars`,
-      additionalInfo: (
+      subtitle: totalScholars > 0 ? `of ${totalScholars} scholars` : 'of — scholars',
+      additionalInfo: weeklyRank ? (
+        <div className="flex items-center text-sm">
+          <Trophy className="h-4 w-4 mr-1 text-yellow-500" />
+          <span>#{weeklyRank}</span>
+        </div>
+      ) : (
         <div className="flex items-center text-sm text-muted-foreground">
           <span>No activity this week</span>
         </div>
@@ -321,7 +329,7 @@ function QuickActionsSection({
         onClick: () => router.push('/leaderboard'),
         badges: [
           { text: 'Weekly Rankings', variant: 'outline' },
-          { text: `Your Rank: #${profileData?.xpAnalytics?.rank?.weekly || '—'}`, variant: 'outline' }
+          { text: `Your Rank: #${profileData?.statistics?.rank?.weekly || '—'}`, variant: 'outline' }
         ]
       }
     )
