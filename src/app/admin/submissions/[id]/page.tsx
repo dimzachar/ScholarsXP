@@ -97,6 +97,9 @@ export default function AdminSubmissionDetailPage() {
   const [reshuffling, setReshuffling] = useState(false)
   const [reshuffleNotice, setReshuffleNotice] = useState<string | null>(null)
   const [reshuffleError, setReshuffleError] = useState<string | null>(null)
+  const [debuggingConsensus, setDebuggingConsensus] = useState(false)
+  const [consensusDebugResult, setConsensusDebugResult] = useState<any>(null)
+  const [consensusDebugError, setConsensusDebugError] = useState<string | null>(null)
 
   const fetchSubmissionDetails = useCallback(async () => {
     try {
@@ -120,12 +123,14 @@ export default function AdminSubmissionDetailPage() {
   }, [submissionId])
 
   useEffect(() => {
-    if (!loading && userProfile?.role !== 'ADMIN') {
+    // Only redirect if we're not loading and the user is not an admin
+    if (!loading && userProfile && userProfile.role !== 'ADMIN') {
       router.push('/dashboard')
       return
     }
 
-    if (submissionId) {
+    // Only fetch submission if we have an ID and user is loading or is admin
+    if (submissionId && (loading || (userProfile && userProfile.role === 'ADMIN'))) {
       fetchSubmissionDetails()
     }
   }, [submissionId, userProfile?.role, loading, router, fetchSubmissionDetails])
@@ -229,6 +234,43 @@ export default function AdminSubmissionDetailPage() {
     }
   }, [submissionId, reshuffling, fetchSubmissionDetails])
 
+  const handleConsensusDebug = useCallback(async () => {
+    if (!submissionId || debuggingConsensus) return
+    
+    try {
+      setDebuggingConsensus(true)
+      setConsensusDebugResult(null)
+      setConsensusDebugError(null)
+
+      const response = await fetch(`/api/admin/submissions/${submissionId}/consensus-debug`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        setConsensusDebugError(data?.error?.error || 'Failed to debug consensus. Please try again.')
+        return
+      }
+
+      setConsensusDebugResult(data)
+      
+      // If consensus was successfully calculated, refresh the submission to see the updated status
+      if (data.data?.consensus?.calculated) {
+        await fetchSubmissionDetails()
+      }
+    } catch (debugError) {
+      console.error('Error debugging consensus:', debugError)
+      setConsensusDebugError('Unable to debug consensus. Please try again.')
+    } finally {
+      setDebuggingConsensus(false)
+    }
+  }, [submissionId, debuggingConsensus, fetchSubmissionDetails])
+
   if (loading || loadingSubmission) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-muted/50 to-muted">
@@ -311,11 +353,73 @@ export default function AdminSubmissionDetailPage() {
           </TabsContent>
 
           <TabsContent value="peer-reviews">
-            <PeerReviewsSection
-              submissionId={submission.id}
-              peerReviews={submission.peerReviews}
-              onUpdate={fetchSubmissionDetails}
-            />
+            <div className="space-y-6">
+              <div className="flex justify-end">
+                <Button 
+                  size="sm" 
+                  variant="secondary"
+                  onClick={handleConsensusDebug}
+                  disabled={debuggingConsensus}
+                >
+                  {debuggingConsensus ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Debugging...
+                    </>
+                  ) : (
+                    <>
+                      🔍 Debug Consensus
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {consensusDebugResult && (
+                <Alert className="border-blue-200 bg-blue-50 text-blue-900">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    <div className="space-y-2">
+                      <div className="font-medium">Consensus Debug Result:</div>
+                      <div className="text-sm">
+                        <strong>Message:</strong> {consensusDebugResult.message}
+                      </div>
+                      {consensusDebugResult.data?.consensus?.calculated && (
+                        <div className="text-sm">
+                          <strong>Final XP:</strong> {consensusDebugResult.data.consensus.finalXp} • 
+                          <strong>Confidence:</strong> {consensusDebugResult.data.consensus.confidence}
+                        </div>
+                      )}
+                      {!consensusDebugResult.data?.consensus?.calculated && (
+                        <div className="text-sm">
+                          <strong>Reason:</strong> {consensusDebugResult.data.consensus.reason}
+                        </div>
+                      )}
+                      <div className="text-sm">
+                        <strong>Should Attempt Consensus:</strong> {consensusDebugResult.data.debugInfo.consensusAnalysis.shouldAttemptConsensus ? 'Yes' : 'No'}
+                      </div>
+                      <div className="text-sm">
+                        <strong>Active Assignments:</strong> {consensusDebugResult.data.debugInfo.assignments.active}
+                      </div>
+                      <div className="text-sm">
+                        <strong>Peer Reviews:</strong> {consensusDebugResult.data.debugInfo.reviews.count}
+                      </div>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {consensusDebugError && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertDescription>{consensusDebugError}</AlertDescription>
+                </Alert>
+              )}
+
+              <PeerReviewsSection
+                submissionId={submission.id}
+                peerReviews={submission.peerReviews}
+                onUpdate={fetchSubmissionDetails}
+              />
+            </div>
           </TabsContent>
 
           {submission.platform !== 'LEGACY' && (

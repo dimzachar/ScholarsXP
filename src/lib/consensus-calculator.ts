@@ -153,15 +153,6 @@ export class ConsensusCalculatorService {
       // Update submission with consensus results
       await this.updateSubmissionWithConsensus(submissionId, result)
 
-      // Record XP transaction for the submitter
-      await xpAnalyticsService.recordXpTransaction(
-        submission.userId,
-        finalXp,
-        'SUBMISSION_REWARD',
-        `Consensus XP for submission ${submissionId}`,
-        submissionId
-      )
-
       // Award reviewer quality bonuses automatically based on agreement with final XP
       try {
         const threshold = 15 // points within final XP to count as accurate
@@ -463,17 +454,30 @@ export class ConsensusCalculatorService {
           }
         })
 
-        // 5. Create audit trail
-        await tx.xpTransaction.create({
-          data: {
+        // 6. Create audit trail - Check for existing transaction to prevent duplicates
+        const existingTransaction = await tx.xpTransaction.findFirst({
+          where: {
             userId: submission.userId,
-            amount: result.finalXp,
-            type: 'SUBMISSION_REWARD',
             sourceId: submissionId,
-            description: `Consensus XP awarded for submission: ${submission.url}`,
-            weekNumber: currentWeek
+            type: 'SUBMISSION_REWARD'
           }
         })
+
+        if (!existingTransaction) {
+          await tx.xpTransaction.create({
+            data: {
+              userId: submission.userId,
+              amount: result.finalXp,
+              type: 'SUBMISSION_REWARD',
+              sourceId: submissionId,
+              description: `Consensus XP awarded for submission: ${submission.url}`,
+              weekNumber: currentWeek
+            }
+          })
+          console.log(`✅ Created XP transaction for submission ${submissionId}: ${result.finalXp} XP`)
+        } else {
+          console.log(`⚠️ XP transaction already exists for submission ${submissionId}, skipping duplicate`)
+        }
 
         const duration = Date.now() - startTime
         console.log(`✅ Consensus transaction completed in ${duration}ms for submission ${submissionId}: ${result.finalXp} XP`)

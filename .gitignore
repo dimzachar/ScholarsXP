@@ -146,3 +146,4 @@ scripts/*
 tmp_*
 backup/*
 *.png
+debug-*

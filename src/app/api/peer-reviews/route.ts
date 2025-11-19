@@ -300,28 +300,103 @@ export const POST = withPermission('review_content')(
     }
 
     // Check if all reviews are complete and trigger consensus calculation
-    const { data: remainingAssignments } = await supabase
+    const { data: remainingAssignments, error: remainingError } = await supabase
       .from('ReviewAssignment')
-      .select('id')
+      .select('id, status, reviewerId')
       .eq('submissionId', submissionId)
       .in('status', ['PENDING', 'IN_PROGRESS'])
 
+    // Get count of active (non-reassigned) assignments
+    const { data: activeAssignments, error: activeAssignmentsError } = await supabase
+      .from('ReviewAssignment')
+      .select('id, status, reviewerId')
+      .eq('submissionId', submissionId)
+      .neq('status', 'REASSIGNED')
+
+    // Get count of completed peer reviews
+    const { data: peerReviews, error: peerReviewsError } = await supabase
+      .from('PeerReview')
+      .select('id, reviewerId, xpScore, createdAt')
+      .eq('submissionId', submissionId)
+
+    // Get submission info for debugging
+    const { data: submissionInfo } = await supabase
+      .from('Submission')
+      .select('userId, status, weekNumber, reviewCount')
+      .eq('id', submissionId)
+      .single()
+
     let consensusResult = null
-    if (!remainingAssignments || remainingAssignments.length === 0) {
-      // All reviews completed, calculate consensus if service role available
+    const hasNoPendingAssignments = !remainingAssignments || remainingAssignments.length === 0
+    const activeAssignmentCount = activeAssignments ? activeAssignments.length : 0
+    const peerReviewCount = peerReviews ? peerReviews.length : 0
+    
+    // Enhanced consensus trigger logic with comprehensive debugging
+    const shouldAttemptConsensus = hasNoPendingAssignments && 
+                                   peerReviewCount > 0 && 
+                                   peerReviewCount >= activeAssignmentCount
+
+    // DEBUG: Log detailed consensus evaluation (commented out for production)
+    // console.log(`🔍 CONSENSUS DEBUG - Submission ${submissionId}:`)
+    // console.log(`   Current status: ${submissionInfo?.status || 'unknown'}`)
+    // console.log(`   Week number: ${submissionInfo?.weekNumber || 'unknown'}`)
+    // console.log(`   User ID: ${submissionInfo?.userId || 'unknown'}`)
+    // console.log(`   Remaining assignments: ${remainingAssignments?.length || 0} (${remainingAssignments?.map(a => `${a.status}:${a.reviewerId}`).join(', ') || 'none'})`)
+    // console.log(`   Active assignments: ${activeAssignmentCount} (${activeAssignments?.map(a => `${a.status}:${a.reviewerId}`).join(', ') || 'none'})`)
+    // console.log(`   Peer reviews: ${peerReviewCount} (${peerReviews?.map(r => `${r.reviewerId}:${r.xpScore}@${r.createdAt}`).join(', ') || 'none'})`)
+    // console.log(`   Conditions:`)
+    // console.log(`     - No pending assignments: ${hasNoPendingAssignments}`)
+    // console.log(`     - Has reviews: ${peerReviewCount > 0}`)
+    // console.log(`     - Reviews >= assignments: ${peerReviewCount} >= ${activeAssignmentCount} = ${peerReviewCount >= activeAssignmentCount}`)
+    // console.log(`   Should attempt consensus: ${shouldAttemptConsensus}`)
+
+    if (shouldAttemptConsensus) {
       if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
         const { consensusCalculatorService } = await import('@/lib/consensus-calculator')
-        consensusResult = await consensusCalculatorService.calculateConsensus(submissionId)
-        console.log(`🎯 All reviews completed for submission ${submissionId}, consensus calculated`)
+        
+        try {
+          consensusResult = await consensusCalculatorService.calculateConsensus(submissionId)
+          // console.log(`🎯 All reviews completed for submission ${submissionId}, consensus calculated (${peerReviewCount}/${activeAssignmentCount} reviews)`)
+        } catch (consensusError: unknown) {
+          // Enhanced error handling for consensus calculation failures
+          const errorMessage = consensusError instanceof Error ? consensusError.message : String(consensusError)
+          // console.error(`❌ Consensus calculation failed for submission ${submissionId}:`, errorMessage)
+          
+          if (errorMessage.includes('Weekly submission cap reached')) {
+            // console.log(`⏰ Consensus for submission ${submissionId} delayed due to weekly cap: ${errorMessage}`)
+            // console.log(`🔄 This submission will be automatically retried when weekly cap is lifted in subsequent weeks`)
+            
+            // Log to help with debugging stuck submissions
+            const submissionInfo = await supabase
+              .from('Submission')
+              .select('userId, createdAt, weekNumber')
+              .eq('id', submissionId)
+              .single()
+            
+            if (submissionInfo.data) {
+              const { userId, createdAt, weekNumber } = submissionInfo.data
+              // console.log(`📊 Submission ${submissionId} info: userId=${userId}, createdAt=${createdAt}, weekNumber=${weekNumber}`)
+              // console.log(`💡 This submission will be finalized automatically when user ${userId} has < 5 finalized submissions in the current week`)
+            }
+          } else if (errorMessage.includes('Insufficient reviews for consensus')) {
+            // console.log(`⚠️ Consensus for submission ${submissionId} failed due to insufficient reviews: ${errorMessage}`)
+            // console.log(`🔧 This may indicate a logic issue with review counting after reassignments`)
+          } else {
+            // console.error(`🚨 Unexpected consensus calculation error for submission ${submissionId}:`, errorMessage)
+            // console.log(`🔧 This submission may need manual intervention`)
+          }
+        }
       } else {
         console.warn(
           'SUPABASE_SERVICE_ROLE_KEY not set; skipping consensus calculation for submission',
           submissionId
         )
       }
+    } else {
+      // console.log(`📝 Submission ${submissionId} still has pending work: ${remainingAssignments?.length || 0} pending assignments, ${peerReviewCount}/${activeAssignmentCount} reviews completed`)
     }
 
-    console.log(`✅ Review submitted by ${reviewerId} for submission ${submissionId}: ${computedXp} XP, quality: ${qualityRating}/5, time: ${timeSpent}min, late: ${isLate}, rejected: ${rejected}`)
+    // console.log(`✅ Review submitted by ${reviewerId} for submission ${submissionId}: ${computedXp} XP, quality: ${qualityRating}/5, time: ${timeSpent}min, late: ${isLate}, rejected: ${rejected}`)
 
     return createSuccessResponse({
       message: 'Review submitted successfully',
@@ -338,4 +413,3 @@ export const POST = withPermission('review_content')(
     })
   })
 )
-

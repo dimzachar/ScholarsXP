@@ -3,9 +3,9 @@ import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { withErrorHandling, createSuccessResponse } from '@/lib/api-middleware'
 import { ValidationError } from '@/lib/api-error-handler'
 import { processWeeklyReset, checkMissedReviews } from '@/lib/weekly-manager'
-import { processReadySubmissions } from '@/lib/xp-aggregator'
+import { processReadySubmissions, processStuckSubmissions } from '@/lib/xp-aggregator'
 import { prisma } from '@/lib/prisma'
-import { logAdminAction } from '@/lib/audit-log'
+import { logAdminAction, type LogAdminActionInput } from '@/lib/audit-log'
 
 /**
  * Admin System Actions Router
@@ -22,7 +22,7 @@ import { logAdminAction } from '@/lib/audit-log'
 function isCronRequest(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
-  return cronSecret && authHeader === `Bearer ${cronSecret}`
+  return !!(cronSecret && authHeader === `Bearer ${cronSecret}`)
 }
 
 // Helper function to log automation runs
@@ -147,7 +147,7 @@ async function handleWeeklyOperations(request: AuthenticatedRequest | null, trig
         action: 'SYSTEM_CONFIG',
         targetType: 'system',
         targetId: 'weekly',
-        details: result,
+        details: result
       })
     }
 
@@ -180,17 +180,24 @@ async function handleXpAggregation(request: AuthenticatedRequest | null, trigger
   try {
     console.log(`${logPrefix} Starting XP aggregation for ready submissions...`)
 
-    const processedCount = await processReadySubmissions()
+    // First process normally ready submissions
+    const readyCount = await processReadySubmissions()
 
+    // Then check for stuck submissions as a fallback
+    const stuckCount = await processStuckSubmissions()
+
+    const totalProcessed = readyCount + stuckCount
     const result = {
-      submissionsProcessed: processedCount,
+      submissionsProcessed: readyCount,
+      stuckSubmissionsProcessed: stuckCount,
+      totalProcessed,
       timestamp: new Date().toISOString()
     }
 
-    const summary = `Processed ${processedCount} ready submissions`
+    const summary = `Processed ${readyCount} ready submissions and ${stuckCount} stuck submissions (total: ${totalProcessed})`
 
     // Only log success if submissions were actually processed (to avoid spam in cron logs)
-    if (processedCount > 0 || !isCron) {
+    if (totalProcessed > 0 || !isCron) {
       console.log(`✅ ${logPrefix} XP aggregation completed: ${summary}`)
     }
 
@@ -205,7 +212,7 @@ async function handleXpAggregation(request: AuthenticatedRequest | null, trigger
         action: 'SYSTEM_CONFIG',
         targetType: 'system',
         targetId: 'aggregate',
-        details: result,
+        details: result
       })
     }
 
@@ -270,7 +277,7 @@ async function handleDataRefresh(request: AuthenticatedRequest | null, triggered
         action: 'SYSTEM_CONFIG',
         targetType: 'system',
         targetId: 'refresh',
-        details: result,
+        details: result
       })
     }
 
@@ -324,7 +331,7 @@ export const GET = withPermission('admin_access')(
       case 'aggregate':
         return createSuccessResponse({
           action: 'aggregate',
-          description: 'Process XP aggregation for submissions with 3+ peer reviews',
+          description: 'Process XP aggregation for submissions with 3+ peer reviews, including stuck submissions',
           lastRun: null, // TODO: Track last run times
           status: 'available'
         })

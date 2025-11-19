@@ -60,7 +60,7 @@ export async function aggregateXP(submissionId: string): Promise<EnhancedXPAggre
         if (!contentData.content || contentData.content.trim() === '') {
           throw new Error('Content fetch failed - cannot aggregate XP')
         }
-      } catch (fetchError) {
+      } catch (fetchError: any) {
         console.error(`Content fetch failed for submission ${submissionId}:`, fetchError)
         throw new Error(`Content fetch failed - cannot aggregate XP: ${fetchError.message}`)
       }
@@ -167,17 +167,33 @@ export async function aggregateXP(submissionId: string): Promise<EnhancedXPAggre
         }
       })
 
-      // 6. Create audit trail
-      await tx.xpTransaction.create({
-        data: {
+      // 6. Create audit trail but avoid creating duplicate transaction with short description
+      const existingTransaction = await tx.xpTransaction.findFirst({
+        where: {
           userId: submission.userId,
-          amount: cappedXp,
-          type: 'SUBMISSION_REWARD',
           sourceId: submissionId,
-          description: `XP awarded for submission: ${submission.url}`,
-          weekNumber: currentWeekNumber
+          type: 'SUBMISSION_REWARD',
+          description: {
+            contains: 'Consensus XP awarded for submission:'
+          }
         }
       })
+
+      // Only create transaction if one with the preferred description doesn't exist
+      if (!existingTransaction) {
+        await tx.xpTransaction.create({
+          data: {
+            userId: submission.userId,
+            amount: cappedXp,
+            type: 'SUBMISSION_REWARD',
+            sourceId: submissionId,
+            description: `Consensus XP awarded for submission: ${submission.url}`,
+            weekNumber: currentWeekNumber
+          }
+        })
+      } else {
+        console.log(`⚠️ XP transaction with preferred description already exists for submission ${submissionId}`)
+      }
 
       // 7. Log successful transaction
       const duration = Date.now() - startTime
@@ -216,25 +232,106 @@ export async function processReadySubmissions(): Promise<number> {
     })
 
     let processedCount = 0
+    let failedCount = 0
+    const failedSubmissions: string[] = []
+
+    console.log(`🔍 Found ${readySubmissions.length} submissions ready for processing`)
 
     for (const submission of readySubmissions) {
       if (submission.peerReviews.length >= 3) {
         try {
           // Switch to peer-only consensus finalization
           const { consensusCalculatorService } = await import('@/lib/consensus-calculator')
+          
+          console.log(`📝 Processing submission ${submission.id} with ${submission.peerReviews.length} reviews`)
+          
           await consensusCalculatorService.calculateConsensus(submission.id)
           processedCount++
-          console.log(`Processed XP aggregation for submission ${submission.id}`)
-        } catch (error) {
-          console.error(`Failed to process submission ${submission.id}:`, error)
+          console.log(`✅ Successfully processed submission ${submission.id}`)
+        } catch (error: any) {
+          failedCount++
+          failedSubmissions.push(submission.id)
+          const errorMessage = error.message
+          
+          // Log specific error types for debugging
+          if (errorMessage.includes('Weekly submission cap reached')) {
+            console.log(`⏰ Submission ${submission.id} blocked by weekly cap: ${errorMessage}`)
+          } else if (errorMessage.includes('Not enough reviews')) {
+            console.log(`⚠️ Submission ${submission.id} has insufficient reviews: ${errorMessage}`)
+          } else {
+            console.error(`❌ Failed to process submission ${submission.id}:`, errorMessage)
+          }
         }
+      } else {
+        console.log(`📋 Submission ${submission.id} has only ${submission.peerReviews.length} reviews, needs 3+ for consensus`)
       }
+    }
+
+    console.log(`📊 Processing complete: ${processedCount} succeeded, ${failedCount} failed`)
+    
+    if (failedCount > 0) {
+      console.log(`❌ Failed submissions: ${failedSubmissions.join(', ')}`)
     }
 
     return processedCount
 
   } catch (error) {
-    console.error('Error processing ready submissions:', error)
+    console.error('❌ Error processing ready submissions:', error)
     throw new Error('Failed to process submissions')
+  }
+}
+
+/**
+ * Fallback function to handle submissions that might be stuck
+ * This checks for submissions that have been under peer review for too long
+ */
+export async function processStuckSubmissions(): Promise<number> {
+  try {
+    const thresholdDays = 7 // Check submissions older than 7 days
+    const thresholdDate = new Date()
+    thresholdDate.setDate(thresholdDate.getDate() - thresholdDays)
+
+    // Find submissions that have been under peer review for too long
+    const stuckSubmissions = await prisma.submission.findMany({
+      where: {
+        status: 'UNDER_PEER_REVIEW',
+        finalXp: null,
+        createdAt: { lt: thresholdDate }
+      },
+      include: {
+        peerReviews: true,
+        user: true
+      }
+    })
+
+    let processedCount = 0
+
+    console.log(`🔍 Found ${stuckSubmissions.length} submissions stuck in peer review for >${thresholdDays} days`)
+
+    for (const submission of stuckSubmissions) {
+      try {
+        console.log(`🔄 Attempting to finalize stuck submission ${submission.id} (created ${submission.createdAt.toISOString()})`)
+        
+        // Check if we have enough reviews
+        if (submission.peerReviews.length >= 3) {
+          const { consensusCalculatorService } = await import('@/lib/consensus-calculator')
+          await consensusCalculatorService.calculateConsensus(submission.id)
+          processedCount++
+          console.log(`✅ Finalized stuck submission ${submission.id}`)
+        } else {
+          console.log(`⚠️ Stuck submission ${submission.id} only has ${submission.peerReviews.length} reviews, cannot finalize`)
+        }
+      } catch (error: any) {
+        const errorMessage = error.message
+        console.error(`❌ Failed to process stuck submission ${submission.id}:`, errorMessage)
+      }
+    }
+
+    console.log(`📊 Stuck submissions processed: ${processedCount}/${stuckSubmissions.length}`)
+    return processedCount
+
+  } catch (error) {
+    console.error('❌ Error processing stuck submissions:', error)
+    return 0
   }
 }
