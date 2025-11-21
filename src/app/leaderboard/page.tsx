@@ -79,12 +79,12 @@ export default function LeaderboardPage() {
     }
 
     try {
-      console.log('Fetching user position for user:', user.id)
+      // console.log('Fetching user position for user:', user.id)
       const data = await apiGet('/api/leaderboard/user-position?type=both')
-      console.log('User position data received:', data)
+      // console.log('User position data received:', data)
       return data
     } catch (error) {
-      console.error('Error fetching user position:', error)
+      // console.error('Error fetching user position:', error)
       // Return a default structure so the UI doesn't break
       return {
         user: {

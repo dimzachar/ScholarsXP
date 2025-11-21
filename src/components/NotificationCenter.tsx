@@ -81,12 +81,12 @@ export default function NotificationCenter() {
   const isTablet = responsiveLayout?.isTablet ?? (typeof window !== 'undefined' && window.innerWidth >= 768 && window.innerWidth < 1024)
 
   // Debug: Log mobile state when component renders
-  console.log('NotificationCenter render:', {
-    isMobile,
-    isTablet,
-    windowWidth: typeof window !== 'undefined' ? window.innerWidth : 'SSR',
-    hookResult: responsiveLayout
-  })
+  // console.log('NotificationCenter render:', {
+  //   isMobile,
+  //   isTablet,
+  //   windowWidth: typeof window !== 'undefined' ? window.innerWidth : 'SSR',
+  //   hookResult: responsiveLayout
+  // })
 
   const fetchNotifications = useCallback(async (force: boolean = false) => {
     if (!user) return
@@ -153,7 +153,7 @@ export default function NotificationCenter() {
 
       await fetchNotifications(true)
 
-      console.log('?? Setting up notification subscription for user:', user.id)
+      // console.log('?? Setting up notification subscription for user:', user.id)
 
       const channelName = `realtime-notifications-${user.id}-${retryCount}`
       const channel = supabase
@@ -206,7 +206,7 @@ export default function NotificationCenter() {
       setSubscriptionStatus('connecting')
 
       channel.subscribe((status) => {
-        console.log('?? Notification subscription status:', status)
+        // console.log('?? Notification subscription status:', status)
         setSubscriptionStatus(
           status === 'SUBSCRIBED'
             ? 'connected'
@@ -257,7 +257,7 @@ export default function NotificationCenter() {
     if (subscriptionStatus === 'disconnected' && retryCount < maxRetries && user) {
       const retryDelay = 5000 * Math.pow(2, retryCount) // Exponential backoff: 5s, 10s, 20s
 
-      console.log(`🔄 Scheduling retry ${retryCount + 1}/${maxRetries} in ${retryDelay}ms`)
+      // console.log(`🔄 Scheduling retry ${retryCount + 1}/${maxRetries} in ${retryDelay}ms`)
 
       const retryTimer = setTimeout(() => {
         console.log(`🔄 Retrying notification subscription (attempt ${retryCount + 1}/${maxRetries})`)

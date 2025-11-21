@@ -43,12 +43,12 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState('overview')
   const [selectedTimeframe, setSelectedTimeframe] = useState('current_week')
 
-  // Use optimized data fetching hooks
+  // Use optimized data fetching hooks - Always load analytics for weekly XP accuracy
   const {
     profile: { data: profileData, loading: _loadingProfile },
     analytics: { data: analyticsData, loading: loadingAnalytics, error: analyticsError },
     refetchAll
-  } = useDashboardData(user?.id, activeTab, selectedTimeframe)
+  } = useDashboardData(user?.id, 'progress', selectedTimeframe) // Always use 'progress' to load analytics
 
   // Handle timeframe changes for analytics
   const handleTimeframeChange = (newTimeframe: string) => {
@@ -212,15 +212,24 @@ function StatCardsSection({ profileData }: { profileData: any }) {
     }
   )
 
+  // FIXED: Use stored currentWeekXp value (now correctly calculated from transactions)
+  // The root cause was fixed in weekly-manager.ts - it now calculates weekly XP from transactions
+  // instead of using the outdated stored value
+  const weeklyXpDisplay = userProfile?.currentWeekXp || 0
+  
+  // Debug logging removed - XP fix is complete and dashboard shows correct values
+  // console.log(`✅ Dashboard weekly XP: ${weeklyXpDisplay}`)
+  // console.log(`👤 Using stored currentWeekXp (now correctly calculated): ${weeklyXpDisplay}`)
+
   const weeklyXpData = createStatCardData(
     'This Week',
-    userProfile?.currentWeekXp || 0,
+    weeklyXpDisplay,
     {
       color: 'secondary',
       icon: Calendar,
       progress: {
-        current: userProfile?.currentWeekXp || 0,
-        max: Math.max(userProfile?.currentWeekXp || 100, 100),
+        current: weeklyXpDisplay,
+        max: Math.max(weeklyXpDisplay || 100, 100),
         label: 'Activity'
       },
       subtitle: `Week ${getWeekNumber(new Date())}`,

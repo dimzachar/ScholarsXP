@@ -65,7 +65,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   useEffect(() => {
     const emergencyTimeout = setTimeout(() => {
       if (loading) {
-        console.log('⚠️ AuthProvider: Emergency timeout triggered - auth flow took longer than expected')
+        // console.log('⚠️ AuthProvider: Emergency timeout triggered - auth flow took longer than expected')
         setLoading(false)
       }
     }, 5000) // 5 second timeout as fallback
@@ -180,7 +180,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
         // Create user profile only on actual sign in
         if (event === 'SIGNED_IN' && session?.user) {
-          console.log('User signed in, creating profile...')
+          // console.log('User signed in, creating profile...')
           createOrUpdateUserProfile(session.user).catch(console.error)
         }
       }
@@ -202,7 +202,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
 
         setLoading(false)
-        console.log('Initial session loaded:', !!session)
+        // console.log('Initial session loaded:', !!session)
       }
     }).catch((error) => {
       console.error('Error getting session:', error)
@@ -233,7 +233,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const existingCache = window.sessionStorage.getItem(cacheKey)
 
       if (existingCache === 'processing') {
-        console.log('User profile creation already in progress, skipping')
+        // console.log('User profile creation already in progress, skipping')
         return
       }
     }
@@ -250,14 +250,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                            user.user_metadata?.name ||
                            user.user_metadata?.preferred_username
 
-      console.log('Discord metadata:', {
-        username: user.user_metadata?.username,
-        global_name: user.user_metadata?.global_name,
-        name: user.user_metadata?.name,
-        preferred_username: user.user_metadata?.preferred_username,
-        full_name: user.user_metadata?.full_name,
-        selected_handle: discordHandle
-      })
+      // console.log('Discord metadata:', {
+      //   username: user.user_metadata?.username,
+      //   global_name: user.user_metadata?.global_name,
+      //   name: user.user_metadata?.name,
+      //   preferred_username: user.user_metadata?.preferred_username,
+      //   full_name: user.user_metadata?.full_name,
+      //   selected_handle: discordHandle
+      // })
 
       // Create/update user profile first
       const userData = {
@@ -289,7 +289,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (upsertError) {
         // Check if it's a duplicate key error (user already exists) - ignore these
         if (upsertError.code === '23505' || upsertError.message?.includes('duplicate') || upsertError.message?.includes('conflict')) {
-          console.log('User already exists, continuing with existing profile')
+          // console.log('User already exists, continuing with existing profile')
         } else {
           console.error('Error upserting user profile:', upsertError)
           // Remove processing flag on error
@@ -299,12 +299,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           return
         }
       } else {
-        console.log('User profile created/updated successfully')
+        // console.log('User profile created/updated successfully')
       }
 
       // Initiate legacy account merge using API call
       if (discordHandle) {
-        console.log('🔄 Initiating legacy account merge...')
+        // console.log('🔄 Initiating legacy account merge...')
 
         try {
           // Call the merge API endpoint
@@ -328,14 +328,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
             if (mergeResult.success) {
               if (mergeResult.status === 'COMPLETED') {
-                console.log('✅ Legacy account merge completed successfully')
-                console.log(`   Transactions transferred: ${mergeResult.details?.transactionsTransferred || 0}`)
-                console.log(`   Total XP transferred: ${mergeResult.details?.totalXpTransferred || 0}`)
-                console.log(`   Processing time: ${mergeResult.details?.processingTimeMs || 0}ms`)
+                // console.log('✅ Legacy account merge completed successfully')
+                // console.log(`   Transactions transferred: ${mergeResult.details?.transactionsTransferred || 0}`)
+                // console.log(`   Total XP transferred: ${mergeResult.details?.totalXpTransferred || 0}`)
+                // console.log(`   Processing time: ${mergeResult.details?.processingTimeMs || 0}ms`)
               } else if (mergeResult.status === 'NO_LEGACY_ACCOUNT') {
-                console.log('ℹ️ No legacy account found for this user')
+                // console.log('ℹ️ No legacy account found for this user')
               } else if (mergeResult.status === 'ALREADY_COMPLETED') {
-                console.log('ℹ️ Legacy account merge was already completed')
+                // console.log('ℹ️ Legacy account merge was already completed')
               }
             } else {
               console.error('❌ Legacy account merge failed:', mergeResult.message)
@@ -354,7 +354,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           // Don't fail the entire auth process if merge fails
         }
       } else {
-        console.log('No Discord handle found in metadata, skipping legacy account merge')
+        // console.log('No Discord handle found in metadata, skipping legacy account merge')
       }
 
       // Cache successful operation and refresh profile
@@ -383,7 +383,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         })
       }
 
-      console.log('✅ User profile creation and merge process completed')
+      // console.log('✅ User profile creation and merge process completed')
 
 
     } catch (error) {

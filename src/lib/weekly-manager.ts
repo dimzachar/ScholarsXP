@@ -35,11 +35,21 @@ export async function processWeeklyReset(): Promise<WeeklyProcessingResult> {
         })
 
         if (!weeklyStats) {
+          // Calculate correct weekly XP from transactions instead of using stored value
+          const transactions = await prisma.xpTransaction.findMany({
+            where: {
+              userId: user.id,
+              weekNumber: previousWeek
+            }
+          })
+          
+          const calculatedXpTotal = transactions.reduce((sum, tx) => sum + tx.amount, 0)
+          
           weeklyStats = await prisma.weeklyStats.create({
             data: {
               userId: user.id,
               weekNumber: previousWeek,
-              xpTotal: user.currentWeekXp,
+              xpTotal: calculatedXpTotal, // Use calculated value instead of stored value
               reviewsDone: 0,
               reviewsMissed: user.missedReviews
             }
@@ -333,4 +343,3 @@ export async function cleanupOldNotifications(): Promise<number> {
     return 0
   }
 }
-
