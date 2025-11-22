@@ -75,7 +75,7 @@ export function GestureWrapper({
       setIsPulling(distance > pullThreshold)
 
       // Debug log
-      console.log('Pull distance:', distance, 'Threshold:', pullThreshold, 'Pulling:', distance > pullThreshold)
+      // console.log('Pull distance:', distance, 'Threshold:', pullThreshold, 'Pulling:', distance > pullThreshold)
     }
   }
 
