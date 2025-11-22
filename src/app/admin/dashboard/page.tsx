@@ -30,6 +30,9 @@ interface AdminStats {
   totalReviews: number
   pendingFlags: number
   totalXpAwarded: number
+  finalizedSubmissions: number
+  underPeerReview: number
+  finalizationRate: number
   systemHealth: {
     submissionSuccessRate: number
     avgReviewScore: number
@@ -61,14 +64,23 @@ export default function AdminDashboardPage() {
         const analyticsResponse = await fetch('/api/admin/analytics?timeframe=last_30_days', { credentials: 'include' })
         const analyticsData = analyticsResponse.ok ? await analyticsResponse.json() : null
 
+        // Calculate finalization statistics
+        const finalized = statsData.data.finalizedSubmissions || 0
+        const underPeerReview = statsData.data.underPeerReview || 0
+        const totalInProgress = finalized + underPeerReview
+        const finalizationRate = totalInProgress > 0 ? (finalized / totalInProgress) * 100 : 0
+
         setStats({
           totalUsers: statsData.data.totalUsers,
-          activeUsers: analyticsData?.data?.overview?.activeUsers || 0,
+          activeUsers: statsData.data.activeUsers, // Use direct API field
           totalSubmissions: statsData.data.totalSubmissions, // Includes legacy
           pendingSubmissions: statsData.data.pendingReviews,
           totalReviews: statsData.data.totalPeerReviews,
           pendingFlags: statsData.data.flaggedSubmissions,
           totalXpAwarded: analyticsData?.data?.overview?.totalXpAwarded || 0,
+          finalizedSubmissions: finalized,
+          underPeerReview: underPeerReview,
+          finalizationRate: finalizationRate,
           systemHealth: {
             submissionSuccessRate: analyticsData?.data?.overview?.submissionSuccessRate || 0,
             avgReviewScore: analyticsData?.data?.overview?.avgReviewScore || 0,
@@ -259,20 +271,16 @@ export default function AdminDashboardPage() {
               </CardContent>
             </Card>
             
-            <Card className={`bg-gradient-to-br ${stats.pendingFlags > 0 ? 'from-destructive/10 to-destructive/20 border-destructive/20' : 'from-muted/50 to-muted border-border'}`}>
+            <Card className="bg-gradient-to-br from-green/10 to-green/20 border-green/20">
               <CardContent className="p-4 text-center">
-                <Shield className={`h-8 w-8 ${stats.pendingFlags > 0 ? 'text-destructive' : 'text-muted-foreground'} mx-auto mb-2`} />
-                <div className={`text-2xl font-bold ${stats.pendingFlags > 0 ? 'text-destructive' : 'text-foreground'}`}>
-                  {stats.pendingFlags}
+                <BarChart3 className="h-8 w-8 text-green mx-auto mb-2" />
+                <div className="text-2xl font-bold text-foreground">
+                  {stats.finalizationRate.toFixed(0)}%
                 </div>
-                <div className={`text-sm ${stats.pendingFlags > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
-                  Pending Flags
+                <div className="text-sm text-green">Finalization Progress</div>
+                <div className="text-xs text-green/80 mt-1">
+                  {stats.finalizedSubmissions} finalized / {stats.underPeerReview} under review
                 </div>
-                {stats.pendingFlags > 0 && (
-                  <Badge variant="destructive" className="text-xs mt-1">
-                    Needs Attention
-                  </Badge>
-                )}
               </CardContent>
             </Card>
           </div>

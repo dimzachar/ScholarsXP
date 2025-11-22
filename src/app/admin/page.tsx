@@ -41,6 +41,9 @@ interface AdminStats {
   totalReviews: number
   pendingFlags: number
   totalXpAwarded: number
+  finalizedSubmissions: number
+  underPeerReview: number
+  finalizationRate: number
   systemHealth: {
     submissionSuccessRate: number
     avgReviewScore: number
@@ -90,14 +93,23 @@ export default function AdminDashboardPage() {
         console.warn('Analytics API failed, using stats only:', analyticsError)
       }
 
+      // Calculate finalization statistics
+      const finalized = statsData.finalizedSubmissions || 0
+      const underPeerReview = statsData.underPeerReview || 0
+      const totalInProgress = finalized + underPeerReview
+      const finalizationRate = totalInProgress > 0 ? (finalized / totalInProgress) * 100 : 0
+
       setStats({
         totalUsers: statsData.totalUsers,
-        activeUsers: analyticsData?.overview?.activeUsers || 0,
+        activeUsers: statsData.activeUsers, // Use direct API field
         totalSubmissions: statsData.totalSubmissions, // Includes legacy
         pendingSubmissions: statsData.pendingReviews,
         totalReviews: statsData.totalPeerReviews,
         pendingFlags: statsData.flaggedSubmissions,
         totalXpAwarded: analyticsData?.overview?.totalXpAwarded || 0,
+        finalizedSubmissions: finalized,
+        underPeerReview: underPeerReview,
+        finalizationRate: finalizationRate,
         systemHealth: {
           submissionSuccessRate: analyticsData?.overview?.submissionSuccessRate || 0,
           avgReviewScore: analyticsData?.overview?.avgReviewScore || 0,
@@ -117,6 +129,9 @@ export default function AdminDashboardPage() {
         totalReviews: 0,
         pendingFlags: 0,
         totalXpAwarded: 0,
+        finalizedSubmissions: 0,
+        underPeerReview: 0,
+        finalizationRate: 0,
         systemHealth: {
           submissionSuccessRate: 0,
           avgReviewScore: 0,
@@ -465,12 +480,12 @@ export default function AdminDashboardPage() {
             <Card className="border-0 shadow-lg">
               <CardContent className="p-6">
                 <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-destructive/20 rounded-lg">
-                    <AlertTriangle className="h-6 w-6 text-destructive" />
+                  <div className="p-3 bg-green/20 rounded-lg">
+                    <BarChart3 className="h-6 w-6 text-green" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-foreground">{stats.pendingFlags}</p>
-                    <p className="text-muted-foreground">Pending Flags</p>
+                    <p className="text-2xl font-bold text-foreground">{stats.finalizationRate.toFixed(0)}%</p>
+                    <p className="text-muted-foreground">Finalization Progress</p>
                   </div>
                 </div>
               </CardContent>
@@ -799,4 +814,3 @@ export default function AdminDashboardPage() {
     </AuthGuard>
   )
 }
-

@@ -628,7 +628,7 @@ function formatLegacySubmissions(legacySubmissions: LegacySubmissionWithUser[]) 
 /**
  * Get legacy submission count
  */
-async function getLegacySubmissionCount(filters: any = {}): Promise<number> {
+export async function getLegacySubmissionCount(filters: any = {}): Promise<number> {
   const whereClause = await createLegacyWhereClause(filters)
   if (whereClause === null) {
     return 0
@@ -705,7 +705,7 @@ async function getSubmissionCount(whereClause: any): Promise<number> {
 /**
  * Get submission statistics efficiently
  */
-async function getSubmissionStats(whereClause: any, filters: any = {}) {
+export async function getSubmissionStats(whereClause: any, filters: any = {}) {
   // Create a more specific cache key that includes search filters
   const cacheKey = QueryCache.createKey('admin_submission_stats', {
     whereClause,
@@ -822,7 +822,7 @@ export async function bulkUpdateSubmissions(
             const legacyUpdateData: Prisma.LegacySubmissionUpdateManyMutationInput = {}
 
             if (supportsAdminFields) {
-              legacyUpdateData.adminStatus = normalized === LEGACY_DEFAULT_STATUS ? null : normalized
+              legacyUpdateData.adminStatus = normalized === LEGACY_DEFAULT_STATUS ? null : (normalized as any)
               legacyUpdateData.adminUpdatedAt = timestamp
               legacyUpdateData.adminUpdatedBy = adminId ?? undefined
 
