@@ -65,11 +65,11 @@ export function withCompression<T extends unknown[]>(
       })
 
       // Log compression stats for monitoring
-      console.log(`🗜️  Compressed response: ${originalSize}B → ${compressedSize}B (${compressionRatio}% reduction)`)
+      // console.log(`🗜️  Compressed response: ${originalSize}B → ${compressedSize}B (${compressionRatio}% reduction)`)
       
       return compressedResponse
     } catch (error) {
-      console.error('Compression failed:', error)
+      // console.error('Compression failed:', error)
       // Return original response if compression fails
       return new NextResponse(body, {
         status: response.status,

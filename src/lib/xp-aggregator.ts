@@ -168,29 +168,34 @@ export async function aggregateXP(submissionId: string): Promise<EnhancedXPAggre
       })
 
       // 6. Create audit trail but avoid creating duplicate transaction with short description
+      console.log(`🔍 Checking for existing transaction for submission ${submissionId} in xp-aggregator...`)
       const existingTransaction = await tx.xpTransaction.findFirst({
         where: {
           userId: submission.userId,
           sourceId: submissionId,
-          type: 'SUBMISSION_REWARD',
+          type: 'SUBMISSION_REWARD', // Use string literal to avoid enum comparison issues
           description: {
             contains: 'Consensus XP awarded for submission:'
           }
         }
       })
 
+      console.log(`🔍 Existing transaction check result in xp-aggregator:`, existingTransaction ? 'FOUND' : 'NOT FOUND')
+
       // Only create transaction if one with the preferred description doesn't exist
       if (!existingTransaction) {
+        console.log(`📝 Creating new XP transaction for submission ${submissionId} in xp-aggregator...`)
         await tx.xpTransaction.create({
           data: {
             userId: submission.userId,
             amount: cappedXp,
-            type: 'SUBMISSION_REWARD',
+            type: 'SUBMISSION_REWARD', // Use string literal to avoid enum comparison issues
             sourceId: submissionId,
             description: `Consensus XP awarded for submission: ${submission.url}`,
             weekNumber: currentWeekNumber
           }
         })
+        console.log(`✅ Created XP transaction for submission ${submissionId} in xp-aggregator: ${cappedXp} XP`)
       } else {
         console.log(`⚠️ XP transaction with preferred description already exists for submission ${submissionId}`)
       }
@@ -244,6 +249,7 @@ export async function processReadySubmissions(): Promise<number> {
           const { consensusCalculatorService } = await import('@/lib/consensus-calculator')
           
           console.log(`📝 Processing submission ${submission.id} with ${submission.peerReviews.length} reviews`)
+          console.log(`📊 Review scores for ${submission.id}:`, submission.peerReviews.map(r => ({ id: r.id, score: r.xpScore, reviewer: r.reviewerId })))
           
           await consensusCalculatorService.calculateConsensus(submission.id)
           processedCount++

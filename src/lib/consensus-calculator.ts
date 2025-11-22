@@ -97,6 +97,9 @@ export class ConsensusCalculatorService {
         return null
       }
 
+      console.log(`🔍 Processing consensus for submission ${submissionId} with ${reviews.length} reviews`)
+      console.log(`📊 Review scores:`, reviews.map(r => ({ id: r.id, score: r.xpScore, reviewer: r.reviewerId })))
+
       // Calculate reviewer reliability scores
       const reviewerReliabilities = await this.calculateReviewerReliabilities(
         reviews.map(r => r.reviewerId)
@@ -454,26 +457,28 @@ export class ConsensusCalculatorService {
           }
         })
 
-        // 6. Create audit trail - Check for existing transaction to prevent duplicates
-        const existingTransaction = await tx.xpTransaction.findFirst({
-          where: {
-            userId: submission.userId,
-            sourceId: submissionId,
-            type: 'SUBMISSION_REWARD'
-          }
-        })
+        // 6. Create audit trail - Check for existing transaction to prevent duplicates using raw SQL
+        console.log(`🔍 Checking for existing transaction for submission ${submissionId} using raw SQL...`)
+        
+        // Use raw SQL to avoid Prisma enum comparison issues
+        // Cast UUID parameters properly to avoid type mismatch
+        const existingTransactions: Array<{ id: string }> = await tx.$queryRaw`
+          SELECT id FROM "XpTransaction" 
+          WHERE "userId" = ${submission.userId}::uuid
+          AND "sourceId" = ${submissionId}::uuid
+          AND type = 'SUBMISSION_REWARD'
+        `
+        
+        const existingTransaction = existingTransactions.length > 0 ? { id: existingTransactions[0].id } : null
+        
+        console.log(`🔍 Existing transaction check result:`, existingTransaction ? 'FOUND' : 'NOT FOUND')
 
         if (!existingTransaction) {
-          await tx.xpTransaction.create({
-            data: {
-              userId: submission.userId,
-              amount: result.finalXp,
-              type: 'SUBMISSION_REWARD',
-              sourceId: submissionId,
-              description: `Consensus XP awarded for submission: ${submission.url}`,
-              weekNumber: currentWeek
-            }
-          })
+          console.log(`📝 Creating new XP transaction for submission ${submissionId} using raw SQL...`)
+          await tx.$executeRaw`
+            INSERT INTO "XpTransaction" ("userId", amount, type, "sourceId", description, "weekNumber", "createdAt")
+            VALUES (${submission.userId}::uuid, ${result.finalXp}, 'SUBMISSION_REWARD', ${submissionId}::uuid, ${`Consensus XP awarded for submission: ${submission.url}`}, ${currentWeek}, NOW())
+          `
           console.log(`✅ Created XP transaction for submission ${submissionId}: ${result.finalXp} XP`)
         } else {
           console.log(`⚠️ XP transaction already exists for submission ${submissionId}, skipping duplicate`)
