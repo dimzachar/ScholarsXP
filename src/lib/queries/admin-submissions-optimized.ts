@@ -719,13 +719,14 @@ export async function getSubmissionStats(whereClause: any, filters: any = {}) {
     CacheTTL.ANALYTICS,
     async () => {
       // Get status counts using optimized query
-      const [statusCounts, legacyStatusCounts] = await Promise.all([
+      const [statusCounts, legacyStatusCounts, reshuffleNeededCount] = await Promise.all([
         prisma.submission.groupBy({
           by: ['status'],
           _count: true,
           where: whereClause
         }),
-        getLegacyStatusCounts(filters)
+        getLegacyStatusCounts(filters),
+        getReshuffleNeededCount(whereClause)
       ])
 
       const statusCountsMap = statusCounts.reduce((acc, stat) => {
@@ -748,8 +749,34 @@ export async function getSubmissionStats(whereClause: any, filters: any = {}) {
 
       return {
         statusCounts: statusCountsMap,
-        totalSubmissions
+        totalSubmissions,
+        reshuffleNeeded: reshuffleNeededCount
       }
+    }
+  )
+}
+
+/**
+ * Get count of submissions that need reshuffling (under peer review with missed reviewers)
+ */
+async function getReshuffleNeededCount(whereClause: any): Promise<number> {
+  const cacheKey = QueryCache.createKey('reshuffle_needed_count', whereClause)
+
+  return await withQueryCache(
+    cacheKey,
+    CacheTTL.ANALYTICS,
+    async () => {
+      // Count submissions that are under peer review and have at least one missed reviewer
+      const result = await prisma.$queryRaw<{ count: bigint }[]>`
+        SELECT COUNT(DISTINCT s.id) as count
+        FROM "Submission" s
+        INNER JOIN "ReviewAssignment" ra ON s.id = ra."submissionId"
+        WHERE s.status = 'UNDER_PEER_REVIEW'
+        AND ra.status = 'MISSED'
+        AND ra.deadline < NOW()
+      `
+      
+      return Number(result[0]?.count || 0)
     }
   )
 }
@@ -811,9 +838,13 @@ export async function bulkUpdateSubmissions(
           let legacyUpdated = 0
 
         if (regularIds.length > 0) {
+            const statusValue = normalized || 'FINALIZED' // Ensure we always have a valid status
             const update = await tx.submission.updateMany({
               where: { id: { in: regularIds } },
-              data: { status: normalized, updatedAt: timestamp }
+              data: { 
+                status: statusValue as any, 
+                updatedAt: timestamp 
+              }
             })
             regularUpdated = update.count
           }

@@ -139,7 +139,8 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
   // Stats state
   const [stats, setStats] = useState({
     statusCounts: {} as Record<string, number>,
-    totalSubmissions: 0
+    totalSubmissions: 0,
+    reshuffleNeeded: 0 // Add this for submissions under peer review that need reshuffling
   })
 
   // Quick Edit Modal State
@@ -706,15 +707,27 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
           </CardContent>
         </Card>
         {stats?.statusCounts && Object.entries(stats.statusCounts).map(([status, count]) => (
-          <Card key={status}>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold">
-                {count}
-              </div>
-              <div className="text-sm text-muted-foreground">{status}</div>
-            </CardContent>
-          </Card>
+          status !== 'AI_REVIEWED' ? (
+            <Card key={status}>
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold">
+                  {count}
+                </div>
+                <div className="text-sm text-muted-foreground">{status}</div>
+              </CardContent>
+            </Card>
+          ) : null
         ))}
+        
+        {/* Separate card for submissions that need reshuffling */}
+        <Card key="RESHUFFLE_NEEDED" className="border-yellow-200 bg-yellow-50">
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold text-yellow-600">
+              {stats?.reshuffleNeeded || 0}
+            </div>
+            <div className="text-sm text-yellow-700 font-medium">RESHUFFLE NEEDED</div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filters */}
@@ -932,7 +945,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
       </Card> */}
     
       {/* Bulk Reshuffle Modal */}
-          <Dialog open={bulkReshuffleModal.open} onOpenChange={(open) => !open && setBulkReshuffleModal(prev => ({ ...prev, open }))}>
+          <Dialog open={bulkReshuffleModal.open} onOpenChange={(open) => !open && setBulkReshuffleModal({ open: false, reason: '' })}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -970,7 +983,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
           <DialogFooter>
             <Button 
               variant="outline" 
-              onClick={() => setBulkReshuffleModal(prev => ({ ...prev, open: false, reason: '' }))}
+              onClick={() => setBulkReshuffleModal({ open: false, reason: '' })}
               disabled={bulkLoading}
             >
               Cancel
