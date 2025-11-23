@@ -1,3 +1,6 @@
+import { rankFeaturedEnhanced } from './featured-ranker-enhanced'
+import type { EnhancedScoreBreakdown } from './featured-ranker-enhanced'
+
 type Range = 'week' | 'month' | 'all'
 
 export type FeaturedInput = {
@@ -17,6 +20,12 @@ export type FeaturedInput = {
 
 export type ScoredFeatured = FeaturedInput & {
   score: number
+}
+
+// Extended type for enhanced ranking with breakdown
+export type ScoredFeaturedWithBreakdown = FeaturedInput & {
+  score: number
+  breakdown: EnhancedScoreBreakdown
 }
 
 function ageDays(iso: string): number {
@@ -91,16 +100,16 @@ export function computeFeaturedScoreBreakdown(item: FeaturedInput, range: Range)
 
 export function meetsMinimumThreshold(item: FeaturedInput, range: Range): boolean {
   const reviews = item.reviewCount ?? 0
-  if (range === 'week') return reviews >= 1 || item.origin === 'legacy'
-  if (range === 'month') return reviews >= 2 || item.origin === 'legacy'
-  return true
+  if (range === 'week') return reviews >= 3 && item.origin === 'submission'
+  if (range === 'month') return reviews >= 3 && item.origin === 'submission'
+  return true // All-time includes both regular and legacy submissions
 }
 
 export function rankFeatured(items: FeaturedInput[], range: Range, perAuthorCap = 1, perPlatformCap: number = Number.POSITIVE_INFINITY): ScoredFeatured[] {
   return rankFeaturedWithOptions(items, range, perAuthorCap, perPlatformCap)
 }
 
-export type RankerKind = 'baseline' | 'eb' | 'zscore' | 'conf'
+export type RankerKind = 'baseline' | 'eb' | 'zscore' | 'conf' | 'enhanced'
 
 export type RankerOptions = {
   ranker?: RankerKind
@@ -233,8 +242,8 @@ export function computeFeaturedScoreConfidence(
 }
 
 export function rankFeaturedWithOptions(
-  items: FeaturedInput[],
-  range: Range,
+  items: FeaturedInput[], 
+  range: Range, 
   perAuthorCap = 1,
   perPlatformCap: number = Number.POSITIVE_INFINITY,
   options: RankerOptions = {}
@@ -242,6 +251,14 @@ export function rankFeaturedWithOptions(
   // Default to EB with author boost if not specified
   const ranker: RankerKind = options.ranker || 'eb'
   const authorBoost = options.authorBoost ?? true
+  
+  // Use enhanced ranking for week and month if requested
+  if (ranker === 'enhanced' && (range === 'week' || range === 'month')) {
+    const enhancedResults = rankFeaturedEnhanced(items, range, perAuthorCap, perPlatformCap)
+    // Enhanced results already include breakdown, just cast to ensure type compatibility
+    return enhancedResults as ScoredFeatured[]
+  }
+  
   const eligible = items.filter((it) => meetsMinimumThreshold(it, range))
   if (DEBUG_AUTHOR) {
     const dbgAll = items.filter(isDebugItem)

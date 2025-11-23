@@ -1,25 +1,10 @@
-import { createAnonClient } from '@/lib/supabase-server'
-import { detectPlatform, normalizeUrl } from '@/lib/utils'
+import { createServiceClient } from '@/lib/supabase-server'
+import { detectPlatform, normalizeUrl, getWeekNumber, getWeekBoundaries } from '@/lib/utils'
 import { canFeatureUrl } from '@/lib/embed-policy'
 import { rankFeaturedWithOptions, type FeaturedInput, type ScoredFeatured, type RankerKind } from '@/lib/featured-ranker'
 import { getRedditSummary } from '@/lib/reddit-summary'
 
 export type FeaturedRange = 'week' | 'month' | 'all'
-
-function startOfWeekUTC(d = new Date()): Date {
-  // Compute Monday 00:00:00 UTC of the week containing d
-  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
-  const day = date.getUTCDay() || 7 // Sunday=0
-  if (day !== 1) date.setUTCDate(date.getUTCDate() - (day - 1))
-  date.setUTCHours(0, 0, 0, 0)
-  return date
-}
-
-function startOfMonthUTC(d = new Date()): Date {
-  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1))
-  date.setUTCHours(0, 0, 0, 0)
-  return date
-}
 
 function isSupported(url: string): boolean {
   return canFeatureUrl(url)
@@ -77,26 +62,78 @@ export async function getFeatured(
   limit = 24,
   opts?: { ranker?: RankerKind; authorBoost?: boolean; autoTune?: boolean }
 ): Promise<ScoredFeatured[]> {
-  const supabase = createAnonClient() as any
+  const supabase = createServiceClient() as any
 
   const now = new Date()
-  const from = range === 'week' ? startOfWeekUTC(now) : range === 'month' ? startOfMonthUTC(now) : null
+  let startDate: Date | null = null
+  
+  if (range === 'week') {
+    const currentWeek = getWeekNumber(now)
+    const year = now.getFullYear()
+    const boundaries = getWeekBoundaries(currentWeek, year)
+    startDate = boundaries.startDate
+    // Adjust for timezone - database seems to store local time, but we're comparing with UTC
+    // Add the timezone offset to align with database storage
+    const timezoneOffset = now.getTimezoneOffset() * 60000 // Convert to milliseconds
+    startDate = new Date(startDate.getTime() - timezoneOffset)
+    console.log('Featured: week range - currentWeek:', currentWeek, 'year:', year, 'startDate:', startDate?.toISOString(), 'timezoneOffset:', timezoneOffset/3600000, 'hours')
+    
+    // Debug: Log the actual query parameters
+    console.log('Featured: Query parameters - startDate ISO:', startDate?.toISOString())
+  } else if (range === 'month') {
+    startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+    startDate.setHours(0, 0, 0, 0)
+    // Adjust for timezone - database seems to store local time, but we're comparing with UTC
+    const timezoneOffset = now.getTimezoneOffset() * 60000 // Convert to milliseconds
+    startDate = new Date(startDate.getTime() - timezoneOffset)
+    console.log('Featured: month range - startDate:', startDate?.toISOString(), 'timezoneOffset:', timezoneOffset/3600000, 'hours')
+  }
 
   // Fetch Submissions: finalized only; require finalXp
+  console.log('Featured: Building Supabase query with parameters:')
+  console.log('  - Table: Submission')
+  console.log('  - Select: id,url,platform,userId,finalXp,aiXp,peerXp,reviewCount,consensusScore,createdAt,status')
+  console.log('  - Order: createdAt DESC')
+  console.log('  - Limit: 500')
+  console.log('  - startDate:', startDate?.toISOString())
+  
   let submissionsQuery = supabase
     .from('Submission')
     .select('id,url,platform,userId,finalXp,aiXp,peerXp,reviewCount,consensusScore,createdAt,status')
     .order('createdAt', { ascending: false })
-    .limit(500) // cap raw set; we’ll score and slice later
+    .limit(500) // cap raw set; we'll score and slice later
 
-  if (from) submissionsQuery = submissionsQuery.gte('createdAt', from.toISOString())
+  if (startDate) {
+    console.log('  - Adding filter: createdAt >=', startDate.toISOString())
+    submissionsQuery = submissionsQuery.gte('createdAt', startDate.toISOString())
+  }
 
   // Only finalized submissions
+  console.log('  - Adding filter: status = FINALIZED')
+  console.log('  - Adding filter: finalXp is not null')
   submissionsQuery = submissionsQuery.eq('status', 'FINALIZED').not('finalXp', 'is', null)
 
+  console.log('Featured: Executing Supabase query for range:', range, 'with startDate:', startDate?.toISOString())
   const { data: submissionsRaw, error: subErr } = await submissionsQuery
   if (subErr) {
     console.error('Featured: submission fetch error', subErr)
+    console.error('Featured: Supabase error details:', {
+      message: subErr.message,
+      status: subErr.status,
+      statusText: subErr.statusText,
+      body: subErr.body
+    })
+  } else {
+    console.log('Featured: submissions fetched:', submissionsRaw?.length || 0, 'items')
+    if (submissionsRaw && submissionsRaw.length > 0) {
+      console.log('Featured: First submission example:', {
+        id: submissionsRaw[0]?.id,
+        url: submissionsRaw[0]?.url,
+        createdAt: submissionsRaw[0]?.createdAt,
+        status: submissionsRaw[0]?.status,
+        finalXp: submissionsRaw[0]?.finalXp
+      })
+    }
   }
 
   const submissions: FeaturedInput[] = (submissionsRaw || [])
@@ -170,11 +207,11 @@ export async function getFeatured(
     .order('importedAt', { ascending: false })
     // .limit(50000)
 
-  if (from) {
-    // Filter by COALESCE(submittedAt, importedAt) >= from
+  if (startDate) {
+    // Filter by COALESCE(submittedAt, importedAt) >= startDate
     // Expressed via PostgREST OR with AND groups:
-    // (submittedAt not null AND submittedAt >= from) OR (submittedAt is null AND importedAt >= from)
-    const iso = from.toISOString()
+    // (submittedAt not null AND submittedAt >= startDate) OR (submittedAt is null AND importedAt >= startDate)
+    const iso = startDate.toISOString()
     legacyQuery = legacyQuery.or(`and(submittedAt.not.is.null,submittedAt.gte.${iso}),and(submittedAt.is.null,importedAt.gte.${iso})`)
   }
 
@@ -279,7 +316,14 @@ export async function getFeatured(
     console.log('[FeaturedDebug] merged matched', DEBUG_AUTHOR, dbg.length)
   }
 
-  const ranked = rankFeaturedWithOptions(merged, range, 1, 6, { ranker: opts?.ranker, authorBoost: opts?.authorBoost, autoTune: opts?.autoTune })
+  const ranked = rankFeaturedWithOptions(merged, range, 1, 6, { ranker: opts?.ranker, authorBoost: opts?.authorBoost, autoTune: opts?.autoTune }) as (ScoredFeatured & { breakdown?: any })[]
+  
+  // For enhanced ranker, ensure breakdown data is preserved
+  if (opts?.ranker === 'enhanced' && range !== 'all') {
+    // The enhanced ranker returns items with breakdown property, but we need to make sure it's preserved
+    // through the ranking process. This is handled in the enhanced ranker implementation.
+    // console.log('[FeaturedService] Enhanced ranking used, breakdown data preserved for', ranked.length, 'items')
+  }
   if (DEBUG_AUTHOR) {
     const dbg = ranked.filter(isDebug)
     console.log('[FeaturedDebug] ranked (before availability) matched', DEBUG_AUTHOR, dbg.length)

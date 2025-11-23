@@ -9,7 +9,7 @@ import type { ScoredFeatured } from '@/lib/featured-ranker'
 import { computeFeaturedScoreBreakdown, computeAuthorMultipliers } from '@/lib/featured-ranker'
 
 type Range = 'week' | 'month' | 'all'
-type Ranker = 'baseline' | 'eb' | 'zscore' | 'conf'
+type Ranker = 'baseline' | 'eb' | 'zscore' | 'conf' | 'enhanced'
 
 function fmt(n: number) {
   if (!isFinite(n)) return '0'
@@ -55,10 +55,29 @@ function computeEbBreakdown(items: ScoredFeatured[], item: ScoredFeatured, range
   return { finalXpAdj, consensus, consBonus, reviewsMult, age, HL: params.HL, score }
 }
 
+// Enhanced scoring breakdown for display
+function computeEnhancedBreakdown(item: any, range: Range) {
+  if (!item.breakdown) return null
+  
+  const bd = item.breakdown
+  const emoji = { basic: '⚪', average: '🔵', awesome: '🔥' }
+  const tierEmoji = emoji[bd.tierName as keyof typeof emoji] || '⚪'
+  
+  return {
+    formula: `(${fmt(bd.baseScore)} × ${fmt(bd.tierMultiplier)}${tierEmoji} + 20) × ${fmt(bd.platformBonus)} × ${fmt(bd.decay)}`,
+    components: {
+      baseScore: `${fmt(bd.baseScore)} (final XP)`,
+      tier: `${tierEmoji} ${bd.tierName.toUpperCase()} tier (${fmt(bd.tierMultiplier)}×)`,
+      platform: `${bd.platformName} bonus (${fmt(bd.platformBonus)}×)`,
+      age: `${fmt(bd.ageDays)} days (${fmt(bd.decay)} decay)`
+    }
+  }
+}
+
 export default function FeaturedBrowser() {
   const [range, setRange] = useState<Range>('week')
-  // Default to EB (shrinkage) ranker with author boost
-  const [ranker, setRanker] = useState<Ranker>('eb')
+  // Default to enhanced ranker for all ranges
+  const [ranker, setRanker] = useState<Ranker>('enhanced')
   const [authorBoost, setAuthorBoost] = useState<boolean>(true)
   const [autoTune, setAutoTune] = useState<boolean>(false)
   const [data, setData] = useState<Record<Range, ScoredFeatured[]>>({ week: [], month: [], all: [] })
@@ -66,7 +85,7 @@ export default function FeaturedBrowser() {
   const [error, setError] = useState<string | null>(null)
 
   const fetchRange = async (r: Range, rk: Ranker, ab: boolean, at: boolean) => {
-    const url = `/api/featured?range=${r}&limit=24&ranker=${rk}&authorBoost=${ab}&autoTune=${at}`
+    const url = `/api/featured?range=${r}&limit=24&ranker=${rk}`
     const res = await fetch(url, { cache: 'no-store' })
     if (!res.ok) throw new Error('fetch failed')
     const json = await res.json()
@@ -100,7 +119,42 @@ export default function FeaturedBrowser() {
       <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5 gap-6">
         {filtered.map((item) => (
           <FeaturedCard key={item.id} url={item.url}>
-            {ranker === 'baseline' ? (
+            {ranker === 'enhanced' && r !== 'all' ? (
+              (() => {
+                const breakdown = computeEnhancedBreakdown(item, r)
+                const mult = authorBoost ? (authorMultMap.get(item.authorKey || item.userId || `legacy:${item.id}`) ?? 1) : 1
+                const score = fmt(item.score * mult)
+                
+                return (
+                  <>
+                    {/* {breakdown && (
+                      <div className="w-full px-3 py-2 border-b bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900 dark:to-purple-900 text-[10px] leading-snug font-mono text-blue-900 dark:text-blue-100 border-blue-200">
+                        <div className="font-semibold text-[9px] mb-1 text-blue-800 dark:text-blue-200">
+                          🔢 Enhanced Scoring Formula:
+                        </div>
+                        <div className="text-[9px] mb-1 font-mono bg-white/50 dark:bg-black/50 px-2 py-1 rounded">
+                          {breakdown.formula} = {score}
+                        </div>
+                        <div className="grid grid-cols-2 gap-1 text-[8px]">
+                          <div>
+                            <span className="font-semibold">📊 Base:</span> {breakdown.components.baseScore}
+                          </div>
+                          <div>
+                            <span className="font-semibold">🏆 Tier:</span> {breakdown.components.tier}
+                          </div>
+                          <div>
+                            <span className="font-semibold">🌐 Platform:</span> {breakdown.components.platform}
+                          </div>
+                          <div className="col-span-2">
+                            <span className="font-semibold">⏰ Age:</span> {breakdown.components.age}
+                          </div>
+                        </div>
+                      </div>
+                    )} */}
+                  </>
+                )
+              })()
+            ) : ranker === 'baseline' ? (
               (() => {
                 const b = computeFeaturedScoreBreakdown(item, r)
                 const base = fmt(b.base)
@@ -111,15 +165,14 @@ export default function FeaturedBrowser() {
                 const mult = authorBoost ? (authorMultMap.get(item.authorKey || item.userId || `legacy:${item.id}`) ?? 1) : 1
                 const score = fmt(b.score * mult)
                 return (
-                  <>
-                    {/*
-                    <div className="w-full px-3 py-1.5 border-b bg-muted/40 text-[10px] leading-snug font-mono text-muted-foreground">
-                      <div>score = (finalXp + max(0, consensus)*2) * (1 + 0.3*log1p(reviews)) * exp(-age/HL){authorBoost ? ' * authorMult' : ''}</div>
-                      <div>score = (({base} + {cons}*2) * (1 + 0.3*{logTerm})) * exp(-{age}/{hl}){authorBoost ? ` * ${fmt(mult)}` : ''} = {score}</div>
-                    </div>
-                    */}
-                  </>
+                  <></>
                 )
+                /*return (
+                  <div className="w-full px-3 py-1.5 border-b bg-muted/40 text-[10px] leading-snug font-mono text-muted-foreground">
+                    <div>score = (finalXp + max(0, consensus)*2) * (1 + 0.3*log1p(reviews)) * exp(-age/HL){authorBoost ? ' * authorMult' : ''}</div>
+                    <div>score = (({base} + {cons}*2) * (1 + 0.3*{logTerm})) * exp(-{age}/{hl}){authorBoost ? ` * ${fmt(mult)}` : ''} = {score}</div>
+                  </div>
+                )*/
               })()
             ) : (
               (() => {
@@ -127,16 +180,12 @@ export default function FeaturedBrowser() {
                   const eb = computeEbBreakdown(filtered, item, r)
                   const mult = authorBoost ? (authorMultMap.get(item.authorKey || item.userId || `legacy:${item.id}`) ?? 1) : 1
                   const finalScore = fmt(eb.score * mult)
-                  return (
-                    <>
-                      {/*
-                      <div className="w-full px-3 py-1.5 border-b bg-muted/40 text-[10px] leading-snug font-mono text-muted-foreground">
-                        <div>score = max(0, xpEB + gamma*clamp(consensus)) * (1 + beta*min(log1p(n), rcap)) * exp(-age/HL){authorBoost ? ' * authorMult' : ''}</div>
-                        <div>score = max(0, {fmt(eb.finalXpAdj)} + {fmt(eb.consBonus)}) * {fmt(eb.reviewsMult)} * exp(-{fmt(eb.age)}/{fmt(eb.HL)}){authorBoost ? ` * ${fmt(mult)}` : ''} = {finalScore}</div>
-                      </div>
-                      */}
-                    </>
-                  )
+                  // return (
+                  //   <div className="w-full px-3 py-1.5 border-b bg-muted/40 text-[10px] leading-snug font-mono text-muted-foreground">
+                  //     <div>score = max(0, xpEB + gamma*clamp(consensus)) * (1 + beta*min(log1p(n), rcap)) * exp(-age/HL){authorBoost ? ' * authorMult' : ''}</div>
+                  //     <div>score = max(0, {fmt(eb.finalXpAdj)} + {fmt(eb.consBonus)}) * {fmt(eb.reviewsMult)} * exp(-{fmt(eb.age)}/{fmt(eb.HL)}){authorBoost ? ` * ${fmt(mult)}` : ''} = {finalScore}</div>
+                  //   </div>
+                  // )
                 }
                 if (ranker === 'zscore') {
                   const xs = filtered.map((it) => it.finalXp ?? 0).sort((a,b)=>a-b)
@@ -157,16 +206,12 @@ export default function FeaturedBrowser() {
                   const baseScore = hotness / Math.pow(ageH + 2, tau)
                   const mult = authorBoost ? (authorMultMap.get(item.authorKey || item.userId || `legacy:${item.id}`) ?? 1) : 1
                   const finalScore = fmt(baseScore * mult)
-                  return (
-                    <>
-                      {/*
-                      <div className="w-full px-3 py-1.5 border-b bg-muted/40 text-[10px] leading-snug font-mono text-muted-foreground">
-                        <div>score = max(0, z) * (1 + gamma*cons_norm) * (1 + beta*log1p(n)) / (ageHours+2)^tau{authorBoost ? ' * authorMult' : ''}</div>
-                        <div>score = max(0, {fmt(z)}) * {fmt(consMult)} * {fmt(reviewsMult)} / ({fmt(ageH)}+2)^{tau}{authorBoost ? ` * ${fmt(mult)}` : ''} = {finalScore}</div>
-                      </div>
-                      */}
-                    </>
-                  )
+                  // return (
+                  //   <div className="w-full px-3 py-1.5 border-b bg-muted/40 text-[10px] leading-snug font-mono text-muted-foreground">
+                  //     <div>score = max(0, z) * (1 + gamma*cons_norm) * (1 + beta*log1p(n)) / (ageHours+2)^tau{authorBoost ? ' * authorMult' : ''}</div>
+                  //     <div>score = max(0, {fmt(z)}) * {fmt(consMult)} * {fmt(reviewsMult)} / ({fmt(ageH)}+2)^{tau}{authorBoost ? ` * ${fmt(mult)}` : ''} = {finalScore}</div>
+                  //   </div>
+                  // )
                 }
                 if (ranker === 'conf') {
                   const xs = filtered.map((it) => it.finalXp ?? 0)
@@ -184,16 +229,12 @@ export default function FeaturedBrowser() {
                   const baseScore = Math.max(0, xpConf + consAdj) * decay
                   const mult = authorBoost ? (authorMultMap.get(item.authorKey || item.userId || `legacy:${item.id}`) ?? 1) : 1
                   const finalScore = fmt(baseScore * mult)
-                  return (
-                    <>
-                      {/*
-                      <div className="w-full px-3 py-1.5 border-b bg-muted/40 text-[10px] leading-snug font-mono text-muted-foreground">
-                        <div>score = max(0, xp_conf + gamma*conf*consensus) * exp(-age/HL){authorBoost ? ' * authorMult' : ''}</div>
-                        <div>score = max(0, {fmt(xpConf)} + {fmt(consAdj)}) * exp(-{fmt(age)}/{HL}){authorBoost ? ` * ${fmt(mult)}` : ''} = {finalScore}</div>
-                      </div>
-                      */}
-                    </>
-                  )
+                  // return (
+                  //   <div className="w-full px-3 py-1.5 border-b bg-muted/40 text-[10px] leading-snug font-mono text-muted-foreground">
+                  //     <div>score = max(0, xp_conf + gamma*conf*consensus) * exp(-age/HL){authorBoost ? ' * authorMult' : ''}</div>
+                  //     <div>score = max(0, {fmt(xpConf)} + {fmt(consAdj)}) * exp(-{fmt(age)}/{HL}){authorBoost ? ` * ${fmt(mult)}` : ''} = {finalScore}</div>
+                  //   </div>
+                  // )
                 }
                 return null
               })()
@@ -208,7 +249,6 @@ export default function FeaturedBrowser() {
   return (
     <div className="w-full space-y-6">
       <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-        {/*
         <label className="inline-flex items-center gap-2">
           Ranker:
           <select
@@ -216,14 +256,14 @@ export default function FeaturedBrowser() {
             onChange={(e) => setRanker(e.target.value as Ranker)}
             className="h-8 rounded-md border bg-background px-2 py-1 text-sm"
           >
+            <option value="enhanced">Enhanced</option>
             <option value="baseline">Baseline</option>
             <option value="eb">EB (shrinkage)</option>
             <option value="zscore">Z-Score (trending)</option>
             <option value="conf">Confidence-weighted</option>
           </select>
         </label>
-        */}
-        {/*
+        {/* Hidden per user request
         <label className="inline-flex items-center gap-2">
           <input type="checkbox" checked={authorBoost} onChange={(e) => setAuthorBoost(e.target.checked)} />
           Author boost
@@ -234,6 +274,22 @@ export default function FeaturedBrowser() {
         </label>
         */}
       </div>
+      
+      {/* {ranker === 'enhanced' && (
+        <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900 dark:to-purple-900 border border-blue-200 rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">🔢 Enhanced Scoring System</h3>
+          <p className="text-xs text-blue-700 dark:text-blue-200 mb-2">
+            <strong>Formula:</strong> Final Score = (Base Score × Tier Multiplier + 20) × Platform Bonus × Age Decay
+          </p>
+          <div className="text-xs text-blue-600 dark:text-blue-300">
+            <div><span className="font-semibold">📊 Base Score:</span> finalXp (peer-reviewed consensus XP)</div>
+            <div><span className="font-semibold">🏆 Tier Multiplier:</span> Quality bonus based on XP thresholds (⚪ Basic: 1.0x, 🔵 Average: 1.15x, 🔥 Awesome: 1.3x)</div>
+            <div><span className="font-semibold">🌐 Platform Bonus:</span> Diversity incentive using steeper curve (1.0 + 1.0/sqrt(count + 1))</div>
+            <div><span className="font-semibold">⏰ Age Decay:</span> Exponential decay (half-life: 7 days for week, 21 for month)</div>
+          </div>
+        </div>
+      )} */}
+      
       <Tabs defaultValue="week" value={range} onValueChange={(v) => setRange(v as Range)} className="w-full space-y-6">
         <TabsList className="flex-wrap gap-2">
           <TabsTrigger value="week">This Week</TabsTrigger>

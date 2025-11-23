@@ -12,7 +12,7 @@ export const GET = withPublicOptimization(async (request: Request) => {
   const authorBoost = (searchParams.get('authorBoost') || 'false').toLowerCase() === 'true'
   const autoTune = (searchParams.get('autoTune') || 'false').toLowerCase() === 'true'
 
-  const ranker = ['baseline', 'eb', 'zscore', 'conf'].includes(rankerParam) ? (rankerParam as any) : 'baseline'
+  const ranker = ['baseline', 'eb', 'zscore', 'conf', 'enhanced'].includes(rankerParam) ? (rankerParam as any) : 'baseline'
 
   if (!['week', 'month', 'all'].includes(range)) {
     return NextResponse.json({ success: false, error: 'Invalid range' }, { status: 400 })
