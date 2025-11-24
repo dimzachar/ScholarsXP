@@ -7,7 +7,7 @@ import { withErrorHandling, createSuccessResponse } from '@/lib/api-middleware'
 import { multiLayerCache } from '@/lib/cache/enhanced-cache'
 import { withPublicOptimization } from '@/middleware/api-optimization'
 
-const CACHE_VERSION = 'v3'
+const CACHE_VERSION = 'v5' // Bumped for Prisma submission count fix
 
 export const GET = withPublicOptimization(withErrorHandling(async (request: NextRequest) => {
   const { searchParams } = new URL(request.url)
@@ -76,13 +76,18 @@ async function fetchLeaderboardFromDatabase(currentWeek: number, limit: number, 
     const weeklyPromises = await Promise.all([
       weeklyStatsService.findLeaderboard(currentWeek, limit, type === 'weekly' ? offset : 0),
       weeklyStatsService.countByWeek(currentWeek),
-      supabaseClient
-        .from('Submission')
-        .select('userId')
-        .eq('weekNumber', currentWeek),
-      supabaseClient
-        .from('LegacySubmission')
-        .select('discordHandle'),
+      // Use Prisma for accurate current week submissions
+      prisma.submission.findMany({
+        where: { weekNumber: currentWeek },
+        select: { userId: true }
+      }),
+      // Use Prisma for legacy submissions with date filtering
+      prisma.$queryRaw`
+        SELECT "discordHandle" 
+        FROM "LegacySubmission"
+        WHERE COALESCE("submittedAt", "importedAt") >= ${startDate}
+        AND COALESCE("submittedAt", "importedAt") <= ${endDate}
+      ` as Promise<Array<{ discordHandle: string | null }>>,
       prisma.peerReview.groupBy({
         by: ['reviewerId'],
         where: {
@@ -162,16 +167,23 @@ async function fetchLeaderboardFromDatabase(currentWeek: number, limit: number, 
     }, {} as Record<string, number>)
   }
 
-  const submissionCountsByUser = weeklySubmissionCounts.data?.reduce((acc, sub) => {
-    acc[sub.userId] = (acc[sub.userId] || 0) + 1
-    return acc
-  }, {} as Record<string, number>) || {}
+  // weeklySubmissionCounts and weeklyLegacySubmissionCounts are now arrays from Prisma (not {data: []})
+  const submissionCountsByUser = Array.isArray(weeklySubmissionCounts)
+    ? weeklySubmissionCounts.reduce((acc: any, sub: any) => {
+      acc[sub.userId] = (acc[sub.userId] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+    : {}
 
-  // Add legacy submissions by discord handle (since legacy data doesn't have userId)
-  const legacySubmissionsByUsername = weeklyLegacySubmissionCounts.data?.reduce((acc, sub) => {
-    acc[sub.discordHandle] = (acc[sub.discordHandle] || 0) + 1
-    return acc
-  }, {} as Record<string, number>) || {}
+  // Legacy submissions - also an array from Prisma raw query
+  const legacySubmissionsByUsername = Array.isArray(weeklyLegacySubmissionCounts)
+    ? weeklyLegacySubmissionCounts.reduce((acc: any, sub: any) => {
+      if (sub.discordHandle) {
+        acc[sub.discordHandle] = (acc[sub.discordHandle] || 0) + 1
+      }
+      return acc
+    }, {} as Record<string, number>)
+    : {}
 
   // Transform weekly data for frontend
   const topPerformers = weeklyStats.map((stat, index) => ({

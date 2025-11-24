@@ -4,7 +4,7 @@ import { withAdminOptimization } from '@/middleware/api-optimization'
 import { getOptimizedAdminSubmissions, bulkUpdateSubmissions } from '@/lib/queries/admin-submissions-optimized'
 import { parsePaginationParams } from '@/lib/pagination'
 import { prisma } from '@/lib/prisma'
-import { getWeekNumber } from '@/lib/utils'
+import { getWeekNumber, recalculateCurrentWeekXp } from '@/lib/utils'
 
 const REVIEWER_COUNT_ENV_VALUES = [
   process.env.MIN_REVIEWERS_REQUIRED,
@@ -329,14 +329,14 @@ const originalGetHandler = withPermission('admin_access')(async (request: Authen
       const platformLower = (submission.platform || '').toLowerCase()
       const heuristicTaskType = submission.taskTypes?.[0]
         || (platformLower.includes('twitter') || platformLower.includes('x.com') ? 'A'
-            : (platformLower.includes('reddit') || platformLower.includes('notion') || platformLower.includes('medium') ? 'B' : 'Unknown'))
+          : (platformLower.includes('reddit') || platformLower.includes('notion') || platformLower.includes('medium') ? 'B' : 'Unknown'))
       const hasPeerReviewsArray = Array.isArray(submission.peerReviews)
       const peerReviewsArray = hasPeerReviewsArray ? submission.peerReviews : []
       const peerReviewCount = hasPeerReviewsArray
         ? peerReviewsArray.length
         : submission.completedReviewCount
-          ?? submission.reviewCount
-          ?? 0
+        ?? submission.reviewCount
+        ?? 0
       const assignmentCount = submission.reviewAssignments?.filter((a: any) => a.status !== 'REASSIGNED')?.length
         ?? submission._count?.reviewAssignments
         ?? submission.reviewAssignmentsCount
@@ -479,12 +479,16 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
         if (submission) {
           const xpDifference = finalXp - (submission.finalXp || 0)
 
-          await prisma.user.update({
-            where: { id: submission.userId },
-            data: {
-              totalXp: { increment: xpDifference },
-              currentWeekXp: { increment: xpDifference }
-            }
+          // Use transaction to ensure consistency
+          await prisma.$transaction(async (tx) => {
+            const recalculatedWeekXp = await recalculateCurrentWeekXp(tx, submission.userId)
+            await tx.user.update({
+              where: { id: submission.userId },
+              data: {
+                totalXp: { increment: xpDifference },
+                currentWeekXp: recalculatedWeekXp
+              }
+            })
           })
         }
       }
@@ -539,7 +543,7 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
             }
           })
         }
-      } catch {}
+      } catch { }
 
       // Invalidate cache for lists after single update too
       try {

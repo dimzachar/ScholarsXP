@@ -157,3 +157,24 @@ export function getWeekBoundaries(weekNumber: number, year: number): { startDate
   return { startDate, endDate }
 }
 
+/**
+ * Recalculate currentWeekXp from transaction history
+ * Use this instead of increment/decrement to ensure accuracy
+ * 
+ * @param tx - Prisma transaction client
+ * @param userId - User ID to recalculate for
+ * @returns The sum of all XP transactions for the current week
+ */
+export async function recalculateCurrentWeekXp(tx: any, userId: string): Promise<number> {
+  const currentWeek = getWeekNumber(new Date())
+
+  // Use raw query to avoid enum errors and ensure accurate calculation
+  const transactions: Array<{ amount: number }> = await tx.$queryRaw`
+    SELECT amount FROM "XpTransaction"
+    WHERE "userId" = ${userId}::uuid
+    AND "weekNumber" = ${currentWeek}
+  `
+
+  return transactions.reduce((sum, t) => sum + t.amount, 0)
+}
+

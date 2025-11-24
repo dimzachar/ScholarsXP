@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { xpAnalyticsService } from './xp-analytics'
 import { prisma } from '@/lib/prisma'
-import { getWeekNumber, getWeekBoundaries } from '@/lib/utils'
+import { getWeekNumber, getWeekBoundaries, recalculateCurrentWeekXp } from '@/lib/utils'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -214,7 +214,7 @@ export class ConsensusCalculatorService {
 
         // Calculate average quality rating
         const qualityRatings = historicalReviews.filter(r => r.qualityRating).map(r => r.qualityRating)
-        const averageQuality = qualityRatings.length > 0 
+        const averageQuality = qualityRatings.length > 0
           ? qualityRatings.reduce((sum, rating) => sum + rating, 0) / qualityRatings.length
           : 3.5
 
@@ -222,7 +222,7 @@ export class ConsensusCalculatorService {
         const lateReviews = historicalReviews.filter(r => r.isLate).length
         const timelinessScore = 1 - (lateReviews / historicalReviews.length)
         const qualityScore = (averageQuality - 1) / 4 // Normalize to 0-1
-        
+
         const reliabilityScore = (timelinessScore * 0.3) + (qualityScore * 0.7)
 
         reliabilities.set(reviewerId, {
@@ -264,7 +264,7 @@ export class ConsensusCalculatorService {
     for (let i = 0; i < scores.length; i++) {
       const score = scores[i]
       const zScore = Math.abs((score - mean) / standardDeviation)
-      
+
       if (zScore > this.OUTLIER_THRESHOLD) {
         outliers.push({
           reviewId: reviews[i].id,
@@ -299,7 +299,7 @@ export class ConsensusCalculatorService {
     for (const review of validReviews) {
       const reliability = reliabilities.get(review.reviewerId)
       const weight = reliability ? reliability.reliabilityScore : 0.5
-      
+
       weightedSum += review.xpScore * weight
       totalWeight += weight
     }
@@ -427,12 +427,13 @@ export class ConsensusCalculatorService {
           }
         })
 
-        // 4. Update user's total XP (atomic increment)
+        // 4. Update user's total XP and recalculate current week XP
+        const recalculatedWeekXp = await recalculateCurrentWeekXp(tx, submission.userId)
         await tx.user.update({
           where: { id: submission.userId },
           data: {
             totalXp: { increment: result.finalXp },
-            currentWeekXp: { increment: result.finalXp }
+            currentWeekXp: recalculatedWeekXp
           }
         })
 
@@ -459,7 +460,7 @@ export class ConsensusCalculatorService {
 
         // 6. Create audit trail - Check for existing transaction to prevent duplicates using raw SQL
         console.log(`🔍 Checking for existing transaction for submission ${submissionId} using raw SQL...`)
-        
+
         // Use raw SQL to avoid Prisma enum comparison issues
         // Cast UUID parameters properly to avoid type mismatch
         const existingTransactions: Array<{ id: string }> = await tx.$queryRaw`
@@ -468,9 +469,9 @@ export class ConsensusCalculatorService {
           AND "sourceId" = ${submissionId}::uuid
           AND type = 'SUBMISSION_REWARD'
         `
-        
+
         const existingTransaction = existingTransactions.length > 0 ? { id: existingTransactions[0].id } : null
-        
+
         console.log(`🔍 Existing transaction check result:`, existingTransaction ? 'FOUND' : 'NOT FOUND')
 
         if (!existingTransaction) {

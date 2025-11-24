@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client'
 import { QueryCache, CacheTTL, withQueryCache } from '../cache/query-cache'
 import { PaginationParams, PaginationHelper } from '../pagination'
 import { AdminSubmissionsResponseDTO, AdminSubmissionDTO, ResponseTransformer } from '@/types/api-responses'
-import { getWeekNumber } from '@/lib/utils'
+import { getWeekNumber, recalculateCurrentWeekXp } from '@/lib/utils'
 
 /**
  * TypeScript interface for legacy submissions with user data
@@ -260,7 +260,7 @@ export async function getOptimizedAdminSubmissions(
     CacheTTL.SUBMISSIONS_LIST,
     async () => {
       const startTime = Date.now()
-      
+
       // Build optimized query using pagination helper
       const cleanedFilters = cleanFilters(filters)
       console.log('Cleaned filters:', cleanedFilters)
@@ -304,10 +304,10 @@ export async function getOptimizedAdminSubmissions(
       // Combine regular and legacy submissions
       const submissions = [...regularSubmissions, ...legacySubmissions]
       const totalCount = regularCount + legacyCount
-      
+
       const executionTime = Date.now() - startTime
       console.log(`⚡ Optimized admin submissions completed in ${executionTime}ms`)
-      
+
       return {
         submissions: submissions.map(ResponseTransformer.toAdminSubmissionDTO),
         pagination: ResponseTransformer.toPaginationDTO(pagination.page, pagination.limit, totalCount),
@@ -324,7 +324,7 @@ export async function getOptimizedAdminSubmissions(
  */
 function cleanFilters(filters: any): Record<string, any> {
   const cleaned: Record<string, any> = {}
-  
+
   Object.entries(filters).forEach(([key, value]) => {
     if (value !== null && value !== undefined && value !== '') {
       switch (key) {
@@ -340,7 +340,7 @@ function cleanFilters(filters: any): Record<string, any> {
       }
     }
   })
-  
+
   return cleaned
 }
 
@@ -420,12 +420,12 @@ async function getOptimizedLegacySubmissions(query: any, filters: any = {}) {
 
   const select = supportsAdminFields
     ? {
-        ...baseSelect,
-        adminStatus: true,
-        adminNotes: true,
-        adminUpdatedAt: true,
-        adminUpdatedBy: true
-      }
+      ...baseSelect,
+      adminStatus: true,
+      adminNotes: true,
+      adminUpdatedAt: true,
+      adminUpdatedBy: true
+    }
     : baseSelect
 
   type LegacyRecord = {
@@ -775,7 +775,7 @@ async function getReshuffleNeededCount(whereClause: any): Promise<number> {
         AND ra.status = 'MISSED'
         AND ra.deadline < NOW()
       `
-      
+
       return Number(result[0]?.count || 0)
     }
   )
@@ -797,10 +797,10 @@ export async function bulkUpdateSubmissions(
   reshuffleResults?: Array<{ submissionId: string; missedReviewers: string[]; newAssignments: number }>;
 }> {
   const startTime = Date.now()
-  
+
   try {
     let result: any
-    
+
     switch (action) {
       case 'updateStatus': {
         if (!data?.status) {
@@ -837,13 +837,13 @@ export async function bulkUpdateSubmissions(
           let regularUpdated = 0
           let legacyUpdated = 0
 
-        if (regularIds.length > 0) {
+          if (regularIds.length > 0) {
             const statusValue = normalized || 'FINALIZED' // Ensure we always have a valid status
             const update = await tx.submission.updateMany({
               where: { id: { in: regularIds } },
-              data: { 
-                status: statusValue as any, 
-                updatedAt: timestamp 
+              data: {
+                status: statusValue as any,
+                updatedAt: timestamp
               }
             })
             regularUpdated = update.count
@@ -978,12 +978,13 @@ export async function bulkUpdateSubmissions(
             })
 
             if (xpDifference !== 0) {
+              const recalculatedWeekXp = await recalculateCurrentWeekXp(tx, submission.userId)
               await Promise.all([
                 tx.user.update({
                   where: { id: submission.userId },
                   data: {
                     totalXp: { increment: xpDifference },
-                    currentWeekXp: { increment: xpDifference }
+                    currentWeekXp: recalculatedWeekXp
                   }
                 }),
                 tx.xpTransaction.create({
@@ -1063,12 +1064,13 @@ export async function bulkUpdateSubmissions(
             }
 
             if (linkedUserId && xpDifference !== 0) {
+              const recalculatedWeekXp = await recalculateCurrentWeekXp(tx, linkedUserId)
               await Promise.all([
                 tx.user.update({
                   where: { id: linkedUserId },
                   data: {
                     totalXp: { increment: xpDifference },
-                    currentWeekXp: { increment: xpDifference }
+                    currentWeekXp: recalculatedWeekXp
                   }
                 }),
                 tx.xpTransaction.create({
@@ -1132,16 +1134,16 @@ export async function bulkUpdateSubmissions(
           result.message = `Updated XP for ${parts.join(' and ')} submissions`
         }
         break
-        
+
       case 'bulkReshuffle': {
         // Bulk reshuffle for submissions under peer review status
         // This will reshuffle all missed/inactive reviewers across all selected submissions
         const timestamp = new Date()
         const supportsAdminFields = await supportsLegacyAdminFields()
-        
+
         // First, get submissions and prepare reshuffle data
         const submissions = await prisma.submission.findMany({
-          where: { 
+          where: {
             id: { in: submissionIds },
             status: 'UNDER_PEER_REVIEW'
           },
@@ -1172,7 +1174,7 @@ export async function bulkUpdateSubmissions(
           }
 
           const missedReviewerIds = submission.reviewAssignments.map(ra => ra.reviewerId)
-          
+
           try {
             // Process each submission in its own small transaction
             await prisma.$transaction(async (tx) => {
@@ -1192,7 +1194,7 @@ export async function bulkUpdateSubmissions(
 
             // Get new reviewers excluding the missed ones (outside transaction)
             console.log(`🔄 Attempting to assign new reviewers for submission ${submission.id}, excluding:`, missedReviewerIds)
-            
+
             const assignmentResult = await reviewerPoolService.assignReviewers(
               submission.id,
               submission.userId,
@@ -1212,13 +1214,13 @@ export async function bulkUpdateSubmissions(
             if (assignmentResult.success && assignmentResult.assignedReviewers && assignmentResult.assignedReviewers.length > 0) {
               reshuffledCount++
               const newReviewerIds = assignmentResult.assignedReviewers.map(r => r.id)
-              
+
               // Update submission review count to reflect new assignments
               await prisma.submission.update({
                 where: { id: submission.id },
                 data: { reviewCount: assignmentResult.assignedReviewers.length }
               })
-              
+
               reshuffleResults.push({
                 submissionId: submission.id,
                 missedReviewers: missedReviewerIds,
@@ -1231,7 +1233,7 @@ export async function bulkUpdateSubmissions(
                 missedReviewerIds: missedReviewerIds,
                 newReviewerIds: newReviewerIds
               })
-              
+
               console.log(`✅ Successfully reassigned ${assignmentResult.assignedReviewers.length} reviewers for submission ${submission.id}`)
             } else {
               console.warn(`⚠️ Failed to assign new reviewers for submission ${submission.id}:`, {
@@ -1300,7 +1302,7 @@ export async function bulkUpdateSubmissions(
           reshuffleResults,
           message: `Successfully reshuffled ${reshuffledCount} submissions with ${totalMissedReviewers} missed reviewers`
         }
-        
+
         break
       }
 
@@ -1328,11 +1330,12 @@ export async function bulkUpdateSubmissions(
           for (const sub of submissions) {
             const awarded = sub.finalXp || sub.aiXp || 0
             if (awarded !== 0) {
+              const recalculatedWeekXp = await recalculateCurrentWeekXp(tx, sub.userId)
               await tx.user.update({
                 where: { id: sub.userId },
                 data: {
                   totalXp: { decrement: awarded },
-                  currentWeekXp: { decrement: awarded }
+                  currentWeekXp: recalculatedWeekXp
                 }
               })
             }
@@ -1358,11 +1361,12 @@ export async function bulkUpdateSubmissions(
             }
 
             if (linkedUserId && awarded !== 0) {
+              const recalculatedWeekXp = await recalculateCurrentWeekXp(tx, linkedUserId)
               await tx.user.update({
                 where: { id: linkedUserId },
                 data: {
                   totalXp: { decrement: awarded },
-                  currentWeekXp: { decrement: awarded }
+                  currentWeekXp: recalculatedWeekXp
                 }
               })
             } else if (!linkedUserId && awarded !== 0) {
@@ -1393,7 +1397,7 @@ export async function bulkUpdateSubmissions(
                     }
                   }
                 })
-              } catch {}
+              } catch { }
             }
 
             for (const legacy of legacySubmissions) {
@@ -1411,7 +1415,7 @@ export async function bulkUpdateSubmissions(
                     }
                   }
                 })
-              } catch {}
+              } catch { }
             }
           }
 
@@ -1446,19 +1450,19 @@ export async function bulkUpdateSubmissions(
       default:
         throw new Error(`Unknown action: ${action}`)
     }
-    
+
     const executionTime = Date.now() - startTime
     console.log(`⚡ Bulk ${action} completed in ${executionTime}ms for ${result.count} submissions`)
-    
+
     // Invalidate related caches
     await invalidateSubmissionCaches()
-    
+
     return {
       success: true,
       count: result.count,
       message: result.message || `Successfully ${action} ${result.count} submissions`
     }
-    
+
   } catch (error) {
     console.error(`Bulk ${action} error:`, error)
     return {
@@ -1493,7 +1497,7 @@ async function invalidateSubmissionCaches(): Promise<void> {
  */
 export async function getOptimizedSubmissionDetails(submissionId: string) {
   const cacheKey = QueryCache.createKey('submission_details', { submissionId })
-  
+
   return await withQueryCache(
     cacheKey,
     CacheTTL.SUBMISSION_DETAILS,
@@ -1547,11 +1551,11 @@ export async function getOptimizedSubmissionDetails(submissionId: string) {
           }
         }
       })
-      
+
       if (!submission) {
         throw new Error('Submission not found')
       }
-      
+
       // Calculate metrics
       const activeAssignments = submission.reviewAssignments.filter((a: any) => a.status !== 'REASSIGNED')
       const metrics = {
@@ -1568,7 +1572,7 @@ export async function getOptimizedSubmissionDetails(submissionId: string) {
           ).length
         }
       }
-      
+
       return {
         submission,
         metrics
@@ -1589,37 +1593,37 @@ export class AdminSubmissionsPerformanceMonitor {
     cacheHits: 0,
     cacheMisses: 0
   }
-  
+
   static recordQuery(executionTime: number, cacheHit: boolean, isBulkOperation: boolean = false) {
     this.metrics.totalQueries++
     this.metrics.totalExecutionTime += executionTime
-    
+
     if (isBulkOperation) {
       this.metrics.bulkOperations++
     }
-    
+
     if (cacheHit) {
       this.metrics.cacheHits++
     } else {
       this.metrics.cacheMisses++
     }
   }
-  
+
   static getMetrics() {
     return {
       ...this.metrics,
-      averageExecutionTime: this.metrics.totalQueries > 0 
-        ? this.metrics.totalExecutionTime / this.metrics.totalQueries 
+      averageExecutionTime: this.metrics.totalQueries > 0
+        ? this.metrics.totalExecutionTime / this.metrics.totalQueries
         : 0,
-      cacheHitRate: this.metrics.totalQueries > 0 
-        ? (this.metrics.cacheHits / this.metrics.totalQueries) * 100 
+      cacheHitRate: this.metrics.totalQueries > 0
+        ? (this.metrics.cacheHits / this.metrics.totalQueries) * 100
         : 0,
-      bulkOperationRate: this.metrics.totalQueries > 0 
-        ? (this.metrics.bulkOperations / this.metrics.totalQueries) * 100 
+      bulkOperationRate: this.metrics.totalQueries > 0
+        ? (this.metrics.bulkOperations / this.metrics.totalQueries) * 100
         : 0
     }
   }
-  
+
   static reset() {
     this.metrics = {
       totalQueries: 0,
