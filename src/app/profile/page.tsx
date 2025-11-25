@@ -183,105 +183,112 @@ export default function ProfilePage() {
 
   return (
     <MobileLayout>
-      {/* Header */}
-      <MobileSection spacing="tight">
-        <div className={isMobile ? "space-y-4" : "flex items-center justify-between"}>
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              onClick={() => router.back()}
-              className={isMobile ? "min-h-11 px-3" : ""}
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
+      {/* Hero Section */}
+      <MobileSection spacing="normal">
+        <div className="p-8 flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
+          <div>
+            <Avatar className="h-32 w-32 border-4 border-background shadow-xl">
+              <AvatarImage src={user?.user_metadata?.avatar_url} className="object-cover" />
+              <AvatarFallback className="text-4xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
+                {profile.username?.charAt(0)?.toUpperCase() || 'U'}
+              </AvatarFallback>
+            </Avatar>
+          </div>
+
+          <div className="flex-1 space-y-4">
             <div>
-              <h1 className={isMobile ? "text-xl font-bold" : "text-2xl font-bold"}>
-                My Profile
-              </h1>
-              <p className={isMobile ? "text-sm text-muted-foreground" : "text-muted-foreground"}>
-                Your learning journey and achievements
+              <h2 className="text-4xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
+                {profile.username}
+              </h2>
+              <p className="text-muted-foreground mt-1 flex items-center justify-center md:justify-start gap-2">
+                <span>Joined {formatDate(profile.joinedAt || profile.createdAt)}</span>
+                <span className="w-1 h-1 rounded-full bg-border"></span>
+                <span className="text-primary font-medium flex items-center gap-1">
+                  {getRoleIcon(profile.role)}
+                  {profile.role}
+                </span>
               </p>
+            </div>
+
+            <div className="flex flex-wrap justify-center md:justify-start gap-3">
+              <Badge variant="outline" className="px-3 py-1.5 text-sm border-yellow-500/30 bg-yellow-500/5 text-yellow-600 dark:text-yellow-400 backdrop-blur-sm shadow-sm">
+                <Trophy className="h-3.5 w-3.5 mr-1.5 text-yellow-500" />
+                Rank #{statistics?.rank?.allTime || 'N/A'}
+              </Badge>
+              {statistics?.rank?.weekly && statistics.rank.weekly > 0 && (
+                <Badge variant="outline" className="px-3 py-1.5 text-sm border-green-500/30 bg-green-500/5 text-green-600 dark:text-green-400 backdrop-blur-sm shadow-sm">
+                  <TrendingUp className="h-3.5 w-3.5 mr-1.5 text-green-500" />
+                  Weekly #{statistics.rank.weekly}
+                </Badge>
+              )}
             </div>
           </div>
         </div>
       </MobileSection>
 
-      {/* Profile Overview */}
+      {/* Stats Grid */}
       <MobileSection spacing="normal">
-        <Card>
-          <CardContent className={isMobile ? "p-4" : "p-6"}>
-            <div className={isMobile ? "space-y-4" : "flex items-start gap-6"}>
-              <Avatar className={isMobile ? "h-16 w-16 mx-auto" : "h-20 w-20"}>
-                <AvatarImage src={user?.user_metadata?.avatar_url} />
-                <AvatarFallback className={isMobile ? "text-base" : "text-lg"}>
-                  {profile.username?.charAt(0)?.toUpperCase() || 'U'}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 space-y-4">
-                <div>
-                  <div className={isMobile ? "text-center space-y-2 mb-3" : "flex items-center gap-3 mb-2"}>
-                    <h2 className={isMobile ? "text-xl font-bold" : "text-2xl font-bold"}>
-                      {profile.username}
-                    </h2>
-                    <div className={isMobile ? "flex justify-center gap-2" : "flex gap-3"}>
-                      <Badge className={`${getRoleBadgeColor(profile.role)} flex items-center gap-1`}>
-                        {getRoleIcon(profile.role)}
-                        {profile.role}
-                      </Badge>
-                      <Badge variant="outline" className="flex items-center gap-1 border-yellow-500/50 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
-                        <Trophy className="h-3 w-3" />
-                        #{statistics?.rank?.allTime || 'N/A'} All-Time
-                      </Badge>
-                    </div>
-                  </div>
-                  <p className={isMobile ? "text-center text-sm text-muted-foreground" : "text-muted-foreground"}>
-                    Joined in {formatDate(profile.joinedAt || profile.createdAt)}
-                  </p>
-                </div>
-
-                <div className={isMobile ? "grid grid-cols-2 gap-3" : "grid grid-cols-3 gap-6"}>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      <Zap className="h-4 w-4 text-primary" />
-                      <span className="text-2xl font-bold text-primary">{profile.totalXp}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">Total XP</p>
-                  </div>
-
-                  <div className="text-center">
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      <Calendar className="h-4 w-4 text-green-500" />
-                      <span className="text-2xl font-bold">{profile.streakWeeks}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">Week Streak</p>
-                  </div>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      <FileText className="h-4 w-4 text-blue-500" />
-                      <span className="text-2xl font-bold">{statistics?.totalSubmissions || 0}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">Submissions</p>
-                  </div>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      <TrendingUp className="h-4 w-4 text-green-500" />
-                      <span className="text-2xl font-bold">{profile.currentWeekXp} XP</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">This Week</p>
-                  </div>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      <Users className="h-4 w-4 text-blue-500" />
-                      <span className="text-2xl font-bold">{statistics?.totalReviews ?? 0}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">Total Reviews</p>
-                  </div>
-                </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <Card className="hover-lift">
+            <CardContent className="p-3 flex flex-col items-center justify-center text-center space-y-2">
+              <div className="p-3 rounded-full bg-primary/10 text-primary mb-1">
+                <Zap className="h-6 w-6" />
               </div>
-            </div>
-          </CardContent>
-        </Card>
+              <div>
+                <span className="text-3xl font-bold tracking-tight">{profile.totalXp}</span>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1">Total XP</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="hover-lift">
+            <CardContent className="p-3 flex flex-col items-center justify-center text-center space-y-2">
+              <div className="p-3 rounded-full bg-green-500/10 text-green-500 mb-1">
+                <Calendar className="h-6 w-6" />
+              </div>
+              <div>
+                <span className="text-3xl font-bold tracking-tight">{profile.streakWeeks}</span>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1">Week Streak</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="hover-lift">
+            <CardContent className="p-3 flex flex-col items-center justify-center text-center space-y-2">
+              <div className="p-3 rounded-full bg-blue-500/10 text-blue-500 mb-1">
+                <FileText className="h-6 w-6" />
+              </div>
+              <div>
+                <span className="text-3xl font-bold tracking-tight">{statistics?.totalSubmissions || 0}</span>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1">Submissions</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="hover-lift">
+            <CardContent className="p-3 flex flex-col items-center justify-center text-center space-y-2">
+              <div className="p-3 rounded-full bg-purple-500/10 text-purple-500 mb-1">
+                <TrendingUp className="h-6 w-6" />
+              </div>
+              <div>
+                <span className="text-3xl font-bold tracking-tight">{profile.currentWeekXp}</span>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1">Week XP</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="hover-lift">
+            <CardContent className="p-3 flex flex-col items-center justify-center text-center space-y-2">
+              <div className="p-3 rounded-full bg-orange-500/10 text-orange-500 mb-1">
+                <Users className="h-6 w-6" />
+              </div>
+              <div>
+                <span className="text-3xl font-bold tracking-tight">{statistics?.totalReviews ?? 0}</span>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1">Reviews</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </MobileSection>
 
       {ENABLE_ACHIEVEMENTS && (
