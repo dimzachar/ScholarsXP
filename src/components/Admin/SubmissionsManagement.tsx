@@ -96,11 +96,11 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
   const [bulkLoading, setBulkLoading] = useState(false)
   const [bulkMessage, setBulkMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
   const [bulkReshuffleModal, setBulkReshuffleModal] = useState({ open: false, reason: '' })
-  const [bulkReshuffleProgress, setBulkReshuffleProgress] = useState({ 
-    open: false, 
-    status: 'pending', 
-    processed: 0, 
-    total: 0, 
+  const [bulkReshuffleProgress, setBulkReshuffleProgress] = useState({
+    open: false,
+    status: 'pending',
+    processed: 0,
+    total: 0,
     message: 'Initializing bulk reshuffle...',
     errors: [] as string[]
   })
@@ -207,11 +207,11 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
         }
         setPagination(prev => {
           const same = prev.page === incoming.page &&
-                       prev.limit === incoming.limit &&
-                       prev.totalCount === incoming.totalCount &&
-                       prev.totalPages === incoming.totalPages &&
-                       prev.hasNextPage === incoming.hasNextPage &&
-                       prev.hasPrevPage === incoming.hasPrevPage
+            prev.limit === incoming.limit &&
+            prev.totalCount === incoming.totalCount &&
+            prev.totalPages === incoming.totalPages &&
+            prev.hasNextPage === incoming.hasNextPage &&
+            prev.hasPrevPage === incoming.hasPrevPage
           return same ? prev : incoming
         })
         setStats(data.stats || {
@@ -510,16 +510,16 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
 
   const handleBulkReshuffleConfirm = async (reason: string) => {
     if (!reason || reason.trim().length < 5) {
-      setBulkMessage({ 
-        text: 'Reason is required and must be at least 5 characters long.', 
-        type: 'error' 
+      setBulkMessage({
+        text: 'Reason is required and must be at least 5 characters long.',
+        type: 'error'
       })
       return
     }
 
     // Close initial modal and open progress modal
     setBulkReshuffleModal({ open: false, reason: '' })
-    
+
     // Initialize progress modal
     setBulkReshuffleProgress({
       open: true,
@@ -549,7 +549,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
 
       if (response.ok) {
         console.log('✅ Bulk reshuffle successful, refreshing submissions...')
-        
+
         // Update progress modal with completion message
         setBulkReshuffleProgress(prev => ({
           ...prev,
@@ -562,25 +562,25 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
 
         // Wait a moment to show completion message, then close
         setTimeout(() => {
-          setBulkReshuffleProgress({ 
-            open: false, 
-            status: 'pending', 
-            processed: 0, 
-            total: 0, 
-            message: '', 
-            errors: [] 
+          setBulkReshuffleProgress({
+            open: false,
+            status: 'pending',
+            processed: 0,
+            total: 0,
+            message: '',
+            errors: []
           })
           fetchSubmissions(true)
         }, 3000)
 
-        setBulkMessage({ 
-          text: result.message || `Successfully reshuffled missed reviewers for ${result.count || 'multiple'} submissions`, 
-          type: 'success' 
+        setBulkMessage({
+          text: result.message || `Successfully reshuffled missed reviewers for ${result.count || 'multiple'} submissions`,
+          type: 'success'
         })
         setTimeout(() => setBulkMessage(null), 5000) // Extended to 5 seconds for bulk operations
       } else {
         console.error('❌ Bulk reshuffle failed:', result)
-        
+
         // Update progress modal with error
         setBulkReshuffleProgress(prev => ({
           ...prev,
@@ -589,15 +589,15 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
           errors: [...prev.errors, result.error || 'Unknown error occurred']
         }))
 
-        setBulkMessage({ 
-          text: result.error || 'Failed to reshuffle submissions', 
-          type: 'error' 
+        setBulkMessage({
+          text: result.error || 'Failed to reshuffle submissions',
+          type: 'error'
         })
         setTimeout(() => setBulkMessage(null), 7000) // Extended timeout for error messages
       }
     } catch (error) {
       console.error('💥 Network error performing bulk reshuffle:', error)
-      
+
       // Update progress modal with error
       setBulkReshuffleProgress(prev => ({
         ...prev,
@@ -718,7 +718,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
             </Card>
           ) : null
         ))}
-        
+
         {/* Separate card for submissions that need reshuffling */}
         <Card key="RESHUFFLE_NEEDED" className="border-yellow-200 bg-yellow-50">
           <CardContent className="p-4 text-center">
@@ -896,11 +896,10 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
               </div>
             </div>
             {bulkMessage && (
-              <div className={`mt-2 p-2 rounded-md ${
-                bulkMessage.type === 'success'
+              <div className={`mt-2 p-2 rounded-md ${bulkMessage.type === 'success'
                   ? 'bg-green-100 border border-green-200 text-green-800'
                   : 'bg-red-100 border border-red-200 text-red-800'
-              } text-sm`}
+                } text-sm`}
               >
                 {bulkMessage.text}
               </div>
@@ -943,9 +942,9 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
           )}
         </CardContent>
       </Card> */}
-    
+
       {/* Bulk Reshuffle Modal */}
-          <Dialog open={bulkReshuffleModal.open} onOpenChange={(open) => !open && setBulkReshuffleModal({ open: false, reason: '' })}>
+      <Dialog open={bulkReshuffleModal.open} onOpenChange={(open) => !open && setBulkReshuffleModal({ open: false, reason: '' })}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -981,8 +980,8 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
             </div>
           </div>
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setBulkReshuffleModal({ open: false, reason: '' })}
               disabled={bulkLoading}
             >
@@ -992,9 +991,9 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
               onClick={async () => {
                 const reason = bulkReshuffleModal.reason?.trim() || ''
                 if (!reason || reason.length < 5) {
-                  setBulkMessage({ 
-                    text: 'Reason is required and must be at least 5 characters long.', 
-                    type: 'error' 
+                  setBulkMessage({
+                    text: 'Reason is required and must be at least 5 characters long.',
+                    type: 'error'
                   })
                   return
                 }
@@ -1096,7 +1095,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                     />
                   </TableHead>
                   <TableHead
-                    className="cursor-pointer"
+                    className="cursor-pointer w-[200px]"
                     onClick={() => handleSort('title')}
                   >
                     <div className="flex items-center gap-1">
@@ -1104,12 +1103,12 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                       <ArrowUpDown className="h-4 w-4" />
                     </div>
                   </TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Platform</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead className="w-[150px]">User</TableHead>
+                  <TableHead className="w-[100px]">Platform</TableHead>
+                  <TableHead className="w-[80px]">Type</TableHead>
+                  <TableHead className="w-[100px]">Status</TableHead>
                   <TableHead
-                    className="cursor-pointer"
+                    className="cursor-pointer w-[120px]"
                     onClick={() => handleSort('xpAwarded')}
                   >
                     <div className="flex items-center gap-1">
@@ -1117,9 +1116,9 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                       <ArrowUpDown className="h-4 w-4" />
                     </div>
                   </TableHead>
-                  <TableHead>Reviews</TableHead>
+                  <TableHead className="w-[80px]">Reviews</TableHead>
                   <TableHead
-                    className="cursor-pointer"
+                    className="cursor-pointer w-[100px]"
                     onClick={() => handleSort('createdAt')}
                   >
                     <div className="flex items-center gap-1">
@@ -1127,7 +1126,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                       <ArrowUpDown className="h-4 w-4" />
                     </div>
                   </TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead className="w-[80px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1158,8 +1157,8 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                           onCheckedChange={() => handleSelectSubmission(submission.id)}
                         />
                       </TableCell>
-                      <TableCell className="max-w-[14rem] space-y-1">
-                        <div className="truncate font-medium">{submission.title}</div>
+                      <TableCell className="max-w-[200px] space-y-1">
+                        <div className="truncate font-medium" title={submission.title}>{submission.title}</div>
                         {submission.url ? (
                           <a
                             href={normalizedUrl}
@@ -1177,9 +1176,9 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                           </div>
                         )}
                       </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{submission.user.username}</div>
-                        <div className="text-sm text-muted-foreground">{submission.user.email}</div>
+                      <TableCell className="max-w-[150px]">
+                        <div className="font-medium truncate" title={submission.user.username}>{submission.user.username}</div>
+                        <div className="text-sm text-muted-foreground truncate" title={submission.user.email}>{submission.user.email}</div>
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">{submission.platform}</Badge>
@@ -1281,12 +1280,12 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                 <span>{bulkReshuffleProgress.processed} of {bulkReshuffleProgress.total} submissions processed</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
+                <div
                   className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ 
-                    width: bulkReshuffleProgress.total > 0 
-                      ? `${(bulkReshuffleProgress.processed / bulkReshuffleProgress.total) * 100}%` 
-                      : '0%' 
+                  style={{
+                    width: bulkReshuffleProgress.total > 0
+                      ? `${(bulkReshuffleProgress.processed / bulkReshuffleProgress.total) * 100}%`
+                      : '0%'
                   }}
                 ></div>
               </div>
@@ -1337,8 +1336,8 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
             </div>
           </div>
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setBulkReshuffleProgress({ open: false, status: 'pending', processed: 0, total: 0, message: '', errors: [] })}
               disabled={bulkReshuffleProgress.status === 'processing'}
             >
