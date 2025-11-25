@@ -85,7 +85,7 @@ export default function ProfilePage() {
   const { user, userProfile: _userProfile, loading: authLoading } = useAuth()
   const router = useRouter()
   const { isMobile, isTablet: _isTablet } = useResponsiveLayout()
-  
+
   const [profileData, setProfileData] = useState<UserProfileData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -100,11 +100,11 @@ export default function ProfilePage() {
     try {
       setLoading(true)
       const response = await fetch('/api/user/profile/complete')
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch profile data')
       }
-      
+
       const data = await response.json()
       setProfileData(data)
     } catch (error) {
@@ -229,10 +229,14 @@ export default function ProfilePage() {
                         {getRoleIcon(profile.role)}
                         {profile.role}
                       </Badge>
+                      <Badge variant="outline" className="flex items-center gap-1 border-yellow-500/50 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
+                        <Trophy className="h-3 w-3" />
+                        #{statistics?.rank?.allTime || 'N/A'} All-Time
+                      </Badge>
                     </div>
                   </div>
                   <p className={isMobile ? "text-center text-sm text-muted-foreground" : "text-muted-foreground"}>
-                    {profile.email}
+                    Joined in {formatDate(profile.joinedAt || profile.createdAt)}
                   </p>
                 </div>
 
@@ -244,13 +248,7 @@ export default function ProfilePage() {
                     </div>
                     <p className="text-xs text-muted-foreground">Total XP</p>
                   </div>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      <Trophy className="h-4 w-4 text-yellow-500" />
-                      <span className="text-2xl font-bold">#{statistics?.rank?.allTime || 'N/A'}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">All-Time Rank</p>
-                  </div>
+
                   <div className="text-center">
                     <div className="flex items-center justify-center gap-1 mb-1">
                       <Calendar className="h-4 w-4 text-green-500" />
@@ -303,20 +301,7 @@ export default function ProfilePage() {
         </MobileSection>
       )}
 
-      {/* Member Since */}
-      <MobileSection spacing="normal">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <Calendar className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm font-medium">Member since</p>
-                <p className="text-sm text-muted-foreground">{formatDate(profile.joinedAt || profile.createdAt)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </MobileSection>
+
 
       {/* Recent Submissions */}
       <MobileSection spacing="normal">
