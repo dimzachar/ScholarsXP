@@ -23,6 +23,7 @@ import {
   Crown,
   Shield
 } from 'lucide-react'
+import { SubmissionsList } from '@/components/profile/SubmissionsList'
 
 interface UserProfileData {
   profile: {
@@ -88,6 +89,7 @@ export default function ProfilePage() {
 
   const [profileData, setProfileData] = useState<UserProfileData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -107,11 +109,13 @@ export default function ProfilePage() {
 
       const data = await response.json()
       setProfileData(data)
+      setError(null)
     } catch (error) {
       console.error('Error fetching profile:', error)
       setError('Failed to load profile data')
     } finally {
       setLoading(false)
+      setIsInitialLoad(false)
     }
   }
 
@@ -138,7 +142,7 @@ export default function ProfilePage() {
     return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
   }
 
-  if (authLoading || loading) {
+  if (authLoading || (loading && isInitialLoad)) {
     return (
       <MobileLayout>
         <MobileHeader
@@ -310,36 +314,9 @@ export default function ProfilePage() {
 
 
 
-      {/* Recent Submissions */}
+      {/* Submissions List */}
       <MobileSection spacing="normal">
-        <Card>
-          <CardHeader className={isMobile ? 'p-4 pb-2' : ''}>
-            <CardTitle className={isMobile ? 'text-base' : 'text-lg'}>Recent Submissions</CardTitle>
-          </CardHeader>
-          <CardContent className={isMobile ? 'p-4 pt-0' : ''}>
-            {recentSubmissions && recentSubmissions.length > 0 ? (
-              <div className="space-y-3">
-                {recentSubmissions.map((sub) => (
-                  <div key={sub.id} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="min-w-0 mr-3">
-                      <p className="font-medium truncate">{sub.title || sub.url || 'Untitled Submission'}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDate(sub.createdAt)}
-                        {sub.platform ? ` • ${sub.platform}` : ''}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">{(sub.xpAwarded ?? sub.finalXp ?? 0)} XP</p>
-                      <p className="text-xs text-muted-foreground">{sub.status}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-6">No recent submissions</p>
-            )}
-          </CardContent>
-        </Card>
+        <SubmissionsList submissions={recentSubmissions} />
       </MobileSection>
     </MobileLayout>
   )

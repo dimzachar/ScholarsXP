@@ -89,12 +89,11 @@ async function getOptimizedCompleteProfile(
         xpTransactionsResult
       ] = await Promise.all([
         // Get recent submissions only (limit to 5 for smaller response)
-        supabase
+        serviceSupabase
           .from('Submission')
           .select('id, title, url, platform, status, finalXp, aiXp, createdAt')
           .eq('userId', userId)
-          .order('createdAt', { ascending: false })
-          .limit(5),
+          .order('createdAt', { ascending: false }),
 
         // Get legacy submissions if user has discordHandle (with flexible matching)
         userProfile?.discordHandle ? (async () => {
@@ -113,8 +112,7 @@ async function getOptimizedCompleteProfile(
                 .from('LegacySubmission')
                 .select('id, url, discordHandle, submittedAt, role, notes, importedAt, aiXp, peerXp, finalXp', { count: 'exact' })
                 .eq('discordHandle', variation)
-                .order('importedAt', { ascending: false })
-                .limit(5);
+                .order('importedAt', { ascending: false });
 
               if (result.data && result.data.length > 0) {
                 console.log(`✅ Found legacy submissions for discord handle variation: "${variation}" (original: "${handle}")`);
@@ -146,11 +144,11 @@ async function getOptimizedCompleteProfile(
         // Get recent achievements only (limit to 10)
         ENABLE_ACHIEVEMENTS
           ? supabase
-              .from('UserAchievement')
-              .select('id, title, description, earnedAt')
-              .eq('userId', userId)
-              .order('earnedAt', { ascending: false })
-              .limit(10)
+            .from('UserAchievement')
+            .select('id, title, description, earnedAt')
+            .eq('userId', userId)
+            .order('earnedAt', { ascending: false })
+            .limit(10)
           : Promise.resolve({ data: [], error: null, count: 0 }),
 
         // Get XP breakdown efficiently
@@ -221,6 +219,7 @@ async function getOptimizedCompleteProfile(
         url: legacy.url,
         platform: 'Legacy',
         status: 'LEGACY_IMPORTED',
+        xpAwarded: legacy.finalXp || legacy.aiXp || 0,
         finalXp: legacy.finalXp || legacy.aiXp || 0,
         createdAt: legacy.submittedAt || legacy.importedAt
       }))
@@ -228,7 +227,6 @@ async function getOptimizedCompleteProfile(
       // Combine and sort by date (most recent first)
       const allSubmissions = [...regularSubmissions, ...legacySubmissionsFormatted]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 5) // Keep only 5 most recent
 
       const recentSubmissions = allSubmissions
 
@@ -240,11 +238,11 @@ async function getOptimizedCompleteProfile(
 
       const achievements = ENABLE_ACHIEVEMENTS
         ? achievementsData.map((achievement: any) => ({
-            id: achievement.id,
-            title: achievement.title,
-            description: achievement.description,
-            earnedAt: achievement.earnedAt
-          }))
+          id: achievement.id,
+          title: achievement.title,
+          description: achievement.description,
+          earnedAt: achievement.earnedAt
+        }))
         : []
 
       return {
@@ -347,8 +345,8 @@ const originalHandler = withPermission('authenticated')(async (request: Authenti
     // Get achievements
     const achievementsQuery = ENABLE_ACHIEVEMENTS
       ? await supabase
-          .from('UserAchievement')
-          .select(`
+        .from('UserAchievement')
+        .select(`
             id,
             earnedAt,
             achievement:Achievement(
@@ -360,8 +358,8 @@ const originalHandler = withPermission('authenticated')(async (request: Authenti
               xpReward
             )
           `)
-          .eq('userId', userId)
-          .order('earnedAt', { ascending: false })
+        .eq('userId', userId)
+        .order('earnedAt', { ascending: false })
       : { data: [], error: null }
 
     if (achievementsQuery.error) {
@@ -396,9 +394,9 @@ const originalHandler = withPermission('authenticated')(async (request: Authenti
     const reviewXp = (transactionsByType['REVIEW_REWARD'] || 0) + (totalReviews * 50) // Transaction XP + base review XP
     const achievementXp = ENABLE_ACHIEVEMENTS
       ? (transactionsByType['ACHIEVEMENT_REWARD'] || 0) +
-        (transactionsByType['ACHIEVEMENT_BONUS'] || 0) +
-        (transactionsByType['ACHIEVEMENT'] || 0) +
-        achievements.reduce((sum, ach) => sum + (ach.achievement?.xpReward || 0), 0)
+      (transactionsByType['ACHIEVEMENT_BONUS'] || 0) +
+      (transactionsByType['ACHIEVEMENT'] || 0) +
+      achievements.reduce((sum, ach) => sum + (ach.achievement?.xpReward || 0), 0)
       : 0
     const legacyXp = transactionsByType['ADMIN_ADJUSTMENT'] || 0 // Legacy imported XP
     const streakXp = transactionsByType['STREAK_BONUS'] || 0
@@ -456,7 +454,7 @@ const originalHandler = withPermission('authenticated')(async (request: Authenti
           submissions: thisWeekSubmissions.length,
           reviews: thisWeekReviews.length,
           xpEarned: thisWeekSubmissions.reduce((sum, sub) => sum + (sub.finalXp || sub.aiXp || 0), 0) +
-                   thisWeekTransactions.reduce((sum, transaction) => sum + transaction.amount, 0)
+            thisWeekTransactions.reduce((sum, transaction) => sum + transaction.amount, 0)
         },
         recentActivity: {
           submissions: recentSubmissions.length,
