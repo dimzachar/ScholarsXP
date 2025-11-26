@@ -32,6 +32,7 @@ import {
 import { useRouter } from 'next/navigation'
 import AutomationStatus from '@/components/Admin/AutomationStatus'
 import SubmissionsManagement from '@/components/Admin/SubmissionsManagement'
+import ReviewsManagement from '@/components/Admin/ReviewsManagement'
 
 interface AdminStats {
   totalUsers: number
@@ -386,430 +387,437 @@ export default function AdminDashboardPage() {
     <AuthGuard>
       <AdminGuard>
         <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 pb-20 md:pb-8">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="inline-flex items-center space-x-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6">
-            <Settings className="h-4 w-4" />
-            <span>System Administration</span>
-          </div>
-          
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">
-                Admin Dashboard{' '}
-              </h1>
-              <p className="text-lg text-muted-foreground">
-                Manage submissions, review flags, and oversee system operations
-              </p>
+          <div className="container mx-auto px-4 py-8 pb-20 md:pb-8">
+            {/* Header */}
+            <div className="mb-8">
+              <div className="inline-flex items-center space-x-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6">
+                <Settings className="h-4 w-4" />
+                <span>System Administration</span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">
+                    Admin Dashboard{' '}
+                  </h1>
+                  <p className="text-lg text-muted-foreground">
+                    Manage submissions, review flags, and oversee system operations
+                  </p>
+                </div>
+
+                {stats && (
+                  <div className="flex items-center gap-2">
+                    {getHealthIcon(stats.systemHealth)}
+                    <span className={`font-medium ${getHealthColor(stats.systemHealth)}`}>
+                      System {(() => {
+                        const overallScore = (stats.systemHealth.submissionSuccessRate + stats.systemHealth.avgReviewScore - stats.systemHealth.flagRate) / 2
+                        if (overallScore >= 80) return 'Healthy'
+                        if (overallScore >= 60) return 'Warning'
+                        return 'Critical'
+                      })()}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
-            
-            {stats && (
-              <div className="flex items-center gap-2">
-                {getHealthIcon(stats.systemHealth)}
-                <span className={`font-medium ${getHealthColor(stats.systemHealth)}`}>
-                  System {(() => {
-                    const overallScore = (stats.systemHealth.submissionSuccessRate + stats.systemHealth.avgReviewScore - stats.systemHealth.flagRate) / 2
-                    if (overallScore >= 80) return 'Healthy'
-                    if (overallScore >= 60) return 'Warning'
-                    return 'Critical'
-                  })()}
-                </span>
+
+            {message && (
+              <div className={`mb-6 p-4 rounded-lg border flex items-start gap-3 ${message.includes('successfully') || message.includes('completed')
+                ? 'bg-success/10 border-success/20 text-success'
+                : message.includes('failed') || message.includes('Error')
+                  ? 'bg-destructive/10 border-destructive/20 text-destructive'
+                  : 'bg-warning/10 border-warning/20 text-warning'
+                }`}>
+                {message.includes('successfully') || message.includes('completed') ? (
+                  <CheckCircle className="h-5 w-5 text-success flex-shrink-0 mt-0.5" />
+                ) : message.includes('failed') || message.includes('Error') ? (
+                  <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+                ) : (
+                  <AlertTriangle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
+                )}
+                <div className="flex-1">
+                  <p className="font-medium">{message}</p>
+                  {(message.includes('Weekly reset completed') || message.includes('XP aggregation completed')) && (
+                    <p className="text-sm mt-1 opacity-80">
+                      Dashboard statistics have been automatically refreshed.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
-          </div>
-        </div>
 
-        {message && (
-          <div className={`mb-6 p-4 rounded-lg border flex items-start gap-3 ${
-            message.includes('successfully') || message.includes('completed')
-              ? 'bg-success/10 border-success/20 text-success'
-              : message.includes('failed') || message.includes('Error')
-              ? 'bg-destructive/10 border-destructive/20 text-destructive'
-              : 'bg-warning/10 border-warning/20 text-warning'
-          }`}>
-            {message.includes('successfully') || message.includes('completed') ? (
-              <CheckCircle className="h-5 w-5 text-success flex-shrink-0 mt-0.5" />
-            ) : message.includes('failed') || message.includes('Error') ? (
-              <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
-            ) : (
-              <AlertTriangle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
+            {/* Stats Overview */}
+            {stats && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <Card className="border-0 shadow-lg">
+                  <CardContent className="p-6">
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-primary/20 rounded-lg">
+                        <FileText className="h-6 w-6 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-foreground">{stats.totalSubmissions}</p>
+                        <p className="text-muted-foreground">Total Submissions</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-lg">
+                  <CardContent className="p-6">
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-warning/20 rounded-lg">
+                        <MessageSquare className="h-6 w-6 text-warning" />
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-foreground">{stats.totalReviews}</p>
+                        <p className="text-muted-foreground">Total Reviews</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-lg">
+                  <CardContent className="p-6">
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-green/20 rounded-lg">
+                        <BarChart3 className="h-6 w-6 text-green" />
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-foreground">{stats.finalizationRate.toFixed(0)}%</p>
+                        <p className="text-muted-foreground">Finalization Progress</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-lg">
+                  <CardContent className="p-6">
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-primary/20 rounded-lg">
+                        <Users className="h-6 w-6 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-foreground">{stats.activeUsers}</p>
+                        <p className="text-muted-foreground">Active Users</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             )}
-            <div className="flex-1">
-              <p className="font-medium">{message}</p>
-              {(message.includes('Weekly reset completed') || message.includes('XP aggregation completed')) && (
-                <p className="text-sm mt-1 opacity-80">
-                  Dashboard statistics have been automatically refreshed.
-                </p>
-              )}
-            </div>
-          </div>
-        )}
 
-        {/* Stats Overview */}
-        {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <Card className="border-0 shadow-lg">
-              <CardContent className="p-6">
-                <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-primary/20 rounded-lg">
-                    <FileText className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-foreground">{stats.totalSubmissions}</p>
-                    <p className="text-muted-foreground">Total Submissions</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            {/* Main Content */}
+            <Tabs defaultValue="actions" className="space-y-6">
+              <TabsList className="grid w-full grid-cols-6 max-w-4xl mx-auto">
+                <TabsTrigger value="actions" className="flex items-center gap-2">
+                  <Zap className="h-4 w-4" />
+                  Actions
+                </TabsTrigger>
+                <TabsTrigger value="automation" className="flex items-center gap-2">
+                  <Activity className="h-4 w-4" />
+                  Automation
+                </TabsTrigger>
+                <TabsTrigger value="users" className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Users
+                </TabsTrigger>
+                <TabsTrigger value="submissions" className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Submissions
+                </TabsTrigger>
+                <TabsTrigger value="reviews" className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4" />
+                  Reviews
+                </TabsTrigger>
+                <TabsTrigger value="analytics" className="flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4" />
+                  Analytics
+                </TabsTrigger>
+              </TabsList>
 
-            <Card className="border-0 shadow-lg">
-              <CardContent className="p-6">
-                <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-warning/20 rounded-lg">
-                    <MessageSquare className="h-6 w-6 text-warning" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-foreground">{stats.totalReviews}</p>
-                    <p className="text-muted-foreground">Total Reviews</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+              <TabsContent value="automation" className="space-y-6">
+                <AutomationStatus />
+              </TabsContent>
 
-            <Card className="border-0 shadow-lg">
-              <CardContent className="p-6">
-                <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-green/20 rounded-lg">
-                    <BarChart3 className="h-6 w-6 text-green" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-foreground">{stats.finalizationRate.toFixed(0)}%</p>
-                    <p className="text-muted-foreground">Finalization Progress</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+              <TabsContent value="actions" className="space-y-6">
+                <Card className="border-0 shadow-xl">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Zap className="h-5 w-5" />
+                      System Actions
+                    </CardTitle>
+                    <CardDescription>
+                      Trigger system-wide operations and maintenance tasks
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-4">
+                        <div className="p-4 bg-muted/50 border border-border rounded-lg">
+                          <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                            <Calendar className="h-4 w-4" />
+                            Weekly Operations
+                          </h3>
+                          <p className="text-sm text-muted-foreground mb-4">
+                            Process weekly streaks, apply penalties, reset weekly XP counters, and generate leaderboards.
+                            <span className="font-medium text-orange-600 dark:text-orange-400"> Use with caution - this affects all users.</span>
+                          </p>
+                          <Button
+                            onClick={() => handleSystemAction('weekly')}
+                            disabled={actionLoading === 'weekly'}
+                            variant="secondary"
+                            className="w-full"
+                          >
+                            {actionLoading === 'weekly' ? (
+                              <>
+                                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                Processing Weekly Reset...
+                              </>
+                            ) : (
+                              <>
+                                <Calendar className="mr-2 h-4 w-4" />
+                                Process Weekly Reset
+                              </>
+                            )}
+                          </Button>
+                        </div>
 
-            <Card className="border-0 shadow-lg">
-              <CardContent className="p-6">
-                <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-primary/20 rounded-lg">
-                    <Users className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-foreground">{stats.activeUsers}</p>
-                    <p className="text-muted-foreground">Active Users</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+                        <div className="p-4 bg-muted/50 border border-border rounded-lg">
+                          <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                            <TrendingUp className="h-4 w-4" />
+                            XP Aggregation
+                          </h3>
+                          <p className="text-sm text-muted-foreground mb-4">
+                            Finalize submissions with 3+ peer reviews, calculate final XP scores, and award XP to users.
+                            <span className="font-medium text-blue-600 dark:text-blue-400"> Safe to run multiple times.</span>
+                          </p>
+                          <Button
+                            onClick={() => handleSystemAction('aggregate')}
+                            disabled={actionLoading === 'aggregate'}
+                            variant="secondary"
+                            className="w-full"
+                          >
+                            {actionLoading === 'aggregate' ? (
+                              <>
+                                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                Processing XP Aggregation...
+                              </>
+                            ) : (
+                              <>
+                                <Zap className="mr-2 h-4 w-4" />
+                                Process XP Aggregation
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
 
-        {/* Main Content */}
-        <Tabs defaultValue="actions" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 max-w-3xl mx-auto">
-            <TabsTrigger value="actions" className="flex items-center gap-2">
-              <Zap className="h-4 w-4" />
-              Actions
-            </TabsTrigger>
-            <TabsTrigger value="automation" className="flex items-center gap-2">
-              <Activity className="h-4 w-4" />
-              Automation
-            </TabsTrigger>
-            <TabsTrigger value="users" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Users
-            </TabsTrigger>
-            <TabsTrigger value="submissions" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Submissions
-            </TabsTrigger>
-            <TabsTrigger value="analytics" className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Analytics
-            </TabsTrigger>
-          </TabsList>
+                      <div className="space-y-4">
+                        <div className="p-4 bg-muted/50 border border-border rounded-lg">
+                          <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                            <Database className="h-4 w-4" />
+                            Data Refresh
+                          </h3>
+                          <p className="text-sm text-muted-foreground mb-4">
+                            Clear system cache and refresh dashboard statistics. Updates analytics, leaderboards, and admin data.
+                            <span className="font-medium text-green-600 dark:text-green-400"> Safe operation - no data changes.</span>
+                          </p>
+                          <Button
+                            onClick={() => handleSystemAction('refresh')}
+                            disabled={actionLoading === 'refresh'}
+                            variant="secondary"
+                            className="w-full"
+                          >
+                            {actionLoading === 'refresh' ? (
+                              <>
+                                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                Refreshing Data...
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="mr-2 h-4 w-4" />
+                                Refresh Data
+                              </>
+                            )}
+                          </Button>
+                        </div>
 
-          <TabsContent value="automation" className="space-y-6">
-            <AutomationStatus />
-          </TabsContent>
+                        <div className="p-4 bg-muted/50 border border-border rounded-lg">
+                          <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                            <Shield className="h-4 w-4" />
+                            System Health
+                          </h3>
+                          <p className="text-sm text-muted-foreground mb-4">
+                            Monitor system performance and security status
+                          </p>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">Status:</span>
+                            <Badge variant={stats?.systemHealth && (stats.systemHealth.submissionSuccessRate + stats.systemHealth.avgReviewScore - stats.systemHealth.flagRate) / 2 >= 60 ? 'default' : 'destructive'}>
+                              {stats?.systemHealth ?
+                                (() => {
+                                  const overallScore = (stats.systemHealth.submissionSuccessRate + stats.systemHealth.avgReviewScore - stats.systemHealth.flagRate) / 2
+                                  if (overallScore >= 80) return 'Healthy'
+                                  if (overallScore >= 60) return 'Warning'
+                                  return 'Critical'
+                                })() : 'Unknown'}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
 
-          <TabsContent value="actions" className="space-y-6">
-            <Card className="border-0 shadow-xl">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Zap className="h-5 w-5" />
-                  System Actions
-                </CardTitle>
-                <CardDescription>
-                  Trigger system-wide operations and maintenance tasks
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div className="p-4 bg-muted/50 border border-border rounded-lg">
-                      <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
-                        <Calendar className="h-4 w-4" />
-                        Weekly Operations
-                      </h3>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Process weekly streaks, apply penalties, reset weekly XP counters, and generate leaderboards.
-                        <span className="font-medium text-orange-600 dark:text-orange-400"> Use with caution - this affects all users.</span>
-                      </p>
-                      <Button
-                        onClick={() => handleSystemAction('weekly')}
-                        disabled={actionLoading === 'weekly'}
-                        variant="secondary"
-                        className="w-full"
-                      >
-                        {actionLoading === 'weekly' ? (
-                          <>
-                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                            Processing Weekly Reset...
-                          </>
-                        ) : (
-                          <>
-                            <Calendar className="mr-2 h-4 w-4" />
-                            Process Weekly Reset
-                          </>
-                        )}
-                      </Button>
-                    </div>
 
-                    <div className="p-4 bg-muted/50 border border-border rounded-lg">
-                      <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
-                        <TrendingUp className="h-4 w-4" />
-                        XP Aggregation
-                      </h3>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Finalize submissions with 3+ peer reviews, calculate final XP scores, and award XP to users.
-                        <span className="font-medium text-blue-600 dark:text-blue-400"> Safe to run multiple times.</span>
-                      </p>
-                      <Button
-                        onClick={() => handleSystemAction('aggregate')}
-                        disabled={actionLoading === 'aggregate'}
-                        variant="secondary"
-                        className="w-full"
-                      >
-                        {actionLoading === 'aggregate' ? (
-                          <>
-                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                            Processing XP Aggregation...
-                          </>
-                        ) : (
-                          <>
-                            <Zap className="mr-2 h-4 w-4" />
-                            Process XP Aggregation
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
 
-                  <div className="space-y-4">
-                    <div className="p-4 bg-muted/50 border border-border rounded-lg">
-                      <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
-                        <Database className="h-4 w-4" />
-                        Data Refresh
-                      </h3>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Clear system cache and refresh dashboard statistics. Updates analytics, leaderboards, and admin data.
-                        <span className="font-medium text-green-600 dark:text-green-400"> Safe operation - no data changes.</span>
-                      </p>
-                      <Button
-                        onClick={() => handleSystemAction('refresh')}
-                        disabled={actionLoading === 'refresh'}
-                        variant="secondary"
-                        className="w-full"
-                      >
-                        {actionLoading === 'refresh' ? (
-                          <>
-                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                            Refreshing Data...
-                          </>
-                        ) : (
-                          <>
-                            <RefreshCw className="mr-2 h-4 w-4" />
-                            Refresh Data
-                          </>
-                        )}
-                      </Button>
-                    </div>
+                      <div className="space-y-4">
+                        <div className="p-4 bg-muted/50 border border-border rounded-lg">
+                          <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                            <TrendingUp className="h-4 w-4" />
+                            Detailed Leaderboard
+                          </h3>
+                          <p className="text-sm text-muted-foreground mb-4">
+                            View comprehensive submission analytics and user performance
+                          </p>
+                          <Button
+                            onClick={() => window.open('/leaderboard/detailed', '_blank')}
+                            className="w-full"
+                            variant="outline"
+                          >
+                            <ArrowRight className="mr-2 h-4 w-4" />
+                            Open Leaderboard
+                          </Button>
+                        </div>
 
-                    <div className="p-4 bg-muted/50 border border-border rounded-lg">
-                      <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
-                        <Shield className="h-4 w-4" />
-                        System Health
-                      </h3>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Monitor system performance and security status
-                      </p>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">Status:</span>
-                        <Badge variant={stats?.systemHealth && (stats.systemHealth.submissionSuccessRate + stats.systemHealth.avgReviewScore - stats.systemHealth.flagRate) / 2 >= 60 ? 'default' : 'destructive'}>
-                          {stats?.systemHealth ?
-                            (() => {
-                              const overallScore = (stats.systemHealth.submissionSuccessRate + stats.systemHealth.avgReviewScore - stats.systemHealth.flagRate) / 2
-                              if (overallScore >= 80) return 'Healthy'
-                              if (overallScore >= 60) return 'Warning'
-                              return 'Critical'
-                            })() : 'Unknown'}
-                        </Badge>
+                        <div className="p-4 bg-muted/50 border border-border rounded-lg">
+                          <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                            <Award className="h-4 w-4" />
+                            Monthly Leaderboards (Admin)
+                          </h3>
+                          <p className="text-sm text-muted-foreground mb-4">
+                            Preview standings, award winners, manage cooldowns and history
+                          </p>
+                          <Button
+                            onClick={() => window.open('/admin/leaderboards', '_blank')}
+                            className="w-full"
+                            variant="outline"
+                          >
+                            <ArrowRight className="mr-2 h-4 w-4" />
+                            Open Monthly Leaderboards
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
-
-
-                  <div className="space-y-4">
-                    <div className="p-4 bg-muted/50 border border-border rounded-lg">
-                      <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
-                        <TrendingUp className="h-4 w-4" />
-                        Detailed Leaderboard
-                      </h3>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        View comprehensive submission analytics and user performance
-                      </p>
+              <TabsContent value="users" className="space-y-6">
+                <Card className="border-0 shadow-xl">
+                  <CardHeader>
+                    <CardTitle>User Management</CardTitle>
+                    <CardDescription>Manage user roles and permissions</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-muted-foreground">
+                      Access the comprehensive user management interface to view, filter, and manage all users in the system.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-4">
                       <Button
-                        onClick={() => window.open('/leaderboard/detailed', '_blank')}
-                        className="w-full"
+                        onClick={() => router.push('/admin/users')}
+                        className="flex items-center gap-2"
+                      >
+                        <Users className="h-4 w-4" />
+                        Open User Management
+                      </Button>
+                      <Button
+                        onClick={() => router.push('/admin/reviewer-availability')}
+                        className="flex items-center gap-2"
                         variant="outline"
                       >
-                        <ArrowRight className="mr-2 h-4 w-4" />
-                        Open Leaderboard
+                        <PauseCircle className="h-4 w-4" />
+                        Manage Reviewer Availability
                       </Button>
-                    </div>
-
-                    <div className="p-4 bg-muted/50 border border-border rounded-lg">
-                      <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
-                        <Award className="h-4 w-4" />
-                        Monthly Leaderboards (Admin)
-                      </h3>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Preview standings, award winners, manage cooldowns and history
-                      </p>
-                      <Button
-                        onClick={() => window.open('/admin/leaderboards', '_blank')}
-                        className="w-full"
-                        variant="outline"
-                      >
-                        <ArrowRight className="mr-2 h-4 w-4" />
-                        Open Monthly Leaderboards
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="users" className="space-y-6">
-            <Card className="border-0 shadow-xl">
-              <CardHeader>
-                <CardTitle>User Management</CardTitle>
-                <CardDescription>Manage user roles and permissions</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-muted-foreground">
-                  Access the comprehensive user management interface to view, filter, and manage all users in the system.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <Button
-                    onClick={() => router.push('/admin/users')}
-                    className="flex items-center gap-2"
-                  >
-                    <Users className="h-4 w-4" />
-                    Open User Management
-                  </Button>
-                  <Button
-                    onClick={() => router.push('/admin/reviewer-availability')}
-                    className="flex items-center gap-2"
-                    variant="outline"
-                  >
-                    <PauseCircle className="h-4 w-4" />
-                    Manage Reviewer Availability
-                  </Button>
-                  <div className="text-sm text-muted-foreground space-y-1">
-                    <p>• View and search all users</p>
-                    <p>• Manage user roles and permissions</p>
-                    <p>• Bulk operations and XP adjustments</p>
-                    <p>• User activity and performance metrics</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="submissions" className="space-y-6">
-            <SubmissionsManagement />
-          </TabsContent>
-
-          <TabsContent value="analytics" className="space-y-6">
-            <Card className="border-0 shadow-xl">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  System Analytics
-                </CardTitle>
-                <CardDescription>
-                  Detailed insights and performance metrics
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <h3 className="font-semibold text-foreground">Weekly Performance</h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">XP Awarded This Week</span>
-                        <span className="font-medium">{stats?.totalXpAwarded || 0}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">Active Participants</span>
-                        <span className="font-medium">{stats?.activeUsers || 0}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">Pending Reviews</span>
-                        <span className="font-medium">{stats?.totalReviews || 0}</span>
+                      <div className="text-sm text-muted-foreground space-y-1">
+                        <p>• View and search all users</p>
+                        <p>• Manage user roles and permissions</p>
+                        <p>• Bulk operations and XP adjustments</p>
+                        <p>• User activity and performance metrics</p>
                       </div>
                     </div>
-                  </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
-                  <div className="space-y-4">
-                    <h3 className="font-semibold text-foreground">System Health</h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">Total Submissions</span>
-                        <span className="font-medium">{stats?.totalSubmissions || 0}</span>
+              <TabsContent value="submissions" className="space-y-6">
+                <SubmissionsManagement />
+              </TabsContent>
+
+              <TabsContent value="reviews" className="space-y-6">
+                <ReviewsManagement />
+              </TabsContent>
+
+              <TabsContent value="analytics" className="space-y-6">
+                <Card className="border-0 shadow-xl">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5" />
+                      System Analytics
+                    </CardTitle>
+                    <CardDescription>
+                      Detailed insights and performance metrics
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-4">
+                        <h3 className="font-semibold text-foreground">Weekly Performance</h3>
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <span className="text-sm text-muted-foreground">XP Awarded This Week</span>
+                            <span className="font-medium">{stats?.totalXpAwarded || 0}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-sm text-muted-foreground">Active Participants</span>
+                            <span className="font-medium">{stats?.activeUsers || 0}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-sm text-muted-foreground">Pending Reviews</span>
+                            <span className="font-medium">{stats?.totalReviews || 0}</span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">Flagged Content</span>
-                        <span className="font-medium text-destructive">{stats?.pendingFlags || 0}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">System Status</span>
-                        <Badge variant={stats?.systemHealth && (stats.systemHealth.submissionSuccessRate + stats.systemHealth.avgReviewScore - stats.systemHealth.flagRate) / 2 >= 60 ? 'default' : 'destructive'}>
-                          {stats?.systemHealth ?
-                            (() => {
-                              const overallScore = (stats.systemHealth.submissionSuccessRate + stats.systemHealth.avgReviewScore - stats.systemHealth.flagRate) / 2
-                              if (overallScore >= 80) return 'Healthy'
-                              if (overallScore >= 60) return 'Warning'
-                              return 'Critical'
-                            })() : 'Unknown'}
-                        </Badge>
+
+                      <div className="space-y-4">
+                        <h3 className="font-semibold text-foreground">System Health</h3>
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <span className="text-sm text-muted-foreground">Total Submissions</span>
+                            <span className="font-medium">{stats?.totalSubmissions || 0}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-sm text-muted-foreground">Flagged Content</span>
+                            <span className="font-medium text-destructive">{stats?.pendingFlags || 0}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-sm text-muted-foreground">System Status</span>
+                            <Badge variant={stats?.systemHealth && (stats.systemHealth.submissionSuccessRate + stats.systemHealth.avgReviewScore - stats.systemHealth.flagRate) / 2 >= 60 ? 'default' : 'destructive'}>
+                              {stats?.systemHealth ?
+                                (() => {
+                                  const overallScore = (stats.systemHealth.submissionSuccessRate + stats.systemHealth.avgReviewScore - stats.systemHealth.flagRate) / 2
+                                  if (overallScore >= 80) return 'Healthy'
+                                  if (overallScore >= 60) return 'Warning'
+                                  return 'Critical'
+                                })() : 'Unknown'}
+                            </Badge>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
         </div>
-      </div>
       </AdminGuard>
     </AuthGuard>
   )
