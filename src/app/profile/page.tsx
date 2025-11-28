@@ -24,6 +24,8 @@ import {
   Shield
 } from 'lucide-react'
 import { SubmissionsList } from '@/components/profile/SubmissionsList'
+import { GamifiedRankDisplay, GamifiedRankBadge } from '@/components/gamified'
+import { getGamifiedRank } from '@/lib/gamified-ranks'
 
 interface UserProfileData {
   profile: {
@@ -206,15 +208,27 @@ export default function ProfilePage() {
               </h2>
               <p className="text-muted-foreground mt-1 flex items-center justify-center md:justify-start gap-2">
                 <span>Joined {formatDate(profile.joinedAt || profile.createdAt)}</span>
-                <span className="w-1 h-1 rounded-full bg-border"></span>
-                <span className="text-primary font-medium flex items-center gap-1">
-                  {getRoleIcon(profile.role)}
-                  {profile.role}
-                </span>
+                {/* System permission role (ADMIN, REVIEWER) - only show for elevated permissions */}
+                {profile.role !== 'USER' && (
+                  <>
+                    <span className="w-1 h-1 rounded-full bg-border"></span>
+                    <span className="text-primary font-medium flex items-center gap-1">
+                      {getRoleIcon(profile.role)}
+                      {profile.role}
+                    </span>
+                  </>
+                )}
               </p>
             </div>
 
             <div className="flex flex-wrap justify-center md:justify-start gap-3">
+              {/* Gamified Rank Badge */}
+              <GamifiedRankBadge
+                rank={getGamifiedRank(profile.totalXp)}
+                size="lg"
+                animated={true}
+              />
+
               <Badge variant="outline" className="px-3 py-1.5 text-sm border-yellow-500/30 bg-yellow-500/5 text-yellow-600 dark:text-yellow-400 backdrop-blur-sm shadow-sm">
                 <Trophy className="h-3.5 w-3.5 mr-1.5 text-yellow-500" />
                 Rank #{statistics?.rank?.allTime || 'N/A'}
@@ -228,6 +242,16 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
+      </MobileSection>
+
+      {/* Gamified Rank Progress */}
+      <MobileSection spacing="normal">
+        <GamifiedRankDisplay
+          totalXp={profile.totalXp}
+          variant="card"
+          showProgress={true}
+          animated={true}
+        />
       </MobileSection>
 
       {/* Stats Grid */}
