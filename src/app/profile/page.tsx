@@ -69,6 +69,8 @@ interface UserProfileData {
     xpAwarded?: number
     finalXp?: number
     createdAt: string
+    aiSummary?: string
+    summaryGeneratedAt?: string
   }>
   recentReviews: Array<{
     id: string

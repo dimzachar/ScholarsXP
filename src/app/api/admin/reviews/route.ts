@@ -46,6 +46,7 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
                     platform: true,
                     title: true,
                     finalXp: true,
+                    aiSummary: true,
                     peerReviews: {
                         select: {
                             id: true,

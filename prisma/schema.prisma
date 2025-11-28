@@ -65,6 +65,8 @@ model Submission {
   consensusScore     Float?
   reviewCount        Int          @default(0)
   flagCount          Int          @default(0)
+  aiSummary          String?      // AI-generated feedback summary (cached)
+  summaryGeneratedAt DateTime?    // Timestamp when AI summary was generated
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
   weekNumber         Int

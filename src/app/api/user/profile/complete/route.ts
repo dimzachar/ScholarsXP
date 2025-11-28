@@ -91,7 +91,7 @@ async function getOptimizedCompleteProfile(
         // Get recent submissions only (limit to 5 for smaller response)
         serviceSupabase
           .from('Submission')
-          .select('id, title, url, platform, status, finalXp, aiXp, createdAt')
+          .select('id, title, url, platform, status, finalXp, aiXp, createdAt, aiSummary, summaryGeneratedAt')
           .eq('userId', userId)
           .order('createdAt', { ascending: false }),
 
@@ -227,6 +227,10 @@ async function getOptimizedCompleteProfile(
       // Combine and sort by date (most recent first)
       const allSubmissions = [...regularSubmissions, ...legacySubmissionsFormatted]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+      // DEBUG: Log submission data to check aiSummary
+      console.log('🔍 DEBUG: First submission data:', JSON.stringify(allSubmissions[0], null, 2))
+      console.log('🔍 DEBUG: Raw Supabase data sample:', JSON.stringify(submissionsResult.data?.[0], null, 2))
 
       const recentSubmissions = allSubmissions
 

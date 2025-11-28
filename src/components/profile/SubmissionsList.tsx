@@ -1,6 +1,6 @@
 'use client'
 import { useState, useMemo, useEffect } from 'react'
-import { Search, Calendar, ChevronDown, ExternalLink, CheckCircle2, Award } from 'lucide-react'
+import { Search, Calendar, ChevronDown, ExternalLink, CheckCircle2, Award, Sparkles } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -221,7 +221,10 @@ export function SubmissionsList({ submissions }: SubmissionsListProps) {
                                                 </div>
                                             ) : summaries[sub.id] ? (
                                                 <div className="space-y-1">
-                                                    <p className="font-medium text-xs text-primary/80 uppercase tracking-wider">Feedback Summary</p>
+                                                    <p className="font-medium text-xs text-primary/80 uppercase tracking-wider flex items-center gap-1">
+                                                        <Sparkles className="h-4 w-4 text-blue-500" />
+                                                        AI Feedback Summary
+                                                    </p>
                                                     <p className="leading-relaxed">{summaries[sub.id]}</p>
                                                 </div>
                                             ) : (

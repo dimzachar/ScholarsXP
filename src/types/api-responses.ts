@@ -173,6 +173,8 @@ export interface SimpleSubmissionDTO {
   status: string
   xpAwarded: number
   createdAt: string
+  aiSummary?: string
+  summaryGeneratedAt?: string
   // Removed: detailed content, review data, metrics
 }
 
@@ -284,8 +286,8 @@ export class ResponseTransformer {
     const completedReviewsCount = hasPeerReviewsArray
       ? peerReviews.length
       : submission.completedReviewCount
-        ?? submission.reviewCount
-        ?? 0
+      ?? submission.reviewCount
+      ?? 0
     const assignmentCount = submission.reviewAssignments?.length
       ?? submission._count?.reviewAssignments
       ?? submission.reviewAssignmentsCount
@@ -340,7 +342,9 @@ export class ResponseTransformer {
       platform: submission.platform,
       status: submission.status,
       xpAwarded: submission.finalXp || submission.aiXp || 0,
-      createdAt: submission.createdAt
+      createdAt: submission.createdAt,
+      aiSummary: submission.aiSummary,
+      summaryGeneratedAt: submission.summaryGeneratedAt
     }
   }
 
@@ -406,8 +410,8 @@ export class ResponseSizeMonitor {
   }> = []
 
   static recordOptimization(
-    endpoint: string, 
-    originalData: any, 
+    endpoint: string,
+    originalData: any,
     optimizedData: any
   ): void {
     const originalSize = JSON.stringify(originalData).length

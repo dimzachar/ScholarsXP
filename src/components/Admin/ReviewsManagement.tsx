@@ -29,7 +29,8 @@ import {
     Star,
     Clock,
     CheckCircle,
-    LayoutList
+    LayoutList,
+    Sparkles
 } from 'lucide-react'
 
 interface Review {
@@ -55,6 +56,7 @@ interface SubmissionWithReviews {
     platform: string
     title: string | null
     finalXp: number | null
+    aiSummary: string | null
     peerReviews: Review[]
 }
 
@@ -196,6 +198,24 @@ export default function ReviewsManagement() {
                                             </div>
                                         </div>
                                     </div>
+
+                                    {submission.aiSummary && (
+                                        <div className="px-4 py-3 bg-blue-50/50 dark:bg-blue-950/10 border-b border-blue-100 dark:border-blue-900/20">
+                                            <div className="flex items-start gap-2">
+                                                <div className="mt-0.5">
+                                                    <Sparkles className="h-4 w-4 text-blue-500" />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                                                        AI Feedback Summary
+                                                    </p>
+                                                    <p className="text-sm text-muted-foreground leading-relaxed">
+                                                        {submission.aiSummary}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <div className="p-0">
                                         <Table>

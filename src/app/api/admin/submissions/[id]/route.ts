@@ -112,7 +112,7 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
             WHERE id::text = ${submissionId}
             LIMIT 1
           ` as any[]
-        } catch (_) {}
+        } catch (_) { }
       }
 
       const legacySubmission = legacySubmissionResult[0] || null
@@ -353,7 +353,7 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
 
         result = await prisma.submission.update({
           where: { id: submissionId },
-          data: { 
+          data: {
             status: normalized,
             updatedAt: new Date()
           }
@@ -373,7 +373,8 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
             }
           }
         })
-        break }
+        break
+      }
 
       case 'updateXp':
         // First try to find in regular submissions
@@ -395,7 +396,7 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
               WHERE id = ${submissionId}::uuid
               LIMIT 1
             ` as any[]
-          } catch (_) {}
+          } catch (_) { }
           if (!legacySubmissionResult || legacySubmissionResult.length === 0) {
             try {
               legacySubmissionResult = await prisma.$queryRaw`
@@ -405,7 +406,7 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
                 WHERE id::text = ${submissionId}
                 LIMIT 1
               ` as any[]
-            } catch (_) {}
+            } catch (_) { }
           }
 
           const legacySubmission = legacySubmissionResult[0] || null
@@ -597,6 +598,43 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
             ...(fieldToUpdate === 'finalXp' ? { status: 'FINALIZED' } : {})
           }
         })
+
+        // If finalizing, generate AI summary in background
+        if (fieldToUpdate === 'finalXp') {
+          // We don't await this to keep the response fast
+          (async () => {
+            try {
+              // Check if summary already exists
+              const sub = await prisma.submission.findUnique({
+                where: { id: submissionId },
+                select: { title: true, aiSummary: true }
+              })
+
+              if (sub && !sub.aiSummary) {
+                const reviews = await prisma.peerReview.findMany({
+                  where: { submissionId },
+                  select: { comments: true, xpScore: true, qualityRating: true }
+                })
+
+                // Import dynamically to avoid circular dependencies if any
+                const { generateReviewSummary } = await import('@/lib/ai-summary')
+                const summary = await generateReviewSummary(sub.title || 'Untitled Submission', reviews)
+
+                if (!summary.startsWith('Failed to generate') && !summary.startsWith('No detailed feedback')) {
+                  await prisma.submission.update({
+                    where: { id: submissionId },
+                    data: {
+                      aiSummary: summary,
+                      summaryGeneratedAt: new Date()
+                    }
+                  })
+                }
+              }
+            } catch (err) {
+              console.error('Background summary generation failed:', err)
+            }
+          })()
+        }
 
         result = {
           message: propagationResult.message,
