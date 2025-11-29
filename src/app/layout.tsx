@@ -27,6 +27,8 @@ export const viewport = {
   maximumScale: 1,
 }
 
+import CustomCursor from '@/components/ui/CustomCursor'
+
 export default function RootLayout({
   children,
 }: {
@@ -38,21 +40,22 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       </head>
       <body suppressHydrationWarning className={`${oxanium.variable} font-sans`}>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <AuthErrorBoundary>
-              <AuthProvider>
-                <ConditionalLayout>
-                  {children}
-                </ConditionalLayout>
-                <Toaster />
-              </AuthProvider>
-            </AuthErrorBoundary>
-          </ThemeProvider>
+        <CustomCursor />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AuthErrorBoundary>
+            <AuthProvider>
+              <ConditionalLayout>
+                {children}
+              </ConditionalLayout>
+              <Toaster />
+            </AuthProvider>
+          </AuthErrorBoundary>
+        </ThemeProvider>
         <Analytics />
       </body>
     </html>

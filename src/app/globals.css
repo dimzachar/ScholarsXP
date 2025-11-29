@@ -152,25 +152,6 @@
     --shadow-xl: 0px 2px 5px 0px hsl(0 0% 0% / 0.60), 0px 8px 10px -1px hsl(0 0% 0% / 0.60);
     --shadow-2xl: 0px 2px 5px 0px hsl(0 0% 0% / 1.50)
   }
-  body {
-    letter-spacing: var(--tracking-normal);
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-}
-
-/* Custom animations and utilities */
-@layer utilities {
-  .animate-fade-in {
-    animation: fadeIn 0.8s ease-in-out;
-  }
 
   .animate-slide-up {
     animation: slideUp 0.6s ease-out;
