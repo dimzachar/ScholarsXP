@@ -245,7 +245,22 @@ export class SubmissionProcessingQueue {
         )
 
         if (userId) {
-          await ensureReviewAssignments(submissionId, userId, { taskTypes: heuristicTaskTypes })
+          const result = await ensureReviewAssignments(submissionId, userId, { taskTypes: heuristicTaskTypes })
+
+          // Persist assignment attempt to database
+          await prisma.submission.update({
+            where: { id: submissionId },
+            data: {
+              assignmentAttemptedAt: new Date(),
+              assignmentError: result.success
+                ? null
+                : JSON.stringify({
+                  status: result.status,
+                  error: result.error,
+                  timestamp: new Date().toISOString()
+                })
+            }
+          })
         } else {
           console.warn(`[PeerReview] Skipping auto-assignment for ${submissionId}: submission userId missing`)
         }
@@ -291,7 +306,22 @@ export class SubmissionProcessingQueue {
         )
 
         if (userId) {
-          await ensureReviewAssignments(submissionId, userId, { taskTypes: ['A'] })
+          const result = await ensureReviewAssignments(submissionId, userId, { taskTypes: ['A'] })
+
+          // Persist assignment attempt to database
+          await prisma.submission.update({
+            where: { id: submissionId },
+            data: {
+              assignmentAttemptedAt: new Date(),
+              assignmentError: result.success
+                ? null
+                : JSON.stringify({
+                  status: result.status,
+                  error: result.error,
+                  timestamp: new Date().toISOString()
+                })
+            }
+          })
         } else {
           console.warn(`[PeerReview] Skipping auto-assignment for ${submissionId}: submission userId missing`)
         }

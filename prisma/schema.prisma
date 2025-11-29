@@ -65,6 +65,9 @@ model Submission {
   consensusScore     Float?
   reviewCount        Int          @default(0)
   flagCount          Int          @default(0)
+  // Assignment tracking fields
+  assignmentError        String?      // JSON string with assignment error details
+  assignmentAttemptedAt  DateTime?    // Last time reviewer assignment was attempted
   aiSummary          String?      // AI-generated feedback summary (cached)
   summaryGeneratedAt DateTime?    // Timestamp when AI summary was generated
   createdAt          DateTime     @default(now())

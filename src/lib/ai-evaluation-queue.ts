@@ -216,7 +216,22 @@ export class AiEvaluationQueue {
         })
 
         if (evaluation.submission.userId) {
-          await ensureReviewAssignments(evaluation.submissionId, evaluation.submission.userId, { taskTypes })
+          const result = await ensureReviewAssignments(evaluation.submissionId, evaluation.submission.userId, { taskTypes })
+
+          // Persist assignment attempt to database
+          await prisma.submission.update({
+            where: { id: evaluation.submissionId },
+            data: {
+              assignmentAttemptedAt: new Date(),
+              assignmentError: result.success
+                ? null
+                : JSON.stringify({
+                  status: result.status,
+                  error: result.error,
+                  timestamp: new Date().toISOString()
+                })
+            }
+          })
         } else {
           console.warn(`[PeerReview] Skipping auto-assignment for ${evaluation.submissionId}: submission userId missing`)
         }
@@ -272,7 +287,22 @@ export class AiEvaluationQueue {
       })
 
       if (evaluation.submission.userId) {
-        await ensureReviewAssignments(evaluation.submissionId, evaluation.submission.userId, { taskTypes: analysis.taskTypes })
+        const result = await ensureReviewAssignments(evaluation.submissionId, evaluation.submission.userId, { taskTypes: analysis.taskTypes })
+
+        // Persist assignment attempt to database
+        await prisma.submission.update({
+          where: { id: evaluation.submissionId },
+          data: {
+            assignmentAttemptedAt: new Date(),
+            assignmentError: result.success
+              ? null
+              : JSON.stringify({
+                status: result.status,
+                error: result.error,
+                timestamp: new Date().toISOString()
+              })
+          }
+        })
       } else {
         console.warn(`[PeerReview] Skipping auto-assignment for ${evaluation.submissionId}: submission userId missing`)
       }
@@ -341,7 +371,7 @@ export class AiEvaluationQueue {
 
       if (shouldFail) {
         console.error(`AI evaluation ${evaluationId} failed permanently after ${this.MAX_RETRIES} retries`)
-        
+
         // Update submission status to indicate AI evaluation failed
         await prisma.submission.update({
           where: { id: evaluation.submissionId },
