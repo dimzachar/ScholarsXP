@@ -101,11 +101,11 @@ export const POST = withPermission('review_content')(
           }
         }, { status: 400 })
       }
-      if (task === 'B' && submission.platform !== 'Medium' && submission.platform !== 'Reddit') {
+      if (task === 'B' && submission.platform !== 'Medium' && submission.platform !== 'Reddit' && submission.platform !== 'Notion') {
         return NextResponse.json({
           success: false,
           error: {
-            error: `Task B applies to Medium or Reddit; got ${submission.platform}`,
+            error: `Task B applies to Medium, Reddit, or Notion; got ${submission.platform}`,
             code: 'INVALID_PLATFORM'
           }
         }, { status: 400 })
