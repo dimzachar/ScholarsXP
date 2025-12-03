@@ -493,6 +493,12 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
                 where: { id: actualUser.id },
                 data: { totalXp: { increment: xpDifference } }
               })
+
+              // Invalidate user profile cache after XP update
+              const { CacheInvalidation } = await import('@/lib/cache/invalidation')
+              const { multiLayerCache } = await import('@/lib/cache/enhanced-cache')
+              const cacheInvalidation = new CacheInvalidation(multiLayerCache)
+              await cacheInvalidation.invalidateOnUserAction('xp_awarded', actualUser.id)
             }
 
             // Create XP transaction record

@@ -520,6 +520,13 @@ export class ConsensusCalculatorService {
         const duration = Date.now() - startTime
         console.log(`✅ Consensus transaction completed in ${duration}ms for submission ${submissionId}: ${result.finalXp} XP`)
 
+        // Invalidate user profile cache after XP update
+        const { CacheInvalidation } = await import('@/lib/cache/invalidation')
+        const { multiLayerCache } = await import('@/lib/cache/enhanced-cache')
+        const cacheInvalidation = new CacheInvalidation(multiLayerCache)
+        await cacheInvalidation.invalidateOnUserAction('xp_awarded', submission.userId)
+        console.log(`🗑️ Cache invalidated for user ${submission.userId} after XP award`)
+
       } catch (error) {
         const duration = Date.now() - startTime
         console.error(`❌ Consensus transaction failed after ${duration}ms for submission ${submissionId}:`, error)

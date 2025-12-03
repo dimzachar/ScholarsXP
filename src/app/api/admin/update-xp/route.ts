@@ -72,9 +72,12 @@ async function updateXpHandler(request: AuthenticatedRequest) {
 
     console.log(`Admin updated XP for user ${updatedUser.username}: ${oldXp} -> ${xpAmount} (${xpDifference >= 0 ? '+' : ''}${xpDifference})`)
 
-    // Invalidate user's cached data by triggering a cache refresh
-    // This will force the dashboard to fetch fresh data
-    console.log(`??? Invalidating cache for user ${updatedUser.id} after XP update`)
+    // Invalidate user's cached data to force fresh data on dashboard/profile
+    const { CacheInvalidation } = await import('@/lib/cache/invalidation')
+    const { multiLayerCache } = await import('@/lib/cache/enhanced-cache')
+    const cacheInvalidation = new CacheInvalidation(multiLayerCache)
+    await cacheInvalidation.invalidateOnUserAction('xp_awarded', userId)
+    console.log(`🗑️ Cache invalidated for user ${updatedUser.id} after XP update`)
 
     return NextResponse.json({
       message: `Successfully updated XP for ${updatedUser.username}`,

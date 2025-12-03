@@ -361,6 +361,12 @@ export class ReviewIncentivesService {
       `Review reward for submission ${submissionId}`,
       submissionId
     )
+
+    // Invalidate user profile cache after XP update
+    const { CacheInvalidation } = await import('@/lib/cache/invalidation')
+    const { multiLayerCache } = await import('@/lib/cache/enhanced-cache')
+    const cacheInvalidation = new CacheInvalidation(multiLayerCache)
+    await cacheInvalidation.invalidateOnUserAction('xp_awarded', reviewerId)
   }
 
   private async applyXpPenalty(

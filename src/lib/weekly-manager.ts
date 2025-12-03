@@ -74,6 +74,12 @@ export async function processWeeklyReset(): Promise<WeeklyProcessingResult> {
               }
             })
             console.log(`Awarded ${bonusXp} Parthenon XP to user ${user.username} for ${newStreakWeeks}-week streak`)
+
+            // Invalidate user profile cache after streak bonus
+            const { CacheInvalidation } = await import('@/lib/cache/invalidation')
+            const { multiLayerCache } = await import('@/lib/cache/enhanced-cache')
+            const cacheInvalidation = new CacheInvalidation(multiLayerCache)
+            await cacheInvalidation.invalidateOnUserAction('xp_awarded', user.id)
           }
           
           streaksAwarded++

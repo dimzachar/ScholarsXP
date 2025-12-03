@@ -40,10 +40,12 @@ export class CacheInvalidation {
     const invalidationMap = {
       'submission_created': ['analytics:*', 'leaderboard:*', 'user-metrics:*', 'submission-count'],
       'submission_reviewed': ['analytics:*', 'leaderboard:*'],
-      'user_updated': userId ? [`user:${userId}:*`] : ['user-count'],
-      'xp_awarded': ['analytics:*', 'leaderboard:*', 'user-metrics:*'],
-      'weekly_reset': ['leaderboard:*', 'analytics:*', 'user-metrics:*'],
-      'achievement_earned': userId ? [`user:${userId}:*`, 'analytics:*'] : ['analytics:*']
+      'user_updated': userId ? [`user:${userId}:*`, `api:complete_profile:userId:${userId}`] : ['user-count', 'api:complete_profile:*'],
+      'xp_awarded': userId 
+        ? ['analytics:*', 'leaderboard:*', 'user-metrics:*', `api:complete_profile:userId:${userId}`]
+        : ['analytics:*', 'leaderboard:*', 'user-metrics:*', 'api:complete_profile:*'],
+      'weekly_reset': ['leaderboard:*', 'analytics:*', 'user-metrics:*', 'api:complete_profile:*'],
+      'achievement_earned': userId ? [`user:${userId}:*`, `api:complete_profile:userId:${userId}`, 'analytics:*'] : ['analytics:*', 'api:complete_profile:*']
     }
 
     const patterns = invalidationMap[action as keyof typeof invalidationMap] || []
@@ -81,9 +83,12 @@ export class CacheInvalidation {
     
     if (userId) {
       await this.invalidateByPattern(`user:${userId}:*`)
+      // Also invalidate the complete profile cache (uses different key format)
+      await this.invalidateByPattern(`api:complete_profile:userId:${userId}`)
     } else {
       await this.invalidateByPattern('user:*')
       await this.invalidateByPattern('user-metrics:*')
+      await this.invalidateByPattern('api:complete_profile:*')
       await this.cache.delete('user-count')
     }
   }
