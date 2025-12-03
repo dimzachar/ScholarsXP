@@ -105,7 +105,7 @@ export function UserRankingCard({
           )}
         </CardTitle>
         <CardDescription>
-          {getRankDescription(rank.weekly, rank.totalUsers)}
+          {rank.weekly > 0 ? getRankDescription(rank.weekly, rank.totalUsers) : 'No activity this week yet'}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -114,8 +114,8 @@ export function UserRankingCard({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-muted-foreground">This Week</span>
-              <Badge variant={getRankBadgeVariant(rank.weekly, rank.totalUsers)}>
-                #{rank.weekly}
+              <Badge variant={rank.weekly > 0 ? getRankBadgeVariant(rank.weekly, rank.totalUsers) : 'outline'}>
+                {rank.weekly > 0 ? `#${rank.weekly}` : '—'}
               </Badge>
             </div>
             <div className="flex items-center justify-between text-sm">
@@ -123,7 +123,7 @@ export function UserRankingCard({
                 <Users className="h-4 w-4" />
                 {rank.totalUsers} scholars
               </span>
-              {showPercentile && (
+              {showPercentile && rank.weekly > 0 && (
                 <span className="text-muted-foreground">
                   Top {weeklyPercentile.toFixed(0)}%
                 </span>
@@ -157,7 +157,9 @@ export function UserRankingCard({
             <div className="space-y-2">
               <h4 className="text-sm font-medium">Performance Insight</h4>
               <p className="text-xs text-muted-foreground">
-                {rank.weekly < rank.allTime 
+                {rank.weekly === 0
+                  ? `Submit content this week to get your weekly ranking!`
+                  : rank.weekly < rank.allTime 
                   ? `You're performing better this week! You've moved up ${rank.allTime - rank.weekly} positions.`
                   : rank.weekly > rank.allTime
                   ? `Focus on consistency to improve your weekly ranking.`
@@ -178,7 +180,7 @@ export function UserRankingCard({
               </div>
               <div className="text-center">
                 <div className="text-lg font-bold text-primary">
-                  {Math.max(0, rank.totalUsers - rank.weekly)}
+                  {rank.weekly > 0 ? Math.max(0, rank.totalUsers - rank.weekly) : '—'}
                 </div>
                 <div className="text-xs text-muted-foreground">Behind you</div>
               </div>

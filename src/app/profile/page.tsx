@@ -235,12 +235,10 @@ export default function ProfilePage() {
                 <Trophy className="h-3.5 w-3.5 mr-1.5 text-yellow-500" />
                 Rank #{statistics?.rank?.allTime || 'N/A'}
               </Badge>
-              {statistics?.rank?.weekly && statistics.rank.weekly > 0 && (
-                <Badge variant="outline" className="px-3 py-1.5 text-sm border-green-500/30 bg-green-500/5 text-green-600 dark:text-green-400 backdrop-blur-sm shadow-sm">
-                  <TrendingUp className="h-3.5 w-3.5 mr-1.5 text-green-500" />
-                  Weekly #{statistics.rank.weekly}
-                </Badge>
-              )}
+              <Badge variant="outline" className="px-3 py-1.5 text-sm border-green-500/30 bg-green-500/5 text-green-600 dark:text-green-400 backdrop-blur-sm shadow-sm">
+                <TrendingUp className="h-3.5 w-3.5 mr-1.5 text-green-500" />
+                Weekly {statistics?.rank?.weekly && statistics.rank.weekly > 0 ? `#${statistics.rank.weekly}` : '—'}
+              </Badge>
             </div>
           </div>
         </div>
