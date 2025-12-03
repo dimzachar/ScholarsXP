@@ -32,12 +32,12 @@ export interface GamifiedRank {
 }
 
 export const RANK_THRESHOLDS: GamifiedRank[] = [
-    // Initiate - Base Discord Role (0-999 XP)
+    // Initiate - Base Discord Role (1-999 XP) - 0 XP = no rank (regular user)
     {
         category: 'Initiate',
         tier: null,
         displayName: 'Initiate',
-        minXp: 0,
+        minXp: 1,
         maxXp: 999,
         color: '#94a3b8',
         gradient: 'from-slate-400 to-slate-500',
