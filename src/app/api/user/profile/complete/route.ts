@@ -221,7 +221,8 @@ async function getOptimizedCompleteProfile(
         status: 'LEGACY_IMPORTED',
         xpAwarded: legacy.finalXp || legacy.aiXp || 0,
         finalXp: legacy.finalXp || legacy.aiXp || 0,
-        createdAt: legacy.submittedAt || legacy.importedAt
+        createdAt: legacy.submittedAt || legacy.importedAt,
+        isLegacy: true
       }))
 
       // Combine and sort by date (most recent first)

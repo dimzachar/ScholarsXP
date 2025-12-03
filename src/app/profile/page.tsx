@@ -11,7 +11,6 @@ import { useResponsiveLayout } from '@/hooks/useResponsiveLayout'
 import { MobileLayout, MobileSection, MobileHeader } from '@/components/layout/MobileLayout'
 import { ENABLE_ACHIEVEMENTS } from '@/config/feature-flags'
 import {
-  ArrowLeft,
   User,
   Trophy,
   Zap,
@@ -71,6 +70,7 @@ interface UserProfileData {
     createdAt: string
     aiSummary?: string
     summaryGeneratedAt?: string
+    isLegacy?: boolean
   }>
   recentReviews: Array<{
     id: string
@@ -88,8 +88,8 @@ interface UserProfileData {
 
 export default function ProfilePage() {
   const { user, userProfile: _userProfile, loading: authLoading } = useAuth()
-  const router = useRouter()
-  const { isMobile, isTablet: _isTablet } = useResponsiveLayout()
+  const _router = useRouter()
+  const { isMobile: _isMobile, isTablet: _isTablet } = useResponsiveLayout()
 
   const [profileData, setProfileData] = useState<UserProfileData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -131,7 +131,7 @@ export default function ProfilePage() {
     }
   }
 
-  const getRoleBadgeColor = (role: string) => {
+  const _getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'ADMIN': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
       case 'REVIEWER': return 'bg-blue-100 text-blue-800 border-blue-200'

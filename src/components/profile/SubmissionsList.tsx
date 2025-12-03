@@ -1,7 +1,7 @@
 'use client'
-import { useState, useMemo, useEffect } from 'react'
-import { Search, Calendar, ChevronDown, ExternalLink, CheckCircle2, Award, Sparkles } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { Search, Calendar, ExternalLink, CheckCircle2, Award, Sparkles } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +12,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 
 interface Submission {
     id: string
@@ -22,6 +24,7 @@ interface Submission {
     xpAwarded?: number
     finalXp?: number
     createdAt: string
+    isLegacy?: boolean
 }
 
 interface SubmissionsListProps {
@@ -32,12 +35,18 @@ export function SubmissionsList({ submissions }: SubmissionsListProps) {
     const [searchTerm, setSearchTerm] = useState('')
     const [sortOrder, setSortOrder] = useState('date-desc')
     const [statusFilter, setStatusFilter] = useState('all')
+    const [hideLegacy, setHideLegacy] = useState(true)
     const [showAll, setShowAll] = useState(false)
     const [summaries, setSummaries] = useState<Record<string, string>>({})
     const [loadingSummaries, setLoadingSummaries] = useState<Record<string, boolean>>({})
 
     const filteredAndSortedSubmissions = useMemo(() => {
         let result = [...(submissions || [])]
+
+        // Filter out legacy submissions if toggle is on
+        if (hideLegacy) {
+            result = result.filter((sub) => !sub.isLegacy)
+        }
 
         // Filter by search term
         if (searchTerm) {
@@ -68,7 +77,7 @@ export function SubmissionsList({ submissions }: SubmissionsListProps) {
         })
 
         return result
-    }, [submissions, searchTerm, sortOrder, statusFilter])
+    }, [submissions, searchTerm, sortOrder, statusFilter, hideLegacy])
 
     const formatDate = (dateString: string) => {
         const d = new Date(dateString)
@@ -84,13 +93,22 @@ export function SubmissionsList({ submissions }: SubmissionsListProps) {
         return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700'
     }
 
-    // Get unique statuses for the filter dropdown
+    // Get unique statuses for the filter dropdown (respects legacy filter)
     const uniqueStatuses = useMemo(() => {
-        const statuses = new Set(submissions?.map(s => s.status) || [])
+        let filtered = submissions || []
+        if (hideLegacy) {
+            filtered = filtered.filter(s => !s.isLegacy)
+        }
+        const statuses = new Set(filtered.map(s => s.status))
         return Array.from(statuses)
+    }, [submissions, hideLegacy])
+
+    // Check if there are any legacy submissions to show the toggle
+    const hasLegacySubmissions = useMemo(() => {
+        return submissions?.some(s => s.isLegacy) ?? false
     }, [submissions])
 
-    const fetchSummary = async (submissionId: string) => {
+    const fetchSummary = useCallback(async (submissionId: string) => {
         if (summaries[submissionId] || loadingSummaries[submissionId]) return
 
         setLoadingSummaries(prev => ({ ...prev, [submissionId]: true }))
@@ -107,7 +125,7 @@ export function SubmissionsList({ submissions }: SubmissionsListProps) {
         } finally {
             setLoadingSummaries(prev => ({ ...prev, [submissionId]: false }))
         }
-    }
+    }, [summaries, loadingSummaries])
 
     // Fetch summaries for finalized submissions
     useEffect(() => {
@@ -120,7 +138,7 @@ export function SubmissionsList({ submissions }: SubmissionsListProps) {
                 fetchSummary(sub.id)
             }
         })
-    }, [filteredAndSortedSubmissions.map(s => s.id).join(',')]) // Only re-run when submission IDs change
+    }, [fetchSummary, filteredAndSortedSubmissions, loadingSummaries, summaries]) // Only re-run when submission IDs change
 
     return (
         <div className="space-y-6">
@@ -139,7 +157,7 @@ export function SubmissionsList({ submissions }: SubmissionsListProps) {
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <Select value={sortOrder} onValueChange={setSortOrder}>
                         <SelectTrigger className="w-[160px]">
                             <SelectValue placeholder="Sort by" />
@@ -163,6 +181,19 @@ export function SubmissionsList({ submissions }: SubmissionsListProps) {
                             ))}
                         </SelectContent>
                     </Select>
+
+                    {hasLegacySubmissions && (
+                        <div className="flex items-center gap-2 px-3 py-2 border rounded-md bg-background">
+                            <Checkbox
+                                id="hide-legacy"
+                                checked={hideLegacy}
+                                onCheckedChange={(checked) => setHideLegacy(checked === true)}
+                            />
+                            <Label htmlFor="hide-legacy" className="text-sm cursor-pointer whitespace-nowrap">
+                                Hide legacy
+                            </Label>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -244,6 +275,7 @@ export function SubmissionsList({ submissions }: SubmissionsListProps) {
                             onClick={() => {
                                 setSearchTerm('')
                                 setStatusFilter('all')
+                                setHideLegacy(false)
                             }}
                             className="mt-2"
                         >
