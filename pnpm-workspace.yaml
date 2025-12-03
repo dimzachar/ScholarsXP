@@ -1,0 +1,14 @@
+onlyBuiltDependencies:
+  - '@prisma/client'
+  - '@prisma/engines'
+  - esbuild
+  - prisma
+  - sharp
+  - supabase
+
+ignoredBuiltDependencies:
+  - '@reown/appkit'
+  - bufferutil
+  - keccak
+  - unrs-resolver
+  - utf-8-validate
