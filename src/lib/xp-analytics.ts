@@ -382,7 +382,7 @@ export class XpAnalyticsService {
   }
 
   /**
-   * Record XP transaction
+   * Record XP transaction and update user totals
    */
   async recordXpTransaction(
     userId: string,
@@ -394,7 +394,8 @@ export class XpAnalyticsService {
     try {
       const weekNumber = this.getCurrentWeekNumber()
 
-      const { error } = await supabase
+      // Insert the transaction
+      const { error: txError } = await supabase
         .from('XpTransaction')
         .insert({
           userId,
@@ -405,12 +406,39 @@ export class XpAnalyticsService {
           weekNumber
         })
 
-      if (error) {
-        console.error('Error recording XP transaction:', error)
-        throw error
+      if (txError) {
+        console.error('Error recording XP transaction:', txError)
+        throw txError
       }
 
-      // console.log(`📊 Recorded XP transaction: ${amount} XP for user ${userId} (${type})`)
+      // Update user's totalXp - fetch current value and increment
+      const { data: user, error: fetchError } = await supabase
+        .from('User')
+        .select('totalXp, currentWeekXp')
+        .eq('id', userId)
+        .single()
+
+      if (fetchError || !user) {
+        console.warn('Failed to fetch user for XP update:', fetchError)
+        return
+      }
+
+      // Update totalXp and currentWeekXp
+      // Note: This function always uses current week, so currentWeekXp update is correct
+      // For backdated transactions (like monthly bonuses), use SQL functions instead
+      const { error: updateError } = await supabase
+        .from('User')
+        .update({
+          totalXp: (user.totalXp || 0) + amount,
+          currentWeekXp: (user.currentWeekXp || 0) + amount,
+          updatedAt: new Date().toISOString()
+        })
+        .eq('id', userId)
+
+      if (updateError) {
+        console.warn('Failed to update user XP totals:', updateError)
+        // Don't throw - transaction was recorded, totals can be reconciled later
+      }
     } catch (error) {
       console.error('Error in recordXpTransaction:', error)
       throw error
