@@ -163,4 +163,14 @@ export function validateUrl(url: string): void {
       { url }
     )
   }
+
+  // Check for blocked Twitter accounts
+  const { isBlockedTwitterAccount } = require('./security')
+  const blockedCheck = isBlockedTwitterAccount(url)
+  if (blockedCheck.blocked) {
+    throw new ValidationError(
+      `Submissions from @${blockedCheck.account} are not allowed. Please submit your own content.`,
+      { blockedAccount: blockedCheck.account }
+    )
+  }
 }

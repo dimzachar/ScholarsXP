@@ -10,6 +10,64 @@ export interface SecurityCheck {
   confidence: number
 }
 
+/**
+ * Blocklist of Twitter/X accounts that should be rejected
+ * These are popular accounts that users should not be submitting as their own content
+ */
+const BLOCKED_TWITTER_ACCOUNTS = [
+  'moveindustries',
+  'tradeportxyz',
+  'movementlabsxyz'
+  // Add more blocked accounts here as needed
+]
+
+/**
+ * Extract Twitter/X username from a URL
+ * Handles various URL formats:
+ * - https://x.com/username
+ * - https://twitter.com/username
+ * - https://x.com/username/status/123456
+ */
+export function extractTwitterUsername(url: string): string | null {
+  try {
+    const urlObj = new URL(url)
+    const hostname = urlObj.hostname.toLowerCase()
+    
+    if (!hostname.includes('twitter.com') && !hostname.includes('x.com')) {
+      return null
+    }
+    
+    // Path format: /username or /username/status/123456
+    const pathParts = urlObj.pathname.split('/').filter(Boolean)
+    if (pathParts.length > 0) {
+      // First part is the username
+      return pathParts[0].toLowerCase()
+    }
+    
+    return null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Check if a Twitter/X URL is from a blocked account
+ */
+export function isBlockedTwitterAccount(url: string): { blocked: boolean; account?: string } {
+  const username = extractTwitterUsername(url)
+  
+  if (!username) {
+    return { blocked: false }
+  }
+  
+  const isBlocked = BLOCKED_TWITTER_ACCOUNTS.includes(username.toLowerCase())
+  
+  return {
+    blocked: isBlocked,
+    account: isBlocked ? username : undefined
+  }
+}
+
 export function detectPlatform(url: string): 'Twitter' | 'Medium' | 'Reddit' | 'Notion' | 'LinkedIn' | null {
   if (!url) return null
 
@@ -64,6 +122,15 @@ export function validateURL(url: string): ValidationResult {
     if (!platform) {
       result.isValid = false
       result.errors.push('Only Twitter/X, Medium, Reddit, Notion, and LinkedIn links are supported')
+    }
+
+    // Check for blocked Twitter accounts
+    if (platform === 'Twitter') {
+      const blockedCheck = isBlockedTwitterAccount(url)
+      if (blockedCheck.blocked) {
+        result.isValid = false
+        result.errors.push(`Submissions from @${blockedCheck.account} are not allowed. Please submit your own content.`)
+      }
     }
 
     // Check for HTTPS
