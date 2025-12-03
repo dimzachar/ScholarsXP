@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { xpAnalyticsService } from './xp-analytics'
 import { prisma } from '@/lib/prisma'
 import { getWeekNumber, getWeekBoundaries, recalculateCurrentWeekXp } from '@/lib/utils'
+import { generateReviewSummary } from '@/lib/ai-summary'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -424,6 +425,37 @@ export class ConsensusCalculatorService {
             finalXp: result.finalXp,
             consensusScore: result.consensusScore,
             status: 'FINALIZED'
+          }
+        })
+
+        // 3.5. Generate AI summary asynchronously (non-blocking)
+        // We do this outside the transaction to avoid blocking finalization
+        setImmediate(async () => {
+          try {
+            const reviews = await prisma.peerReview.findMany({
+              where: { submissionId },
+              select: { comments: true, xpScore: true, qualityRating: true }
+            })
+            
+            if (reviews.length > 0) {
+              const summary = await generateReviewSummary(
+                submission.url || 'Untitled Submission',
+                reviews
+              )
+              
+              if (!summary.startsWith('Failed to generate') && !summary.startsWith('No detailed feedback')) {
+                await prisma.submission.update({
+                  where: { id: submissionId },
+                  data: {
+                    aiSummary: summary,
+                    summaryGeneratedAt: new Date()
+                  }
+                })
+                console.log(`✅ AI summary generated for submission ${submissionId}`)
+              }
+            }
+          } catch (err) {
+            console.warn(`⚠️ Failed to generate AI summary for ${submissionId}:`, err)
           }
         })
 
