@@ -38,7 +38,7 @@ interface LeaderboardEntry {
   reviews: number
 }
 
-export const normalizeLeaderboardEntries = (entries: any[] = []): LeaderboardEntry[] =>
+export const normalizeLeaderboardEntries = (entries: unknown[] = []): LeaderboardEntry[] =>
   entries.map((entry) => ({
     ...entry,
     submissions: entry.submissions ?? entry.totalSubmissions ?? entry.submissionCount ?? 0,
@@ -602,11 +602,13 @@ export default function LeaderboardPage() {
                                 const rank = getGamifiedRank(entry.totalXp)
                                 const Icon = rank.icon
                                 return (
-                                  <Icon
-                                    className="h-5 w-5"
-                                    style={{ color: rank.color }}
-                                    strokeWidth={2.5}
-                                  />
+                                  <span title={rank.displayName}>
+                                    <Icon
+                                      className="h-5 w-5"
+                                      style={{ color: rank.color }}
+                                      strokeWidth={2.5}
+                                    />
+                                  </span>
                                 )
                               })()}
                               <p className="text-base sm:text-lg font-bold text-primary">{entry.totalXp.toLocaleString()} XP</p>
