@@ -346,11 +346,11 @@ export const RANK_THRESHOLDS: GamifiedRank[] = [
     },
 ]
 
-export function getGamifiedRank(totalXp: number): GamifiedRank {
+export function getGamifiedRank(totalXp: number): GamifiedRank | null {
     const rank = RANK_THRESHOLDS.find(
         (r) => totalXp >= r.minXp && totalXp <= r.maxXp
     )
-    return rank || RANK_THRESHOLDS[0]
+    return rank || null // 0 XP = no rank (regular user)
 }
 
 export function getNextRank(currentRank: GamifiedRank): GamifiedRank | null {
@@ -364,7 +364,7 @@ export function getNextRank(currentRank: GamifiedRank): GamifiedRank | null {
 }
 
 export function calculateRankProgress(totalXp: number): {
-    currentRank: GamifiedRank
+    currentRank: GamifiedRank | null
     nextRank: GamifiedRank | null
     currentXp: number
     requiredXp: number
@@ -372,6 +372,19 @@ export function calculateRankProgress(totalXp: number): {
     remainingXp: number
 } {
     const currentRank = getGamifiedRank(totalXp)
+
+    // No rank yet (0 XP) - progress toward Initiate
+    if (!currentRank) {
+        return {
+            currentRank: null,
+            nextRank: RANK_THRESHOLDS[0], // Initiate
+            currentXp: totalXp,
+            requiredXp: 1,
+            progressPercentage: 0,
+            remainingXp: 1,
+        }
+    }
+
     const nextRank = getNextRank(currentRank)
 
     if (!nextRank) {
@@ -407,9 +420,9 @@ export function getDiscordRoles(): GamifiedRank[] {
     return RANK_THRESHOLDS.filter((r) => r.isDiscordRole)
 }
 
-export function getDiscordRole(totalXp: number): string {
+export function getDiscordRole(totalXp: number): string | null {
     const rank = getGamifiedRank(totalXp)
-    return rank.category
+    return rank?.category || null
 }
 
 export function formatXP(xp: number): string {

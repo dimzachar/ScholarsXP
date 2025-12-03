@@ -600,6 +600,7 @@ export default function LeaderboardPage() {
                             <div className="flex items-center gap-2 justify-end">
                               {(() => {
                                 const rank = getGamifiedRank(entry.totalXp)
+                                if (!rank) return null
                                 const Icon = rank.icon
                                 return (
                                   <span title={rank.displayName}>

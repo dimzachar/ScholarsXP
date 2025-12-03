@@ -40,7 +40,7 @@ export function GamifiedRankDisplay({
     if (variant === 'compact') {
         return (
             <div className={cn('inline-flex', className)}>
-                <GamifiedRankBadge rank={rank} size="md" animated={animated} />
+                {rank && <GamifiedRankBadge rank={rank} size="md" animated={animated} />}
             </div>
         )
     }
@@ -50,7 +50,7 @@ export function GamifiedRankDisplay({
         if (orientation === 'horizontal') {
             return (
                 <div className={cn('flex flex-col gap-3', className)}>
-                    <GamifiedRankBadge rank={rank} size="lg" animated={animated} />
+                    {rank && <GamifiedRankBadge rank={rank} size="lg" animated={animated} />}
                     {showProgress && (
                         <GamifiedProgressBar
                             totalXp={totalXp}
@@ -72,7 +72,7 @@ export function GamifiedRankDisplay({
                         height="h-32"
                     />
                     <div className="flex flex-col gap-2">
-                        <GamifiedRankBadge rank={rank} size="lg" animated={animated} />
+                        {rank && <GamifiedRankBadge rank={rank} size="lg" animated={animated} />}
                         {progress.nextRank && (
                             <p className="text-xs text-muted-foreground">
                                 Next: {progress.nextRank.displayName}
@@ -95,7 +95,11 @@ export function GamifiedRankDisplay({
                             <p className="text-sm font-medium text-muted-foreground mb-1">
                                 Current Rank
                             </p>
-                            <GamifiedRankBadge rank={rank} size="xl" animated={animated} />
+                            {rank ? (
+                                <GamifiedRankBadge rank={rank} size="xl" animated={animated} />
+                            ) : (
+                                <p className="text-sm text-muted-foreground">No rank yet</p>
+                            )}
                         </div>
                         {progress.nextRank && (
                             <div className="text-right">
@@ -124,7 +128,7 @@ export function GamifiedRankDisplay({
                     )}
 
                     {/* Achievement milestones hint */}
-                    {rank.tier === 'Diamond' && (
+                    {rank?.tier === 'Diamond' && (
                         <div className="mt-2 p-3 rounded-lg bg-gradient-to-r from-cyan-500/10 to-cyan-600/10 border border-cyan-500/20">
                             <p className="text-xs text-center text-cyan-700 dark:text-cyan-300 font-medium">
                                 🎉 You&apos;ve reached the highest tier in {rank.category}!

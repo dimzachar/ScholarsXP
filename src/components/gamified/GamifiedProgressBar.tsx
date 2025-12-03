@@ -38,7 +38,7 @@ export function GamifiedProgressBar({
 
     // Dynamic color based on tier
     const getProgressColor = () => {
-        switch (currentRank.tier) {
+        switch (currentRank?.tier) {
             case 'Bronze':
                 return 'from-amber-500 via-amber-600 to-amber-700'
             case 'Silver':

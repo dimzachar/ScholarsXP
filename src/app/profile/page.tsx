@@ -225,11 +225,13 @@ export default function ProfilePage() {
 
             <div className="flex flex-wrap justify-center md:justify-start gap-3">
               {/* Gamified Rank Badge */}
-              <GamifiedRankBadge
-                rank={getGamifiedRank(profile.totalXp)}
-                size="lg"
-                animated={true}
-              />
+              {getGamifiedRank(profile.totalXp) && (
+                <GamifiedRankBadge
+                  rank={getGamifiedRank(profile.totalXp)!}
+                  size="lg"
+                  animated={true}
+                />
+              )}
 
               <Badge variant="outline" className="px-3 py-1.5 text-sm border-yellow-500/30 bg-yellow-500/5 text-yellow-600 dark:text-yellow-400 backdrop-blur-sm shadow-sm">
                 <Trophy className="h-3.5 w-3.5 mr-1.5 text-yellow-500" />
