@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -56,6 +57,8 @@ export default function NotificationCenter() {
   const channelRef = useRef<RealtimeChannel | null>(null)
   const lastFetchTimeRef = useRef<number>(0)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const [panelPosition, setPanelPosition] = useState({ top: 0, right: 0 })
 
   const normalizeNotification = useCallback((raw: any): Notification => {
     const readValue = raw.read
@@ -107,7 +110,7 @@ export default function NotificationCenter() {
         const body = await response.json()
         const payload = body?.data
         const items = Array.isArray(payload?.notifications)
-          ? payload.notifications.map((item: any) => normalizeNotification(item))
+          ? payload.notifications.map((item: unknown) => normalizeNotification(item))
           : []
 
         setNotifications(items)
@@ -230,8 +233,13 @@ export default function NotificationCenter() {
 
     setupSubscription()
 
-    // Removed 15-second polling - using Supabase realtime instead
-    // This was causing excessive API calls (5.7K requests consuming CPU)
+    // Fallback polling every 2 minutes (reduced from 15 seconds to save CPU)
+    // This ensures notifications still work if realtime connection fails
+    if (!pollRef.current) {
+      pollRef.current = setInterval(() => {
+        fetchNotifications(false) // non-forced, respects 5-second debounce
+      }, 120000) // 2 minutes
+    }
 
     return () => {
       isActive = false
@@ -372,12 +380,20 @@ export default function NotificationCenter() {
   return (
     <div className="relative">
       <Button
+        ref={buttonRef}
         variant="ghost"
         size="sm"
         onClick={() => {
-          const next = !isOpen
-          setIsOpen(next)
-          if (!isOpen) {
+          const willOpen = !isOpen
+          if (willOpen && buttonRef.current) {
+            const rect = buttonRef.current.getBoundingClientRect()
+            setPanelPosition({
+              top: rect.bottom + 8,
+              right: window.innerWidth - rect.right
+            })
+          }
+          setIsOpen(willOpen)
+          if (willOpen) {
             fetchNotifications(true)
           }
         }}
@@ -404,22 +420,25 @@ export default function NotificationCenter() {
         )}
       </Button>
 
-      {isOpen && (
+      {isOpen && typeof document !== 'undefined' && createPortal(
         <>
-          {/* Backdrop */}
+          {/* Backdrop - z-[60] to be above navbar z-50 */}
           <div
-            className="fixed inset-0 z-40"
+            className="fixed inset-0 z-[60]"
             onClick={() => setIsOpen(false)}
           />
 
-          {/* Notification Panel */}
-          <div className={`
-            z-50
-            ${isMobile
-              ? 'fixed inset-0 flex items-start justify-center pt-16 px-4 pb-4'
-              : `absolute mt-2 ${isTablet ? 'right-0 top-full w-96' : 'right-0 top-full w-80'}`
-            }
-          `}>
+          {/* Notification Panel - z-[70] to be above backdrop */}
+          <div 
+            className={`
+              z-[70] fixed
+              ${isMobile
+                ? 'inset-x-0 top-16 flex items-start justify-center px-4 pb-4'
+                : 'w-80'
+              }
+            `}
+            style={!isMobile ? { top: panelPosition.top, right: panelPosition.right } : undefined}
+          >
             <Card className={`
               border-0 shadow-2xl
               ${isMobile
@@ -600,7 +619,8 @@ export default function NotificationCenter() {
               </CardContent>
             </Card>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   )
