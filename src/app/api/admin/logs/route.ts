@@ -97,6 +97,25 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
                     summary = `System config on ${row.targetType}`
                   }
                 }
+              } else if (row.action === 'XP_OVERRIDE') {
+                // Admin manual XP adjustment - include target info
+                const diff = det.difference
+                const diffStr = diff !== undefined ? (diff >= 0 ? `+${diff}` : `${diff}`) : ''
+                const targetLabel = row.targetType !== 'user' ? ` on ${row.targetType} ${row.targetId.slice(0, 8)}...` : ''
+                if (det.oldXp !== undefined && det.newXp !== undefined) {
+                  summary = `XP adjusted: ${det.oldXp} → ${det.newXp} (${diffStr})${targetLabel}${det.reason ? ` - ${det.reason}` : ''}`
+                } else {
+                  summary = `XP override${targetLabel}${det.reason ? `: ${det.reason}` : ''}`
+                }
+              } else if (row.action === 'USER_ROLE_CHANGE') {
+                // Admin role change
+                if (det.oldRole && det.newRole) {
+                  summary = `Role changed: ${det.oldRole} → ${det.newRole}`
+                } else if (det.newRole) {
+                  summary = `Role set to ${det.newRole}`
+                } else {
+                  summary = 'User role updated'
+                }
               } else if (row.action === 'REVIEW_REASSIGN' && det?.newReviewerId) {
                 summary = `Review reassigned ${det.oldReviewerId} -> ${det.newReviewerId}`
               } else if (row.action === 'REVIEW_AUTO_ASSIGN' && det?.reviewerCount) {

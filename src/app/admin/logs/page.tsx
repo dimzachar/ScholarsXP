@@ -8,13 +8,37 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Pagination } from '@/components/ui/pagination'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Calendar, Filter, RefreshCw, Search, ListFilter, SortDesc, SortAsc, ShieldCheck, User as UserIcon, FileText, Award } from 'lucide-react'
+import { Calendar, Filter, RefreshCw, Search, ListFilter, SortDesc, SortAsc, ShieldCheck, User as UserIcon, FileText, Award, Copy, Check } from 'lucide-react'
 import type { NormalizedLogRow } from '@/lib/audit-log'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AuthGuard from '@/components/Auth/AuthGuard'
 import { AdminGuard } from '@/components/Auth/RoleGuard'
 
 type EventType = NormalizedLogRow['eventType']
+
+// Copyable ID component
+function CopyableId({ id, className = '' }: { id: string; className?: string }) {
+  const [copied, setCopied] = React.useState(false)
+  
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(id)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  
+  const shortId = id.length > 12 ? `${id.slice(0, 8)}...` : id
+  
+  return (
+    <button
+      onClick={handleCopy}
+      title={`Click to copy: ${id}`}
+      className={`inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer ${className}`}
+    >
+      <span className="font-mono">{shortId}</span>
+      {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3 opacity-50" />}
+    </button>
+  )
+}
 
 const EVENT_TYPE_META: Record<EventType, { label: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; badgeClass: string }> = {
   // Use only tokens defined in tailwind.config.ts for consistent theming
@@ -279,6 +303,9 @@ export default function AdminLogsPage() {
                           <TableCell className="align-top">
                             <div className="text-sm">
                               <span className="font-medium capitalize">{row.target?.type || '—'}</span>
+                              {row.target?.id && row.target.id !== '00000000-0000-0000-0000-000000000000' && (
+                                <CopyableId id={row.target.id} className="block" />
+                              )}
                               {row.target?.label && (
                                 <span className="text-xs text-muted-foreground block truncate">{row.target.label}</span>
                               )}
@@ -344,6 +371,9 @@ export default function AdminLogsPage() {
                             <dd className="mt-1">
                               <div className="text-sm text-foreground">
                                 <span className="font-medium capitalize">{row.target?.type || '-'}</span>
+                                {row.target?.id && row.target.id !== '00000000-0000-0000-0000-000000000000' && (
+                                  <CopyableId id={row.target.id} className="block" />
+                                )}
                                 {row.target?.label && (
                                   <span className="block text-xs text-muted-foreground break-all">{row.target.label}</span>
                                 )}
