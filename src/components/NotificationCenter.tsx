@@ -230,16 +230,13 @@ export default function NotificationCenter() {
 
     setupSubscription()
 
-    if (!pollRef.current) {
-      pollRef.current = setInterval(() => {
-        fetchNotifications(true)
-      }, 15000)
-    }
+    // Removed 15-second polling - using Supabase realtime instead
+    // This was causing excessive API calls (5.7K requests consuming CPU)
 
     return () => {
       isActive = false
       if (channelRef.current) {
-        console.log('?? Cleaning up notification subscription for user:', user.id)
+        console.log('🔔 Cleaning up notification subscription for user:', user.id)
         supabase.removeChannel(channelRef.current)
         channelRef.current = null
       }
