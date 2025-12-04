@@ -85,14 +85,15 @@ export default function Navigation() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  title={!isActive ? item.label : undefined}
+                  aria-label={item.label}
+                  aria-current={isActive ? 'page' : undefined}
                   className={`transition-all duration-200 hover:bg-accent flex items-center px-3 py-2 rounded-lg ${
                     isActive
                       ? 'text-primary bg-primary/10 font-semibold'
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  <Icon className="h-4 w-4 shrink-0" />
+                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                   {isActive && (
                     <span className="ml-2 whitespace-nowrap">
                       {item.label}

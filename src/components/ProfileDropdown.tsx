@@ -59,6 +59,7 @@ export default function ProfileDropdown({
             <button
               type="button"
               className="flex items-center gap-4 py-2 pl-3 pr-2 rounded-2xl focus:outline-none"
+              aria-label={`User menu for ${displayName}`}
             >
               {/* Name (top), XP + Rank badges (bottom) */}
               <div className="text-right hidden sm:block min-h-[44px]">

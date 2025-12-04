@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
+  maximumScale: 5,
 }
 
 import CustomCursor from '@/components/ui/CustomCursor'
@@ -38,6 +38,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="preconnect" href="https://cdn.discordapp.com" />
       </head>
       <body suppressHydrationWarning className={`${oxanium.variable} font-sans`}>
         <CustomCursor />

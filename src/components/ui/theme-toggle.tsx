@@ -26,7 +26,9 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
         className
       )}
       onClick={toggleTheme}
-      role="button"
+      role="switch"
+      aria-checked={isDark}
+      aria-label={`Switch to ${isDark ? 'light' : 'dark'} theme`}
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {

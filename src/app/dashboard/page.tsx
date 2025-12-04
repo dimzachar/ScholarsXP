@@ -97,7 +97,7 @@ export default function DashboardPage() {
         className="min-h-screen"
       >
         <MobileHeader
-          title={`Welcome back, ${profileData?.displayName || 'Scholar'}!`}
+          title={profileData?.displayName ? `Welcome back, ${profileData.displayName}!` : 'Welcome back, Scholar!'}
           subtitle="Track your progress and continue your learning journey"
           variant="default"
         />
