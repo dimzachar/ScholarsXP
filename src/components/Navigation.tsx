@@ -3,27 +3,17 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import NotificationCenter from '@/components/NotificationCenter'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
+import ProfileDropdown from '@/components/ProfileDropdown'
 import { MobileBottomNav, createNavItem } from '@/components/navigation/MobileBottomNav'
-import { useResponsiveLayout } from '@/hooks/useResponsiveLayout'
-import { Home, Users, Trophy, Gem, Settings, Zap, LogOut, User } from 'lucide-react'
+import { Home, Users, Trophy, Gem, Settings, Zap } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 
 export default function Navigation() {
   const pathname = usePathname()
-  const { user, userProfile, signOut, loading, isAdmin, isReviewer } = useAuth()
-  const { isMobile, isTablet } = useResponsiveLayout()
+  const { user, userProfile, signOut, isAdmin, isReviewer } = useAuth()
 
   const handleSignOut = async () => {
     try {
@@ -75,8 +65,8 @@ export default function Navigation() {
         userRole={isAdmin ? 'admin' : isReviewer ? 'reviewer' : 'user'}
         isAuthenticated={!!user}
       />
-    <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 shadow-sm">
-      <div className="container flex h-16 items-center max-w-7xl mx-auto px-4">
+    <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 shadow-sm overflow-x-hidden">
+      <div className="flex h-16 items-center max-w-7xl mx-auto px-3 sm:px-4 w-full">
         <div className="mr-4 hidden xl:flex">
           <Link href="/" className="mr-6 flex items-center space-x-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
@@ -86,7 +76,7 @@ export default function Navigation() {
               ScholarXP
             </span>
           </Link>
-          <nav className="flex items-center space-x-2 text-sm font-medium">
+          <nav className="flex items-center space-x-1 text-sm font-medium">
             {navItems.map((item) => {
               const Icon = item.icon
               const isActive = pathname === item.href
@@ -95,14 +85,19 @@ export default function Navigation() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`transition-all duration-200 hover:bg-accent flex items-center space-x-2 px-4 py-2 rounded-lg ${
+                  title={!isActive ? item.label : undefined}
+                  className={`transition-all duration-200 hover:bg-accent flex items-center px-3 py-2 rounded-lg ${
                     isActive
                       ? 'text-primary bg-primary/10 font-semibold'
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
-                  <span>{item.label}</span>
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {isActive && (
+                    <span className="ml-2 whitespace-nowrap">
+                      {item.label}
+                    </span>
+                  )}
                 </Link>
               )
             })}
@@ -110,79 +105,34 @@ export default function Navigation() {
         </div>
 
         {/* Mobile navigation */}
-        <div className="flex flex-1 items-center justify-between space-x-2 xl:justify-end">
-          <div className="w-full flex-1 xl:w-auto xl:flex-none">
-            <div className="xl:hidden">
-              <Link href="/" className="flex items-center space-x-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                  <Zap className="h-5 w-5 text-primary-foreground" />
-                </div>
-                <span className="font-bold text-xl text-primary">
-                  ScholarXP
-                </span>
-              </Link>
-            </div>
+        <div className="flex flex-1 items-center justify-between gap-2 xl:justify-end min-w-0">
+          {/* Logo - icon only on small mobile, icon+text on larger mobile */}
+          <div className="flex-shrink-0 xl:hidden">
+            <Link href="/" className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary flex-shrink-0">
+                <Zap className="h-5 w-5 text-primary-foreground" />
+              </div>
+              {/* Hide title on very small screens (< 400px), show on sm+ */}
+              <span className="font-bold text-xl text-primary hidden xs:inline-block sm:inline-block">
+                ScholarXP
+              </span>
+            </Link>
           </div>
 
-          <div className="flex items-center space-x-4">
+          {/* Right side actions - responsive spacing */}
+          <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
             <NotificationCenter />
             <ThemeToggle />
 
-            <Separator orientation="vertical" className="h-6" />
+            <Separator orientation="vertical" className="h-6 hidden sm:block" />
             
             {/* User info */}
             {user ? (
-              <div className="flex items-center space-x-3">
-                <div className="hidden text-right sm:block">
-                  <p className="text-sm font-medium leading-none">
-                    {user.user_metadata?.full_name || user.email?.split('@')[0] || 'User'}
-                  </p>
-                  <div className="flex items-center space-x-1 mt-1">
-                    {userProfile ? (
-                      <>
-                        <Badge variant="secondary" className="text-xs">
-                          {userProfile.totalXp} XP
-                        </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {userProfile.role}
-                        </Badge>
-                      </>
-                    ) : (
-                      <>
-                        <Badge variant="secondary" className="text-xs">
-                          Loading XP...
-                        </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          Loading...
-                        </Badge>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Avatar className="h-9 w-9 cursor-pointer">
-                      <AvatarImage src={user.user_metadata?.avatar_url} alt="User" />
-                      <AvatarFallback className="bg-primary text-primary-foreground">
-                        {(user.user_metadata?.full_name || user.email || 'U')[0].toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem asChild>
-                      <Link href="/profile">
-                        <User className="mr-2 h-4 w-4" />
-                        My Profile
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleSignOut}>
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Sign out
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+              <ProfileDropdown
+                user={user}
+                userProfile={userProfile}
+                onSignOut={handleSignOut}
+              />
             ) : (
               <Link href="/login">
                 <Button variant="default" size="sm">

@@ -29,8 +29,7 @@ export function MobileTabNavigation({ tabs, className }: MobileTabNavigationProp
     return tab.label
   }
 
-  // Determine if we should show icons based on screen size
-  const showIcons = !isMobile || tabs.length <= 3
+  // Always show icons - they're the primary indicator on mobile
 
   return (
     <div className={cn('w-full', className)}>
@@ -53,12 +52,12 @@ export function MobileTabNavigation({ tabs, className }: MobileTabNavigationProp
             key={tab.value}
             value={tab.value}
             className={cn(
-              'flex items-center gap-2 transition-all duration-200',
+              'flex items-center justify-center gap-1.5 transition-all duration-200',
               // Touch target sizing for mobile - using static Tailwind classes
-              isMobile && 'min-h-11', // 44px minimum touch target
+              isMobile && 'min-h-11 flex-col sm:flex-row', // 44px minimum touch target
               isTablet && 'min-h-12', // 48px comfortable touch target
               // Text sizing adjustments
-              isMobile && 'text-sm px-3 py-2',
+              isMobile && 'text-xs px-2 py-2',
               isTablet && 'text-sm px-4 py-3',
               !isMobile && !isTablet && 'text-base px-6 py-3',
               // Enhanced focus states for accessibility
@@ -70,20 +69,18 @@ export function MobileTabNavigation({ tabs, className }: MobileTabNavigationProp
               'hover:bg-muted/50 data-[state=active]:hover:bg-primary/90'
             )}
           >
-            {showIcons && (
-              <tab.icon 
-                className={cn(
-                  'shrink-0',
-                  isMobile ? 'h-4 w-4' : 'h-5 w-5'
-                )} 
-              />
-            )}
+            <tab.icon 
+              className={cn(
+                'shrink-0',
+                isMobile ? 'h-5 w-5' : 'h-5 w-5'
+              )} 
+            />
+            {/* On mobile: show short label only when active; on larger screens: always show */}
             <span className={cn(
               'truncate',
-              // Hide text on very small screens if we have many tabs
-              isMobile && tabs.length > 3 && 'sr-only'
+              isMobile && 'text-[10px] leading-tight'
             )}>
-              {getTabLabel(tab)}
+              {isMobile ? (tab.mobileLabel || tab.label.split(' ')[0]) : getTabLabel(tab)}
             </span>
           </TabsTrigger>
         ))}

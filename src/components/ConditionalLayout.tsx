@@ -27,7 +27,10 @@ export default function ConditionalLayout({ children }: ConditionalLayoutProps) 
     return (
       <>
         <Navigation />
-        {children}
+        {/* Add bottom padding for mobile bottom nav (shows below xl breakpoint) */}
+        <div className="pb-20 xl:pb-0">
+          {children}
+        </div>
       </>
     )
   }

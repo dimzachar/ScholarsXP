@@ -100,13 +100,13 @@ export function ProgressTab({
 
       {/* Enhanced Header with Better Visual Hierarchy */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">Analytics Dashboard</h2>
-            <p className="text-muted-foreground">Track your learning progress and achievements</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight">Analytics Dashboard</h2>
+            <p className="text-muted-foreground text-sm sm:text-base">Track your learning progress and achievements</p>
           </div>
           <Select value={selectedTimeframe} onValueChange={onTimeframeChange}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-full sm:w-48 shrink-0">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -119,19 +119,19 @@ export function ProgressTab({
 
         {/* Quick Stats Overview */}
         {!loadingAnalytics && analyticsData && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card className="p-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
+            <Card className="p-3 sm:p-4">
               <div className="flex items-center space-x-2">
-                <BarChart3 className="h-4 w-4 text-blue-500" />
-                <div>
-                  <p className="text-sm font-medium">
+                <BarChart3 className="h-4 w-4 text-blue-500 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm font-medium truncate">
                     {selectedTimeframe === 'current_week' 
-                      ? 'This Week XP' 
+                      ? 'Week XP' 
                       : selectedTimeframe === 'last_12_weeks'
-                      ? 'Last 12 Weeks XP'
+                      ? '12 Weeks XP'
                       : 'Total XP'}
                   </p>
-                  <p className="text-2xl font-bold dark:text-accent">
+                  <p className="text-xl sm:text-2xl font-bold dark:text-accent">
                     {(() => {
                       // Show different XP based on timeframe
                       if (selectedTimeframe === 'current_week') {
@@ -155,32 +155,32 @@ export function ProgressTab({
                 </div>
               </div>
             </Card>
-            <Card className="p-4">
+            <Card className="p-3 sm:p-4">
               <div className="flex items-center space-x-2">
-                <Target className="h-4 w-4 text-green-500" />
-                <div>
-                  <p className="text-sm font-medium">Goals Complete</p>
-                  <p className="text-2xl font-bold">
-                    {analyticsData?.goalProgress?.filter((g: any) => g.percentage >= 100).length || 0}
+                <Target className="h-4 w-4 text-green-500 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm font-medium truncate">Goals</p>
+                  <p className="text-xl sm:text-2xl font-bold">
+                    {analyticsData?.goalProgress?.filter((g: unknown) => g.percentage >= 100).length || 0}
                   </p>
                 </div>
               </div>
             </Card>
-            <Card className="p-4">
+            <Card className="p-3 sm:p-4">
               <div className="flex items-center space-x-2">
-                <TrendingUp className="h-4 w-4 text-purple-500" />
-                <div>
-                  <p className="text-sm font-medium">Submissions</p>
-                  <p className="text-2xl font-bold">{timeframeCounts.submissions || 0}</p>
+                <TrendingUp className="h-4 w-4 text-purple-500 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm font-medium truncate">Submissions</p>
+                  <p className="text-xl sm:text-2xl font-bold">{timeframeCounts.submissions || 0}</p>
                 </div>
               </div>
             </Card>
-            <Card className="p-4">
+            <Card className="p-3 sm:p-4">
               <div className="flex items-center space-x-2">
-                <Trophy className="h-4 w-4 text-yellow-500" />
-                <div>
-                  <p className="text-sm font-medium">Rank</p>
-                  <p className="text-2xl font-bold">#{profileData?.statistics?.rank?.allTime || 'N/A'}</p>
+                <Trophy className="h-4 w-4 text-yellow-500 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm font-medium truncate">Rank</p>
+                  <p className="text-xl sm:text-2xl font-bold">#{profileData?.statistics?.rank?.allTime || 'N/A'}</p>
                 </div>
               </div>
             </Card>

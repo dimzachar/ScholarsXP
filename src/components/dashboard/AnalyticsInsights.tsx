@@ -166,20 +166,22 @@ export function AnalyticsInsights({
                 <div className="flex-shrink-0 mt-0.5">
                   {getInsightIcon(insight.type, insight.icon)}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="font-medium text-sm">{insight.title}</h4>
-                    <Badge 
-                      variant={getPriorityBadgeVariant(insight.priority)}
-                      className="text-xs"
-                    >
-                      {insight.priority}
-                    </Badge>
-                    <Badge variant="outline" className="text-xs">
-                      {getTypeDisplayName(insight.type)}
-                    </Badge>
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
+                    <h4 className="font-medium text-sm truncate">{insight.title}</h4>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge 
+                        variant={getPriorityBadgeVariant(insight.priority)}
+                        className="text-xs shrink-0"
+                      >
+                        {insight.priority}
+                      </Badge>
+                      <Badge variant="outline" className="text-xs shrink-0">
+                        {getTypeDisplayName(insight.type)}
+                      </Badge>
+                    </div>
                   </div>
-                  <p className="text-sm text-muted-foreground mb-3">
+                  <p className="text-sm text-muted-foreground mb-3 break-words">
                     {insight.description}
                   </p>
                   

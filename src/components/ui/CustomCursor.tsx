@@ -1,11 +1,28 @@
 "use client";
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 const CustomCursor = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const [isMobile, setIsMobile] = useState(false);
+
+    // Check for mobile/touch device
+    useEffect(() => {
+        const checkMobile = () => {
+            const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            const isSmallScreen = window.innerWidth < 768;
+            setIsMobile(hasTouchScreen || isSmallScreen);
+        };
+        
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     useEffect(() => {
+        // Don't render cursor on mobile
+        if (isMobile) return;
+
         const canvas = canvasRef.current;
         if (!canvas) return;
 
@@ -160,6 +177,9 @@ const CustomCursor = () => {
             cancelAnimationFrame(animationFrameId);
         };
     }, []);
+
+    // Don't render on mobile
+    if (isMobile) return null;
 
     return (
         <canvas

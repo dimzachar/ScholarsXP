@@ -202,20 +202,20 @@ export default function XpTrendChart({
       <CardContent>
         <div className="space-y-4">
           {/* Metric Toggle Buttons */}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2">
             {Object.entries(chartConfig).map(([key, config]) => (
               <Button
                 key={key}
                 variant={activeMetrics.includes(key) ? "default" : "outline"}
                 size="sm"
                 onClick={() => toggleMetric(key)}
-                className="h-8 text-xs"
+                className="h-7 sm:h-8 text-[10px] sm:text-xs px-2 sm:px-3"
               >
                 <div
-                  className="w-2 h-2 rounded-full mr-2"
+                  className="w-2 h-2 rounded-full mr-1 sm:mr-2 shrink-0"
                   style={{ backgroundColor: config.color }}
                 />
-                {config.label}
+                <span className="truncate">{config.label}</span>
               </Button>
             ))}
           </div>
@@ -300,14 +300,14 @@ export default function XpTrendChart({
           {/* Legend and Details */}
           {showDetails && (
             <div className="space-y-4">
-              <div className="flex items-center justify-center gap-6 text-sm">
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm">
                 {Object.entries(chartConfig).map(([key, config]) => (
-                  <div key={key} className="flex items-center gap-2">
+                  <div key={key} className="flex items-center gap-1.5">
                     <div
-                      className="w-3 h-3 rounded-full"
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
                       style={{ backgroundColor: config.color }}
                     />
-                    <span>{config.label}</span>
+                    <span className="text-xs sm:text-sm whitespace-nowrap">{config.label}</span>
                   </div>
                 ))}
               </div>
@@ -341,22 +341,22 @@ export default function XpTrendChart({
               </div>
 
               {/* Trend Analysis */}
-              <div className="p-4 bg-muted/50 rounded-lg">
-                <h4 className="font-medium mb-2">Trend Analysis</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Recent 4 weeks avg:</span>
-                    <span className="font-medium ml-2">{Math.round(recentAvg)} XP</span>
+              <div className="p-3 sm:p-4 bg-muted/50 rounded-lg">
+                <h4 className="font-medium mb-2 text-sm sm:text-base">Trend Analysis</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 text-xs sm:text-sm">
+                  <div className="flex justify-between sm:block">
+                    <span className="text-muted-foreground">Recent 4 weeks:</span>
+                    <span className="font-medium sm:ml-2">{Math.round(recentAvg)} XP</span>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">Previous weeks avg:</span>
-                    <span className="font-medium ml-2">{Math.round(olderAvg)} XP</span>
+                  <div className="flex justify-between sm:block">
+                    <span className="text-muted-foreground">Previous avg:</span>
+                    <span className="font-medium sm:ml-2">{Math.round(olderAvg)} XP</span>
                   </div>
-                  <div>
+                  <div className="flex justify-between sm:block items-center">
                     <span className="text-muted-foreground">Trend:</span>
                     <Badge 
                       variant={isPositiveTrend ? 'default' : isNegativeTrend ? 'destructive' : 'secondary'}
-                      className="ml-2"
+                      className="sm:ml-2 text-xs"
                     >
                       {trendPercentage > 0 ? '+' : ''}{trendPercentage.toFixed(1)}%
                     </Badge>

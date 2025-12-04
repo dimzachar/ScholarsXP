@@ -53,11 +53,12 @@ export function MobileBottomNav({
       'safe-area-inset-bottom', // Handle iPhone notch
       className
     )}>
-      <div className="container mx-auto px-4">
+      <div className="w-full px-2 sm:px-4 max-w-full overflow-x-hidden">
         <div className={cn(
           'flex items-center justify-around',
           `min-h-[${TOUCH_TARGET_SIZE.comfortable}px]`,
-          'py-2'
+          'py-2',
+          'gap-1'
         )}>
           {visibleItems.map((item) => {
             const isActive = pathname === item.href || 
@@ -70,8 +71,8 @@ export function MobileBottomNav({
                 className={cn(
                   'flex flex-col items-center justify-center gap-1 relative',
                   'transition-all duration-200 rounded-lg',
-                  `min-h-[${TOUCH_TARGET_SIZE.minimum}px] min-w-[${TOUCH_TARGET_SIZE.minimum}px]`,
-                  'px-3 py-2',
+                  `min-h-[${TOUCH_TARGET_SIZE.minimum}px]`,
+                  'px-2 sm:px-3 py-2 flex-1 max-w-[72px] sm:max-w-[80px]',
                   // Active state
                   isActive && [
                     'text-primary bg-primary/10',
@@ -111,7 +112,7 @@ export function MobileBottomNav({
                 </div>
                 
                 <span className={cn(
-                  'text-xs font-medium transition-all duration-200 truncate max-w-[60px]',
+                  'text-[10px] sm:text-xs font-medium transition-all duration-200 truncate w-full text-center',
                   isActive && 'font-semibold'
                 )}>
                   {item.label}
