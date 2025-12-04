@@ -105,7 +105,8 @@ export default function ProfilePage() {
   const fetchCompleteProfile = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/user/profile/complete')
+      // Add cache-busting timestamp to ensure fresh data
+      const response = await fetch(`/api/user/profile/complete?_t=${Date.now()}`)
 
       if (!response.ok) {
         throw new Error('Failed to fetch profile data')

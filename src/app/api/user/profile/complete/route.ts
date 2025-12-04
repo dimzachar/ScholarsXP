@@ -31,7 +31,11 @@ const optimizedProfileHandler = withPermission('authenticated')(async (request: 
 
       return NextResponse.json(profileData, {
         headers: {
-          'Cache-Control': 'private, max-age=60, stale-while-revalidate=120',
+          // Disable browser caching to ensure XP updates are reflected immediately
+          // Server-side caching still handles performance optimization
+          'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
           'X-Cache': 'OPTIMIZED',
           'X-Execution-Time': executionTime.toString(),
           'X-Performance-Gain': 'optimized_profile'

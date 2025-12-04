@@ -7,9 +7,9 @@ import { ENABLE_ACHIEVEMENTS } from '@/config/feature-flags'
 const cache = new Map<string, { data: any; timestamp: number; ttl: number }>()
 
 const CACHE_TTL = {
-  profile: 5 * 60 * 1000, // 5 minutes
-  leaderboard: 2 * 60 * 1000, // 2 minutes
-  analytics: 3 * 60 * 1000, // 3 minutes
+  profile: 60 * 1000, // 1 minute
+  leaderboard: 60 * 1000, // 1 minute
+  analytics: 2 * 60 * 1000, // 2 minutes
   achievements: 10 * 60 * 1000, // 10 minutes
 } as const
 
@@ -66,8 +66,12 @@ async function fetchWithCache<T>(url: string, cacheKey: string, ttl: number, for
     }
   }
 
+  // Add cache-busting timestamp to bypass browser cache
+  const separator = url.includes('?') ? '&' : '?'
+  const fetchUrl = `${url}${separator}_t=${Date.now()}`
+
   // Fetch fresh data
-  const response = await fetch(url)
+  const response = await fetch(fetchUrl)
   if (!response.ok) {
     throw new Error(`Failed to fetch ${url}: ${response.statusText}`)
   }
@@ -206,7 +210,7 @@ export function useAnalyticsData(timeframe = 'current_week', enabled = true) {
         goalProgress: (xpBreakdownResponse as any)?.goalProgress || [],
         insights: (xpBreakdownResponse as any)?.insights || [],
         achievements: achievementsResponse,
-        timeframe: (xpBreakdownResponse as any)?.timeframe || timeframe
+        timeframe: (xpBreakdownResponse as unknown)?.timeframe || timeframe
       }
 
       setState({ data: combinedData, loading: false, error: null })

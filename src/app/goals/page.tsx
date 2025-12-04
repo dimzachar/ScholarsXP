@@ -56,8 +56,8 @@ export default function GoalsPage() {
       setLoadingGoals(true)
       
       const [xpBreakdownResponse, profileResponse] = await Promise.all([
-        fetch(`/api/user/xp-breakdown?timeframe=${selectedTimeframe}`),
-        fetch('/api/user/profile/complete')
+        fetch(`/api/user/xp-breakdown?timeframe=${selectedTimeframe}&_t=${Date.now()}`),
+        fetch(`/api/user/profile/complete?_t=${Date.now()}`)
       ])
 
       if (xpBreakdownResponse.ok && profileResponse.ok) {
