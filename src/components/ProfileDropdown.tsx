@@ -15,6 +15,7 @@ import { User, LogOut } from 'lucide-react'
 import { UserProfile } from '@/contexts/AuthContext'
 import { User as SupabaseUser } from '@supabase/supabase-js'
 import { getGamifiedRank, type RankTier } from '@/lib/gamified-ranks'
+import { ScrambleText } from '@/components/ui/scramble-text'
 
 // Theme-aware colors for rank tiers (light theme needs darker colors for visibility)
 const tierStyles: Record<RankTier | 'base', string> = {
@@ -60,11 +61,16 @@ export default function ProfileDropdown({
               className="flex items-center gap-4 py-2 pl-3 pr-2 rounded-2xl focus:outline-none"
             >
               {/* Name (top), XP + Rank badges (bottom) */}
-              <div className="text-right hidden sm:block">
+              <div className="text-right hidden sm:block min-h-[44px]">
                 <div className="text-sm font-semibold text-foreground tracking-tight truncate max-w-[150px]">
-                  {displayName}
+                  <ScrambleText 
+                    text={displayName} 
+                    duration={1200}
+                    delay={200}
+                    scrambleOnHover
+                  />
                 </div>
-                <div className="flex items-center justify-end gap-1.5 mt-1 flex-wrap">
+                <div className="flex items-center justify-end gap-1.5 mt-1 flex-wrap min-h-[22px]">
                   <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500">
                     {totalXp.toLocaleString()} XP
                   </span>
