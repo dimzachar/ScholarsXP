@@ -64,8 +64,39 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
               let summary = `${actionLabel} on ${row.targetType} ${row.targetId}`
               
               // Handle different review action types with specific summaries
-              if (row.action === 'SYSTEM_CONFIG' && det?.newStatus) {
-                summary = `Status -> ${det.newStatus}`
+              if (row.action === 'SYSTEM_CONFIG') {
+                // Generate descriptive summaries based on targetId and details
+                if (row.targetId === 'weekly' || det?.targetIdRaw === 'weekly') {
+                  const parts: string[] = ['Weekly reset:']
+                  if (det.usersProcessed !== undefined) parts.push(`${det.usersProcessed} users`)
+                  if (det.streaksAwarded) parts.push(`${det.streaksAwarded} streaks`)
+                  if (det.penaltiesApplied) parts.push(`${det.penaltiesApplied} penalties`)
+                  if (det.missedReviewsFound) parts.push(`${det.missedReviewsFound} missed reviews`)
+                  summary = parts.length > 1 ? parts.join(', ') : 'Weekly reset triggered'
+                } else if (row.targetId === 'aggregate' || det?.targetIdRaw === 'aggregate') {
+                  const total = det.totalProcessed ?? (det.submissionsProcessed || 0) + (det.stuckSubmissionsProcessed || 0)
+                  summary = `XP aggregation: ${total} submission(s) processed`
+                } else if (row.targetId === 'refresh' || det?.targetIdRaw === 'refresh') {
+                  const areas = det.cacheAreasCleared?.join(', ') || 'all'
+                  summary = `Cache refresh: ${areas}`
+                } else if (row.targetId === 'monthly_winners' || det?.targetIdRaw === 'monthly_winners') {
+                  summary = `Monthly winners bulk award${det.month ? ` (${det.month})` : ''}`
+                } else if (row.targetType === 'user' && det?.action) {
+                  // User status changes (deactivate/reactivate)
+                  summary = `User ${det.action}d`
+                } else if (det?.newStatus) {
+                  summary = `Status -> ${det.newStatus}`
+                } else if (det?.subAction) {
+                  summary = `${det.subAction}`
+                } else {
+                  // Fallback: try to extract meaningful info from details
+                  const detailKeys = Object.keys(det).filter(k => k !== 'targetIdRaw')
+                  if (detailKeys.length > 0) {
+                    summary = `Config update: ${detailKeys.slice(0, 3).join(', ')}${detailKeys.length > 3 ? '...' : ''}`
+                  } else {
+                    summary = `System config on ${row.targetType}`
+                  }
+                }
               } else if (row.action === 'REVIEW_REASSIGN' && det?.newReviewerId) {
                 summary = `Review reassigned ${det.oldReviewerId} -> ${det.newReviewerId}`
               } else if (row.action === 'REVIEW_AUTO_ASSIGN' && det?.reviewerCount) {
