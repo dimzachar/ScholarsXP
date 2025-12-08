@@ -8,7 +8,7 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
     const pathParts = url.pathname.split('/')
     const submissionId = pathParts[pathParts.length - 3] // Extract submission ID from path
     const reviewId = pathParts[pathParts.length - 1] // Extract review ID from path
-    const { xpScore, comments, qualityRating, reason } = await request.json()
+    const { xpScore, comments, qualityRating, contentCategory, qualityTier, reason } = await request.json()
 
     // Validate input
     if (typeof xpScore !== 'number' || xpScore < 0 || xpScore > 100) {
@@ -64,6 +64,8 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
           xpScore,
           comments: comments || null,
           qualityRating: qualityRating || null,
+          contentCategory: contentCategory || null,
+          qualityTier: qualityTier || null,
           updatedAt: new Date()
         },
         include: {
@@ -94,7 +96,9 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
             modifiedFields: {
               xpScore: oldScore !== xpScore,
               comments: (existingReview.comments || '') !== (comments || ''),
-              qualityRating: existingReview.qualityRating !== qualityRating
+              qualityRating: existingReview.qualityRating !== qualityRating,
+              contentCategory: existingReview.contentCategory !== contentCategory,
+              qualityTier: existingReview.qualityTier !== qualityTier
             }
           }
         }
