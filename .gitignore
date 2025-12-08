@@ -147,3 +147,7 @@ tmp_*
 backup/*
 *.png
 debug-*
+docs/*
+
+fucks-or-sucks-main/*
+Movement-Network-ConnectWallet-Template/*
