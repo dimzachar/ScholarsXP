@@ -18,6 +18,16 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react'],
   },
+  // Allow Discord CDN images for user avatars
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'cdn.discordapp.com',
+        pathname: '/avatars/**',
+      },
+    ],
+  },
   async headers() {
     return [
       {

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3002",
+    "dev": "next dev -p 3002  --turbopack",
     "build": "npx prisma generate && next build",
     "build:analyze": "ANALYZE=true next build",
     "analyze": "pnpm run build:analyze",
@@ -20,7 +20,13 @@
     "test:analytics-api": "tsx scripts/test-analytics-api.ts"
   },
   "dependencies": {
+    "@aptos-labs/ts-sdk": "^5.1.5",
+    "@aptos-labs/wallet-adapter-react": "^7.2.2",
+    "@aptos-labs/wallet-standard": "^0.5.2",
+    "@nightlylabs/aptos-wallet-adapter-plugin": "^0.2.12",
     "@prisma/client": "6.16.2",
+    "@privy-io/node": "^0.6.1",
+    "@privy-io/react-auth": "^3.8.0",
     "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-checkbox": "^1.3.2",
@@ -41,6 +47,7 @@
     "@supabase/supabase-js": "^2.50.5",
     "@types/node-cron": "^3.0.11",
     "@vercel/analytics": "^1.5.0",
+    "aptos": "^1.22.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.1",
@@ -78,6 +85,7 @@
     "autoprefixer": "^10.4.21",
     "eslint": "^9",
     "eslint-config-next": "15.5.7",
+    "fast-check": "^4.3.0",
     "jest": "^30.0.4",
     "jest-axe": "^10.0.0",
     "jest-environment-jsdom": "^30.0.4",

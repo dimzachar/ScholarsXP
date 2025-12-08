@@ -26,6 +26,11 @@ model User {
   discordId          String?      @unique
   discordHandle      String?
   discordAvatarUrl   String?
+  // Privy identity linking fields
+  privyUserId              String?   @unique  // Privy's internal user ID for identity linking
+  // Movement Network wallet fields (Aptos-based, via Nightly etc.)
+  movementWalletAddress    String?   @unique  // Primary Movement wallet address (0x...)
+  walletLinkedAt           DateTime?          // When wallet was first linked
   submissions        Submission[]
   peerReviews        PeerReview[]
   weeklyStats        WeeklyStats[]
@@ -46,6 +51,7 @@ model User {
   @@index([lastActiveAt, createdAt]) // Analytics queries optimization
   @@index([totalXp(sort: Desc)])   // Leaderboard queries optimization
   @@index([lastActiveAt, totalXp], map: "idx_user_active_recent") // Active users partial index
+  @@index([movementWalletAddress]) // Wallet address lookup
 }
 
 model Submission {
@@ -88,6 +94,7 @@ model Submission {
   @@index([createdAt])             // Time-based analytics (time series)
   @@index([platform, createdAt])   // Platform analytics
   @@index([status, createdAt, platform]) // Enhanced admin analytics
+  judgmentVotes      JudgmentVote[]
 }
 
 model PeerReview {
@@ -101,6 +108,7 @@ model PeerReview {
   isLate         Boolean    @default(false)
   contentCategory String?
   qualityTier     String?
+  judgmentStatus  JudgmentStatus @default(NONE)
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
@@ -517,4 +525,24 @@ model AutomationLog {
   @@index([jobName, startedAt(sort: Desc)])
   @@index([triggeredBy, startedAt(sort: Desc)])
   @@map("AutomationLog")
+}
+
+model JudgmentVote {
+  id            String   @id @default(uuid()) @db.Uuid
+  submissionId  String   @db.Uuid
+  walletAddress String   // Embedded wallet address (0x...)
+  voteXp        Int      // The XP score they voted for
+  signature     String   // Transaction signature proving the vote
+  createdAt     DateTime @default(now())
+
+  submission    Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, walletAddress]) // One vote per wallet per submission
+  @@index([walletAddress]) // Look up votes by wallet
+}
+
+enum JudgmentStatus {
+  NONE
+  VALIDATED
+  INVALIDATED
 }
