@@ -4,7 +4,7 @@ import { markAllNotificationsAsRead } from '@/lib/notifications'
 
 export const POST = withPermission('authenticated')(async (request: AuthenticatedRequest) => {
   try {
-    const markedCount = await markAllNotificationsAsRead(request.user.id, request.user.access_token)
+    const markedCount = await markAllNotificationsAsRead(request.user.id)
 
     return NextResponse.json({
       message: `Marked ${markedCount} notifications as read`,

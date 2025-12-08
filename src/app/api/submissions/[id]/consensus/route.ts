@@ -50,18 +50,9 @@ export const GET = withPermission('review_content')(async (request: Authenticate
     const url = new URL(request.url)
     const submissionId = url.pathname.split('/').slice(-2)[0] // Extract submission ID from path
 
-    // Import the secure client factory
-    const { createAuthenticatedClient } = await import('@/lib/supabase-server')
-
-    // Create authenticated client that respects RLS policies
-    const accessToken = request.user.access_token ||
-                       request.headers.get('authorization')?.replace('Bearer ', '') ||
-                       request.cookies.get('sb-access-token')?.value || ''
-
-    const supabase = createAuthenticatedClient(
-      accessToken,
-      request.user.refresh_token || request.cookies.get('sb-refresh-token')?.value
-    )
+    // Import the service client factory (auth handled by middleware)
+    const { createServiceClient } = await import('@/lib/supabase-server')
+    const supabase = createServiceClient()
 
     // Get submission with consensus data
     const { data: submission, error } = await supabase

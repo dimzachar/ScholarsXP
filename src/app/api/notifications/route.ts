@@ -16,7 +16,7 @@ export const GET = withAPIOptimization(
       const unreadOnly = searchParams.get('unreadOnly') === 'true'
 
       if (action === 'unread_count') {
-        const unreadCount = await getUnreadCount(request.user.id, request.user.access_token)
+        const unreadCount = await getUnreadCount(request.user.id)
         return createSuccessResponse({ unreadCount })
       }
 
@@ -24,8 +24,7 @@ export const GET = withAPIOptimization(
         request.user.id,
         page,
         limit,
-        unreadOnly,
-        request.user.access_token
+        unreadOnly
       )
 
       return createSuccessResponse({
@@ -33,7 +32,7 @@ export const GET = withAPIOptimization(
         total: result.total,
         page,
         limit,
-        unreadCount: await getUnreadCount(request.user.id, request.user.access_token)
+        unreadCount: await getUnreadCount(request.user.id)
       })
     })
   ),

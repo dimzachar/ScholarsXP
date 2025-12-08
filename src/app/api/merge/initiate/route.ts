@@ -3,12 +3,14 @@
  * 
  * Provides API access to the merge service for manual merge initiation
  * and admin tools. Supports both user-initiated and admin-initiated merges.
+ * 
+ * Updated to use Privy authentication via X-Privy-User-Id header.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase-service'
 import { MergeService } from '@/lib/services/MergeService'
 import { withAPIOptimization } from '@/middleware/api-optimization'
+import { getUserProfileByPrivyId } from '@/lib/auth-middleware'
 
 interface MergeInitiateRequest {
   realUserId: string
@@ -55,35 +57,26 @@ async function postHandler(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Get user from auth header for authorization
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
+    // Get Privy user ID from header
+    const privyUserId = request.headers.get('x-privy-user-id')
+    if (!privyUserId) {
       return NextResponse.json({
-        error: 'Missing or invalid authorization header'
+        error: 'Authentication required - please sign in'
       }, { status: 401 })
     }
 
-    const token = authHeader.substring(7)
-    const supabase = createServiceClient()
-    
-    // Verify the token and get user
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-    if (authError || !user) {
+    // Get user profile by Privy ID
+    const userProfile = await getUserProfileByPrivyId(privyUserId)
+    if (!userProfile) {
       return NextResponse.json({
-        error: 'Invalid or expired token'
+        error: 'User not found - please complete sign in'
       }, { status: 401 })
     }
 
     // Authorization check: users can only merge their own accounts
     // Admins can merge any account
-    const { data: userProfile } = await supabase
-      .from('User')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    const isAdmin = userProfile?.role === 'ADMIN'
-    const isOwnAccount = user.id === body.realUserId
+    const isAdmin = userProfile.role === 'ADMIN'
+    const isOwnAccount = userProfile.id === body.realUserId
 
     if (!isAdmin && !isOwnAccount) {
       return NextResponse.json({
@@ -91,20 +84,7 @@ async function postHandler(request: NextRequest) {
       }, { status: 403 })
     }
 
-    const metadata = (user.user_metadata ?? {}) as Record<string, unknown>
-    const customClaims = metadata['custom_claims']
-    const customGlobalName = typeof customClaims === 'object' && customClaims !== null
-      ? extractString((customClaims as Record<string, unknown>)['global_name'])
-      : undefined
-
     const fallbackUsername = extractString(body.fallbackUsername)
-      ?? extractString(metadata['legacy_username'])
-      ?? extractString(metadata['legacyUsername'])
-      ?? extractString(metadata['previous_username'])
-      ?? extractString(metadata['previousUsername'])
-      ?? extractString(metadata['username_history'])
-      ?? extractString(metadata['usernameHistory'])
-      ?? customGlobalName
 
     const normalizedFallback = fallbackUsername && fallbackUsername.toLowerCase() === body.discordHandle.toLowerCase()
       ? undefined
@@ -171,35 +151,26 @@ async function getHandler(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Get user from auth header for authorization
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
+    // Get Privy user ID from header
+    const privyUserId = request.headers.get('x-privy-user-id')
+    if (!privyUserId) {
       return NextResponse.json({
-        error: 'Missing or invalid authorization header'
+        error: 'Authentication required - please sign in'
       }, { status: 401 })
     }
 
-    const token = authHeader.substring(7)
-    const supabase = createServiceClient()
-    
-    // Verify the token and get user
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-    if (authError || !user) {
+    // Get user profile by Privy ID
+    const userProfile = await getUserProfileByPrivyId(privyUserId)
+    if (!userProfile) {
       return NextResponse.json({
-        error: 'Invalid or expired token'
+        error: 'User not found - please complete sign in'
       }, { status: 401 })
     }
 
     // Authorization check: users can only check their own status
     // Admins can check any user's status
-    const { data: userProfile } = await supabase
-      .from('User')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    const isAdmin = userProfile?.role === 'ADMIN'
-    const isOwnAccount = user.id === userId
+    const isAdmin = userProfile.role === 'ADMIN'
+    const isOwnAccount = userProfile.id === userId
 
     if (!isAdmin && !isOwnAccount) {
       return NextResponse.json({
@@ -244,33 +215,24 @@ async function putHandler(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Get user from auth header for authorization
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
+    // Get Privy user ID from header
+    const privyUserId = request.headers.get('x-privy-user-id')
+    if (!privyUserId) {
       return NextResponse.json({
-        error: 'Missing or invalid authorization header'
+        error: 'Authentication required - please sign in'
       }, { status: 401 })
     }
 
-    const token = authHeader.substring(7)
-    const supabase = createServiceClient()
-    
-    // Verify the token and get user
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-    if (authError || !user) {
+    // Get user profile by Privy ID
+    const userProfile = await getUserProfileByPrivyId(privyUserId)
+    if (!userProfile) {
       return NextResponse.json({
-        error: 'Invalid or expired token'
+        error: 'User not found - please complete sign in'
       }, { status: 401 })
     }
 
     // Check if user is admin (only admins can retry merges)
-    const { data: userProfile } = await supabase
-      .from('User')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (userProfile?.role !== 'ADMIN') {
+    if (userProfile.role !== 'ADMIN') {
       return NextResponse.json({
         error: 'Unauthorized: Only admins can retry failed merges'
       }, { status: 403 })

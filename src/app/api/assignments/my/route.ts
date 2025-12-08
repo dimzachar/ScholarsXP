@@ -1,5 +1,5 @@
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
-import { createAuthenticatedClient } from '@/lib/supabase-server'
+import { createServiceClient } from '@/lib/supabase-server'
 import { withErrorHandling, createSuccessResponse } from '@/lib/api-middleware'
 
 export const GET = withPermission('review_content')(
@@ -11,15 +11,8 @@ export const GET = withPermission('review_content')(
 
     const reviewerId = request.user.id
 
-    // Create authenticated Supabase client that respects RLS policies
-    const accessToken = request.user.access_token ||
-                       request.headers.get('authorization')?.replace('Bearer ', '') ||
-                       request.cookies.get('sb-access-token')?.value || ''
-
-    const supabase = createAuthenticatedClient(
-      accessToken,
-      request.user.refresh_token || request.cookies.get('sb-refresh-token')?.value
-    )
+    // Create service client for database queries (auth handled by middleware)
+    const supabase = createServiceClient()
 
     // Build query based on status filter
     let query = supabase

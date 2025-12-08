@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
-import { createAuthenticatedClient } from '@/lib/supabase-server'
+import { createServiceClient } from '@/lib/supabase-server'
 
 export const GET = withPermission('authenticated')(async (request: AuthenticatedRequest) => {
   try {
@@ -13,15 +13,8 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
 
     const userId = request.user.id
 
-    // Create authenticated Supabase client that respects RLS policies
-    const accessToken = request.user.access_token ||
-                       request.headers.get('authorization')?.replace('Bearer ', '') ||
-                       request.cookies.get('sb-access-token')?.value || ''
-
-    const supabase = createAuthenticatedClient(
-      accessToken,
-      request.user.refresh_token || request.cookies.get('sb-refresh-token')?.value
-    )
+    // Create service client for database queries (auth handled by middleware)
+    const supabase = createServiceClient()
 
     let reviews: any[] = []
     let totalCount = 0
