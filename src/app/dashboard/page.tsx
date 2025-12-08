@@ -1,9 +1,9 @@
 'use client'
 /* eslint @typescript-eslint/no-explicit-any: off */
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { useDashboardData } from '@/hooks/useDashboardData'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
@@ -35,8 +35,15 @@ import {
 } from 'lucide-react'
 
 export default function DashboardPage() {
-  const { user, loading, isAdmin, isReviewer } = useAuth()
+  const { user, isLoading: loading, isAdmin, isReviewer } = usePrivyAuthSync()
   const router = useRouter()
+  
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/login')
+    }
+  }, [loading, user, router])
   // Hooks must be called unconditionally
   const { isMobile } = useResponsiveLayout()
   usePerformanceMonitor()
@@ -48,7 +55,7 @@ export default function DashboardPage() {
     profile: { data: profileData, loading: _loadingProfile },
     analytics: { data: analyticsData, loading: loadingAnalytics, error: analyticsError },
     refetchAll
-  } = useDashboardData(user?.id, 'progress', selectedTimeframe) // Always use 'progress' to load analytics
+  } = useDashboardData(user?.id || undefined, 'progress', selectedTimeframe, user?.privyUserId) // Always use 'progress' to load analytics
 
   // Handle timeframe changes for analytics
   const handleTimeframeChange = (newTimeframe: string) => {

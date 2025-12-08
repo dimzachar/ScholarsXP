@@ -57,7 +57,13 @@ interface FetchState<T> {
 }
 
 // Generic fetcher function with caching
-async function fetchWithCache<T>(url: string, cacheKey: string, ttl: number, forceRefresh = false): Promise<T> {
+async function fetchWithCache<T>(
+  url: string, 
+  cacheKey: string, 
+  ttl: number, 
+  forceRefresh = false,
+  privyUserId?: string | null
+): Promise<T> {
   // Check cache first (unless force refresh is requested)
   if (!forceRefresh) {
     const cached = cache.get(cacheKey)
@@ -70,8 +76,14 @@ async function fetchWithCache<T>(url: string, cacheKey: string, ttl: number, for
   const separator = url.includes('?') ? '&' : '?'
   const fetchUrl = `${url}${separator}_t=${Date.now()}`
 
+  // Build headers with Privy auth if available
+  const headers: HeadersInit = {}
+  if (privyUserId) {
+    headers['X-Privy-User-Id'] = privyUserId
+  }
+
   // Fetch fresh data
-  const response = await fetch(fetchUrl)
+  const response = await fetch(fetchUrl, { headers })
   if (!response.ok) {
     throw new Error(`Failed to fetch ${url}: ${response.statusText}`)
   }
@@ -89,7 +101,7 @@ async function fetchWithCache<T>(url: string, cacheKey: string, ttl: number, for
 }
 
 // Custom hook for profile data
-export function useProfileData(userId?: string) {
+export function useProfileData(userId?: string, privyUserId?: string | null) {
   const [state, setState] = useState<FetchState<any>>({
     data: null,
     loading: true,
@@ -97,15 +109,16 @@ export function useProfileData(userId?: string) {
   })
 
   const fetchData = useCallback(async (forceRefresh = false) => {
-    if (!userId) return
+    if (!userId && !privyUserId) return
 
     try {
       setState(prev => ({ ...prev, loading: true, error: null }))
       const data = await fetchWithCache(
         '/api/user/profile/complete',
-        `profile-${userId}`,
+        `profile-${userId || privyUserId}`,
         CACHE_TTL.profile,
-        forceRefresh
+        forceRefresh,
+        privyUserId
       )
       
       // Ensure XP consistency across all data sources
@@ -125,7 +138,7 @@ export function useProfileData(userId?: string) {
         error: error instanceof Error ? error.message : 'Failed to fetch profile data'
       })
     }
-  }, [userId])
+  }, [userId, privyUserId])
 
   const forceRefresh = useCallback(() => {
     // console.log('🔄 Force refreshing profile data for user:', userId)
@@ -173,7 +186,7 @@ export function useLeaderboardData(limit = 10) {
 }
 
 // Custom hook for analytics data
-export function useAnalyticsData(timeframe = 'current_week', enabled = true) {
+export function useAnalyticsData(timeframe = 'current_week', enabled = true, privyUserId?: string | null) {
   const [state, setState] = useState<FetchState<any>>({
     data: null,
     loading: enabled,
@@ -190,7 +203,9 @@ export function useAnalyticsData(timeframe = 'current_week', enabled = true) {
         ? fetchWithCache(
             '/api/user/achievements',
             'achievements',
-            CACHE_TTL.achievements
+            CACHE_TTL.achievements,
+            false,
+            privyUserId
           )
         : Promise.resolve(EMPTY_ACHIEVEMENTS_SUMMARY)
 
@@ -198,7 +213,9 @@ export function useAnalyticsData(timeframe = 'current_week', enabled = true) {
         fetchWithCache(
           `/api/user/xp-breakdown?timeframe=${timeframe}`,
           `xp-breakdown-${timeframe}`,
-          CACHE_TTL.analytics
+          CACHE_TTL.analytics,
+          false,
+          privyUserId
         ),
         achievementsPromise
       ])
@@ -210,7 +227,7 @@ export function useAnalyticsData(timeframe = 'current_week', enabled = true) {
         goalProgress: (xpBreakdownResponse as any)?.goalProgress || [],
         insights: (xpBreakdownResponse as any)?.insights || [],
         achievements: achievementsResponse,
-        timeframe: (xpBreakdownResponse as unknown)?.timeframe || timeframe
+        timeframe: (xpBreakdownResponse as any)?.timeframe || timeframe
       }
 
       setState({ data: combinedData, loading: false, error: null })
@@ -221,7 +238,7 @@ export function useAnalyticsData(timeframe = 'current_week', enabled = true) {
         error: error instanceof Error ? error.message : 'Failed to fetch analytics data'
       })
     }
-  }, [timeframe, enabled])
+  }, [timeframe, enabled, privyUserId])
 
   useEffect(() => {
     fetchData()
@@ -231,9 +248,9 @@ export function useAnalyticsData(timeframe = 'current_week', enabled = true) {
 }
 
 // Combined hook for all dashboard data
-export function useDashboardData(userId?: string, activeTab = 'overview', timeframe = 'current_week') {
-  const profileData = useProfileData(userId)
-  const analyticsData = useAnalyticsData(timeframe, activeTab === 'progress')
+export function useDashboardData(userId?: string, activeTab = 'overview', timeframe = 'current_week', privyUserId?: string | null) {
+  const profileData = useProfileData(userId, privyUserId)
+  const analyticsData = useAnalyticsData(timeframe, activeTab === 'progress', privyUserId)
 
   const isLoading = profileData.loading ||
                    (activeTab === 'progress' && analyticsData.loading)

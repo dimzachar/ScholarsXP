@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 
 interface Submission {
     id: string
@@ -39,6 +40,7 @@ export function SubmissionsList({ submissions }: SubmissionsListProps) {
     const [showAll, setShowAll] = useState(false)
     const [summaries, setSummaries] = useState<Record<string, string>>({})
     const [loadingSummaries, setLoadingSummaries] = useState<Record<string, boolean>>({})
+    const { authenticatedFetch } = useAuthenticatedFetch()
 
     const filteredAndSortedSubmissions = useMemo(() => {
         let result = [...(submissions || [])]
@@ -113,7 +115,7 @@ export function SubmissionsList({ submissions }: SubmissionsListProps) {
 
         setLoadingSummaries(prev => ({ ...prev, [submissionId]: true }))
         try {
-            const response = await fetch(`/api/submissions/${submissionId}/ai-summary`)
+            const response = await authenticatedFetch(`/api/submissions/${submissionId}/ai-summary`)
             if (response.ok) {
                 const data = await response.json()
                 if (data.summary) {
@@ -125,7 +127,7 @@ export function SubmissionsList({ submissions }: SubmissionsListProps) {
         } finally {
             setLoadingSummaries(prev => ({ ...prev, [submissionId]: false }))
         }
-    }, [summaries, loadingSummaries])
+    }, [summaries, loadingSummaries, authenticatedFetch])
 
     // Fetch summaries for finalized submissions
     useEffect(() => {

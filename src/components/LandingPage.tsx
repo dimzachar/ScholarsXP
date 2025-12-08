@@ -1,13 +1,46 @@
 'use client'
 
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
-import { Zap, BookOpen, Users, Trophy, Star, ArrowRight, CheckCircle } from 'lucide-react'
+import { Zap, BookOpen, Users, Trophy, ArrowRight, CheckCircle, Loader2 } from 'lucide-react'
+import { usePrivyAuth } from '@/hooks/usePrivyAuth'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 
 export default function LandingPage() {
+  const { login, isAuthenticated, isLoading: privyLoading, isReady } = usePrivyAuth()
+  const { user, isLoading: syncLoading } = usePrivyAuthSync()
+  const router = useRouter()
+
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    // Redirect if authenticated via Privy (user sync will happen in background)
+    if (isAuthenticated && !privyLoading && !syncLoading) {
+      router.push('/dashboard')
+    }
+  }, [isAuthenticated, privyLoading, syncLoading, router])
+
+  const handleSignIn = () => {
+    if (!isReady || privyLoading) return
+    login()
+  }
+
+  const isLoading = privyLoading || syncLoading
+
+  // If user is authenticated, show redirecting state (ConditionalLayout will show the main nav)
+  if (isAuthenticated || user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-sm text-muted-foreground">Redirecting to dashboard...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/50 to-muted">
       {/* Header */}
@@ -23,12 +56,19 @@ export default function LandingPage() {
           </div>
           <div className="flex items-center space-x-4">
             <ThemeToggle />
-            <Link href="/login">
-              <Button>
-                Sign In
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
+            <Button onClick={handleSignIn} disabled={!isReady || isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  Sign In
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </>
+              )}
+            </Button>
           </div>
         </div>
       </header>
@@ -54,12 +94,19 @@ export default function LandingPage() {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/login">
-              <Button size="lg" className="text-lg px-8 py-3">
-                Get Started Free
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-            </Link>
+            <Button size="lg" className="text-lg px-8 py-3" onClick={handleSignIn} disabled={!isReady || isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  Get Started Free
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </>
+              )}
+            </Button>
             <Button variant="outline" size="lg" className="text-lg px-8 py-3">
               Learn More
             </Button>
@@ -177,12 +224,19 @@ export default function LandingPage() {
         <div className="text-center bg-primary rounded-2xl p-12 text-primary-foreground">
           <h2 className="text-3xl font-bold mb-4">Ready to Gamify Your Content?</h2>
           <p className="text-xl mb-8 opacity-90">Start submitting your published work and earning XP for quality content!</p>
-          <Link href="/login">
-            <Button size="lg" variant="secondary" className="text-lg px-8 py-3">
-              Start Earning XP - It's Free!
-              <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-          </Link>
+          <Button size="lg" variant="secondary" className="text-lg px-8 py-3" onClick={handleSignIn} disabled={!isReady || isLoading}>
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              <>
+                Start Earning XP - It&apos;s Free!
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </>
+            )}
+          </Button>
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import Navigation from '@/components/Navigation'
 
 interface ConditionalLayoutProps {
@@ -8,10 +8,10 @@ interface ConditionalLayoutProps {
 }
 
 export default function ConditionalLayout({ children }: ConditionalLayoutProps) {
-  const { user, loading } = useAuth()
+  const { user, isLoading } = usePrivyAuthSync()
 
   // Show loading state while checking authentication
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">

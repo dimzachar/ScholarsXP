@@ -2,14 +2,14 @@
 
 import React, { useEffect } from 'react'
 import { performanceMonitor } from '@/lib/performance-monitor'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 
 interface PerformanceMonitorProviderProps {
   children: React.ReactNode
 }
 
 export function PerformanceMonitorProvider({ children }: PerformanceMonitorProviderProps) {
-  const { user } = useAuth()
+  const { user } = usePrivyAuthSync()
 
   useEffect(() => {
     // Set user ID for performance tracking

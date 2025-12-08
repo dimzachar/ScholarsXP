@@ -9,7 +9,7 @@ import MonthlyLeaderboard from '@/components/leaderboard/MonthlyLeaderboardNew'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 // import { Progress } from '@/components/ui/progress'
 import AuthGuard from '@/components/Auth/AuthGuard'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { Pagination, PaginationInfo } from '@/components/ui/pagination'
 import { apiGet } from '@/lib/api-client'
 import Link from 'next/link'
@@ -60,7 +60,7 @@ interface AllTimeStats {
 }
 
 export default function LeaderboardPage() {
-  const { user } = useAuth()
+  const { user } = usePrivyAuthSync()
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats | null>(null)
   const [allTimeLeaders, setAllTimeLeaders] = useState<LeaderboardEntry[]>([])
   const [allTimePagination, setAllTimePagination] = useState<PaginationInfo | null>(null)

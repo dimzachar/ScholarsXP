@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -36,8 +37,9 @@ const getTaskTypeDisplayName = (taskType: string): string => {
 }
 
 export default function GoalsPage() {
-  const { user, loading } = useAuth()
+  const { user, isLoading: loading } = usePrivyAuthSync()
   const router = useRouter()
+  const { authenticatedFetch } = useAuthenticatedFetch()
   type GoalProgressItem = { taskType: string; current: number; maximum: number; percentage: number }
   type GoalsData = {
     goalProgress: GoalProgressItem[]
@@ -56,8 +58,8 @@ export default function GoalsPage() {
       setLoadingGoals(true)
       
       const [xpBreakdownResponse, profileResponse] = await Promise.all([
-        fetch(`/api/user/xp-breakdown?timeframe=${selectedTimeframe}&_t=${Date.now()}`),
-        fetch(`/api/user/profile/complete?_t=${Date.now()}`)
+        authenticatedFetch(`/api/user/xp-breakdown?timeframe=${selectedTimeframe}&_t=${Date.now()}`),
+        authenticatedFetch(`/api/user/profile/complete?_t=${Date.now()}`)
       ])
 
       if (xpBreakdownResponse.ok && profileResponse.ok) {

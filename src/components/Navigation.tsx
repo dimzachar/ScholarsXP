@@ -9,15 +9,17 @@ import { ThemeToggle } from '@/components/ui/theme-toggle'
 import ProfileDropdown from '@/components/ProfileDropdown'
 import { MobileBottomNav, createNavItem } from '@/components/navigation/MobileBottomNav'
 import { Home, Users, Trophy, Gem, Settings, Zap } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { usePrivyAuth } from '@/hooks/usePrivyAuth'
 
 export default function Navigation() {
   const pathname = usePathname()
-  const { user, userProfile, signOut, isAdmin, isReviewer } = useAuth()
+  const { user, isAdmin, isReviewer } = usePrivyAuthSync()
+  const { logout } = usePrivyAuth()
 
   const handleSignOut = async () => {
     try {
-      await signOut()
+      await logout()
     } catch (error) {
       console.error('Sign out failed:', error)
     }
@@ -131,7 +133,6 @@ export default function Navigation() {
             {user ? (
               <ProfileDropdown
                 user={user}
-                userProfile={userProfile}
                 onSignOut={handleSignOut}
               />
             ) : (
@@ -150,4 +151,3 @@ export default function Navigation() {
     </>
   )
 }
-

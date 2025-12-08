@@ -1,11 +1,11 @@
 'use client'
 
 import React from 'react'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import LandingPage from '@/components/LandingPage'
 
 export default function Home() {
-  const { user, loading } = useAuth()
+  const { user, isLoading: loading } = usePrivyAuthSync()
 
   // Show loading state while checking authentication
   if (loading) {

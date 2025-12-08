@@ -7,7 +7,8 @@ import SubmissionReviewRow from '@/components/SubmissionReviewRow'
 import AuthGuard from '@/components/Auth/AuthGuard'
 import { ReviewerGuard } from '@/components/Auth/RoleGuard'
 import { api, handleApiError } from '@/lib/api-client'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -143,7 +144,8 @@ interface UserReviewsResponse {
 }
 
 export default function ReviewPage() {
-  const { userProfile } = useAuth()
+  const { user, isAdmin } = usePrivyAuthSync()
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const [pendingReviews, setPendingReviews] = useState<PendingReview[]>([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
@@ -170,14 +172,14 @@ export default function ReviewPage() {
 
   useEffect(() => {
     fetchPendingReviews()
-  }, [])
+  }, [authenticatedFetch])
 
   // Fetch user's own reviews (given)
   useEffect(() => {
     const fetchMyReviews = async () => {
       try {
         setMyReviewsLoading(true)
-        const res = await fetch(`/api/user/reviews?type=given&limit=10&offset=0`, { cache: 'no-store' })
+        const res = await authenticatedFetch(`/api/user/reviews?type=given&limit=10&offset=0`, { cache: 'no-store' })
         if (!res.ok) {
           const text = await res.text()
           throw new Error(text || 'Failed to fetch user reviews')
@@ -193,7 +195,7 @@ export default function ReviewPage() {
       }
     }
     fetchMyReviews()
-  }, [])
+  }, [authenticatedFetch])
 
   // Back to Top behavior (copied style from changelog)
   useEffect(() => {
@@ -206,9 +208,9 @@ export default function ReviewPage() {
   // Admin: fetch all pending submissions (read-only list)
   useEffect(() => {
     const fetchAdminPending = async () => {
-      if (userProfile?.role !== 'ADMIN') return
+      if (!isAdmin) return
       try {
-        const res = await fetch('/api/peer-reviews/pending')
+        const res = await authenticatedFetch('/api/peer-reviews/pending')
         if (!res.ok) return
         const json = await res.json()
         interface ApiSubmission {
@@ -256,7 +258,7 @@ export default function ReviewPage() {
     }
 
     fetchAdminPending()
-  }, [userProfile?.role])
+  }, [isAdmin, authenticatedFetch])
 
   const filteredAdminSubmissions = adminPendingSubmissions.filter((s) => {
     const matchesSearch = adminSearch
@@ -285,7 +287,11 @@ export default function ReviewPage() {
 
   const fetchPendingReviews = async () => {
     try {
-      const data = await api.get<AssignmentResponse>('/api/assignments/my?status=pending')
+      const response = await authenticatedFetch('/api/assignments/my?status=pending')
+      if (!response.ok) {
+        throw new Error('Failed to fetch pending reviews')
+      }
+      const data: AssignmentResponse = await response.json()
       const assignments = data.assignments || []
 
       const mappedReviews: PendingReview[] = assignments
@@ -320,10 +326,18 @@ export default function ReviewPage() {
     reviewData: ReviewSubmissionPayload
   ) => {
     try {
-      await api.post('/api/peer-reviews', {
-        submissionId,
-        ...reviewData
+      const response = await authenticatedFetch('/api/peer-reviews', {
+        method: 'POST',
+        body: JSON.stringify({
+          submissionId,
+          ...reviewData
+        })
       })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to submit review')
+      }
 
       setMessage('Review submitted successfully! +50 XP earned')
       // Remove the reviewed submission from the list
@@ -484,7 +498,7 @@ export default function ReviewPage() {
               My Assignments
               <Badge variant="secondary" className="ml-2">{pendingReviews.length}</Badge>
             </TabsTrigger>
-            {userProfile?.role === 'ADMIN' && (
+            {isAdmin && (
               <TabsTrigger value="all">
                 All Pending (Admin)
                 <Badge variant="secondary" className="ml-2">{adminPendingSubmissions.length}</Badge>
@@ -505,7 +519,7 @@ export default function ReviewPage() {
                     <p className="text-muted-foreground mb-6">
                       You’re all caught up. New assignments will appear here.
                     </p>
-                    {userProfile?.role === 'ADMIN' && (
+                    {isAdmin && (
                       <div className="text-xs text-muted-foreground">Switch to “All Pending (Admin)” to audit the queue.</div>
                     )}
                   </CardContent>
@@ -562,7 +576,7 @@ export default function ReviewPage() {
           </TabsContent>
 
           {/* All (Admin) */}
-          {userProfile?.role === 'ADMIN' && (
+          {isAdmin && (
             <TabsContent value="all" className="space-y-6 mt-4">
               <Card className="border-0 shadow-sm">
                 <CardContent className="p-4">
@@ -802,3 +816,4 @@ export default function ReviewPage() {
     </AuthGuard>
   )
 }
+

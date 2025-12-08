@@ -8,8 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator'
 import { supabase } from '@/lib/supabase-client'
 import type { RealtimeChannel } from '@supabase/supabase-js'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import {
   Bell,
   BellRing,
@@ -47,8 +48,9 @@ interface Notification {
 }
 
 export default function NotificationCenter() {
-  const { user } = useAuth()
+  const { user } = usePrivyAuthSync()
   const responsiveLayout = useResponsiveLayout()
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -101,8 +103,7 @@ export default function NotificationCenter() {
 
     setLoading(true)
     try {
-      const response = await fetch('/api/notifications?limit=20', {
-        credentials: 'include',
+      const response = await authenticatedFetch('/api/notifications?limit=20', {
         cache: 'no-store'
       })
 
@@ -123,7 +124,7 @@ export default function NotificationCenter() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id, normalizeNotification])
+  }, [user?.id, normalizeNotification, authenticatedFetch])
 
   useEffect(() => {
     if (!user) {
@@ -275,11 +276,8 @@ export default function NotificationCenter() {
 
   const markAsRead = async (notificationId: string) => {
     try {
-      const response = await fetch(`/api/notifications/${notificationId}`, {
+      const response = await authenticatedFetch(`/api/notifications/${notificationId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
       })
 
       if (response.ok) {
@@ -296,11 +294,8 @@ export default function NotificationCenter() {
 
   const deleteNotification = async (notificationId: string) => {
     try {
-      const response = await fetch(`/api/notifications/${notificationId}`, {
+      const response = await authenticatedFetch(`/api/notifications/${notificationId}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
       })
 
       if (response.ok) {
@@ -315,11 +310,8 @@ export default function NotificationCenter() {
 
   const markAllAsRead = async () => {
     try {
-      const response = await fetch('/api/notifications/mark-all-read', {
+      const response = await authenticatedFetch('/api/notifications/mark-all-read', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
       })
 
       if (response.ok) {
@@ -334,11 +326,8 @@ export default function NotificationCenter() {
 
   const deleteAll = async () => {
     try {
-      const response = await fetch('/api/notifications/delete-all', {
+      const response = await authenticatedFetch('/api/notifications/delete-all', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
       })
 
       if (response.ok) {
