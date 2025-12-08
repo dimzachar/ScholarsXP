@@ -1,13 +1,17 @@
+/**
+ * Route Guards - Privy-First Authentication
+ * 
+ * Uses Privy user ID header (X-Privy-User-Id) for authentication.
+ */
+
 import { NextRequest } from 'next/server'
-import { verifyAuthToken } from './auth-middleware'
-import { UserRole } from '@/contexts/AuthContext'
+import { getUserProfileByPrivyId, UserRole } from './auth-middleware'
 
 export interface AuthenticatedUser {
   id: string
   email: string
   role: UserRole
-  access_token: string
-  refresh_token: string | null
+  privyUserId: string
 }
 
 /**
@@ -17,26 +21,31 @@ export interface AuthenticatedUser {
  */
 export function requireRole(allowedRoles: UserRole[]) {
   return async (request: NextRequest): Promise<AuthenticatedUser> => {
-    // Get token from request cookies
-    const token = request.cookies.get('sb-access-token')?.value
+    // Get Privy user ID from header
+    const privyUserId = request.headers.get('x-privy-user-id')
     
-    if (!token) {
-      throw new Error('Authentication required - no token found')
+    if (!privyUserId) {
+      throw new Error('Authentication required - please sign in')
     }
 
-    // Verify token and get user with role
-    const { user, error } = await verifyAuthToken(token)
+    // Get user profile by Privy ID
+    const userProfile = await getUserProfileByPrivyId(privyUserId)
     
-    if (error || !user) {
-      throw new Error('Authentication failed - invalid token')
+    if (!userProfile) {
+      throw new Error('User not found - please complete sign in')
     }
 
     // Check if user role is allowed
-    if (!allowedRoles.includes(user.role)) {
-      throw new Error(`Insufficient permissions - required: ${allowedRoles.join(' or ')}, current: ${user.role}`)
+    if (!allowedRoles.includes(userProfile.role)) {
+      throw new Error(`Insufficient permissions - required: ${allowedRoles.join(' or ')}, current: ${userProfile.role}`)
     }
 
-    return user as AuthenticatedUser
+    return {
+      id: userProfile.id,
+      email: userProfile.email || '',
+      role: userProfile.role,
+      privyUserId: userProfile.privyUserId || privyUserId,
+    }
   }
 }
 
@@ -62,19 +71,24 @@ export const requireAuth = requireRole(['USER', 'REVIEWER', 'ADMIN'])
  */
 export async function getCurrentUser(request: NextRequest): Promise<AuthenticatedUser | null> {
   try {
-    const token = request.cookies.get('sb-access-token')?.value
+    const privyUserId = request.headers.get('x-privy-user-id')
     
-    if (!token) {
+    if (!privyUserId) {
       return null
     }
 
-    const { user, error } = await verifyAuthToken(token)
+    const userProfile = await getUserProfileByPrivyId(privyUserId)
     
-    if (error || !user) {
+    if (!userProfile) {
       return null
     }
 
-    return user as AuthenticatedUser
+    return {
+      id: userProfile.id,
+      email: userProfile.email || '',
+      role: userProfile.role,
+      privyUserId: userProfile.privyUserId || privyUserId,
+    }
   } catch (error) {
     console.error('Error getting current user:', error)
     return null
@@ -92,28 +106,37 @@ export function hasRolePermission(userRole: UserRole, requiredRoles: UserRole[])
 }
 
 /**
- * Middleware helper to extract user from Authorization header
+ * Get user from Privy user ID header
  * @param request NextRequest object
  * @returns Authenticated user or null
  */
-export async function getUserFromAuthHeader(request: NextRequest): Promise<AuthenticatedUser | null> {
+export async function getUserFromPrivyHeader(request: NextRequest): Promise<AuthenticatedUser | null> {
   try {
-    const authHeader = request.headers.get('authorization')
+    const privyUserId = request.headers.get('x-privy-user-id')
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!privyUserId) {
       return null
     }
 
-    const token = authHeader.substring(7)
-    const { user, error } = await verifyAuthToken(token)
+    const userProfile = await getUserProfileByPrivyId(privyUserId)
     
-    if (error || !user) {
+    if (!userProfile) {
       return null
     }
 
-    return user as AuthenticatedUser
+    return {
+      id: userProfile.id,
+      email: userProfile.email || '',
+      role: userProfile.role,
+      privyUserId: userProfile.privyUserId || privyUserId,
+    }
   } catch (error) {
-    console.error('Error getting user from auth header:', error)
+    console.error('Error getting user from Privy header:', error)
     return null
   }
 }
+
+/**
+ * @deprecated Use getUserFromPrivyHeader instead
+ */
+export const getUserFromAuthHeader = getUserFromPrivyHeader

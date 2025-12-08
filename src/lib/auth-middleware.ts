@@ -1,14 +1,40 @@
+/**
+ * Auth Middleware - Privy-First Authentication
+ * 
+ * Uses Privy user ID header (X-Privy-User-Id) for authentication.
+ * Supabase auth fallback has been removed for security.
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { UserRole, UserProfile } from '@/contexts/AuthContext'
+
+// Import UserRole from PrivyAuthSyncContext to avoid circular dependency
+export type UserRole = 'USER' | 'REVIEWER' | 'ADMIN'
+
+export interface UserProfile {
+  id: string
+  privyUserId?: string
+  email: string | null
+  username: string | null
+  role: UserRole
+  totalXp: number
+  currentWeekXp: number
+  streakWeeks: number
+  missedReviews: number
+  discordId?: string | null
+  discordHandle?: string | null
+  discordAvatarUrl?: string | null
+  movementWalletAddress?: string | null
+  walletLinkedAt?: string | null
+  createdAt: string
+  updatedAt: string
+}
 
 export interface AuthenticatedRequest extends NextRequest {
   user: {
     id: string
     email: string
-    user_metadata?: any
-    access_token?: string
-    refresh_token?: string | null
+    user_metadata?: Record<string, unknown>
   }
   userProfile: UserProfile
 }
@@ -38,184 +64,57 @@ export class AuthError extends Error {
   }
 }
 
-export async function verifyAuthToken(token: string) {
-  try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-          detectSessionInUrl: false
-        }
-      }
-    )
-
-    const { data, error } = await supabase.auth.getUser(token)
-
-    if (error || !data.user) {
-      return { user: null, error: error || new Error('Invalid token') }
-    }
-
-    // Get user profile with role
-    const userProfile = await getUserProfile(data.user.id, data.user.email!)
-
-    return {
-      user: {
-        ...data.user,
-        role: userProfile.role,
-        access_token: token,
-        refresh_token: null // Will be handled separately if needed
-      },
-      error: null
-    }
-  } catch (error) {
-    return { user: null, error: error as Error }
-  }
-}
-
-export async function getAuthenticatedUser(request: NextRequest) {
-  // First try to get token from Authorization header
-  const authHeader = request.headers.get('authorization')
-  let accessToken: string | undefined
-
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    accessToken = authHeader.substring(7)
-  }
-
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false
-      },
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value
-        },
-        set() {
-          // Can't set cookies in middleware
-        },
-        remove() {
-          // Can't remove cookies in middleware
-        },
-      },
-    }
-  )
-
-  let user
-  let error
-
-  if (accessToken) {
-    // Use the token from Authorization header
-    const { data, error: tokenError } = await supabase.auth.getUser(accessToken)
-    user = data.user
-    error = tokenError
-  } else {
-    // Fall back to cookies
-    const { data, error: cookieError } = await supabase.auth.getUser()
-    user = data.user
-    error = cookieError
-  }
-
-  if (error || !user) {
-    throw new AuthError('Authentication required', 401)
-  }
-
-  return user
-}
-
-export async function getUserProfile(userId: string, email: string) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-
-  // First try to find by ID
-  let { data, error } = await supabase
-    .from('User')
-    .select('*')
-    .eq('id', userId)
-    .single()
-
-  // If not found by ID, try to find by email
-  if (error && email) {
-    const { data: emailData, error: emailError } = await supabase
-      .from('User')
-      .select('*')
-      .eq('email', email)
-      .single()
-
-    if (!emailError && emailData) {
-      // Update the user record with the new auth ID
-      const { error: updateError } = await supabase
-        .from('User')
-        .update({ id: userId })
-        .eq('email', email)
-
-      if (!updateError) {
-        data = { ...emailData, id: userId }
-      } else {
-        data = emailData
-      }
-    }
-  }
-
-  if (!data) {
-    throw new AuthError('User profile not found', 404)
-  }
-
-  return data as UserProfile
-}
 
 export function hasPermission(userRole: UserRole, permission: Permission): boolean {
   return ROLE_PERMISSIONS[userRole].includes(permission)
 }
 
+/**
+ * Get user profile by Privy user ID
+ */
+export async function getUserProfileByPrivyId(privyUserId: string): Promise<UserProfile | null> {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
+  const { data, error } = await supabase
+    .from('User')
+    .select('*')
+    .eq('privyUserId', privyUserId)
+    .single()
+
+  if (error || !data) {
+    return null
+  }
+
+  return data as UserProfile
+}
+
 export function createRoleBasedHandler() {
   return {
     withPermission: (permission: Permission) => {
-      return (handler: (request: AuthenticatedRequest, context?: any) => Promise<NextResponse>) => {
-        return async (request: NextRequest, context?: any) => {
+      return (handler: (request: AuthenticatedRequest, context?: unknown) => Promise<NextResponse>) => {
+        return async (request: NextRequest, context?: unknown) => {
           try {
-            // Get token from Authorization header or cookies
-            const authHeader = request.headers.get('authorization')
-            let accessToken: string | undefined
-
-            if (authHeader && authHeader.startsWith('Bearer ')) {
-              accessToken = authHeader.substring(7)
-            } else {
-              // Try to get from cookies
-              accessToken = request.cookies.get('sb-access-token')?.value
-            }
-
-            if (!accessToken) {
+            // Get Privy user ID from header
+            const privyUserId = request.headers.get('x-privy-user-id')
+            
+            if (!privyUserId) {
               return NextResponse.json(
-                { error: 'Authentication required - no token found' },
+                { error: 'Authentication required - please sign in' },
                 { status: 401 }
               )
             }
 
-            // Verify token and get user with access_token included
-            const { user, error } = await verifyAuthToken(accessToken)
-
-            if (error || !user) {
+            // Get user profile by Privy ID
+            const userProfile = await getUserProfileByPrivyId(privyUserId)
+            
+            if (!userProfile) {
               return NextResponse.json(
-                { error: 'Authentication failed - invalid token' },
+                { error: 'User not found - please complete sign in' },
                 { status: 401 }
               )
-            }
-
-            // Get user profile with role (already included in verifyAuthToken result)
-            const userProfile = {
-              id: user.id,
-              email: user.email!,
-              role: user.role,
-              username: user.user_metadata?.username || user.email!.split('@')[0]
             }
 
             // Check permission
@@ -232,10 +131,16 @@ export function createRoleBasedHandler() {
 
             // Create authenticated request
             const authenticatedRequest = request as AuthenticatedRequest
-            authenticatedRequest.user = user
+            authenticatedRequest.user = {
+              id: userProfile.id,
+              email: userProfile.email || '',
+              user_metadata: {
+                username: userProfile.username,
+                avatar_url: userProfile.discordAvatarUrl
+              }
+            }
             authenticatedRequest.userProfile = userProfile
 
-            // Call the handler
             return await handler(authenticatedRequest, context)
           } catch (error) {
             if (error instanceof AuthError) {
@@ -256,19 +161,34 @@ export function createRoleBasedHandler() {
     },
 
     withRole: (requiredRole: UserRole) => {
-      return (handler: (request: AuthenticatedRequest, context?: any) => Promise<NextResponse>) => {
-        return async (request: NextRequest, context?: any) => {
+      return (handler: (request: AuthenticatedRequest, context?: unknown) => Promise<NextResponse>) => {
+        return async (request: NextRequest, context?: unknown) => {
           try {
-            // Get authenticated user
-            const user = await getAuthenticatedUser(request)
+            // Get Privy user ID from header
+            const privyUserId = request.headers.get('x-privy-user-id')
             
-            // Get user profile with role
-            const userProfile = await getUserProfile(user.id, user.email!)
+            if (!privyUserId) {
+              return NextResponse.json(
+                { error: 'Authentication required - please sign in' },
+                { status: 401 }
+              )
+            }
+
+            // Get user profile by Privy ID
+            const userProfile = await getUserProfileByPrivyId(privyUserId)
+            
+            if (!userProfile) {
+              return NextResponse.json(
+                { error: 'User not found - please complete sign in' },
+                { status: 401 }
+              )
+            }
             
             // Check role (admin can access everything)
-            const hasAccess = userProfile.role === requiredRole || 
-                             userProfile.role === 'ADMIN' ||
-                             (requiredRole === 'REVIEWER' && userProfile.role === 'ADMIN')
+            const role = userProfile.role as string
+            const hasAccess = role === requiredRole || 
+                             role === 'ADMIN' ||
+                             (requiredRole === 'REVIEWER' && role === 'ADMIN')
 
             if (!hasAccess) {
               return NextResponse.json(
@@ -283,10 +203,16 @@ export function createRoleBasedHandler() {
 
             // Create authenticated request
             const authenticatedRequest = request as AuthenticatedRequest
-            authenticatedRequest.user = user
+            authenticatedRequest.user = {
+              id: userProfile.id,
+              email: userProfile.email || '',
+              user_metadata: {
+                username: userProfile.username,
+                avatar_url: userProfile.discordAvatarUrl
+              }
+            }
             authenticatedRequest.userProfile = userProfile
 
-            // Call the handler
             return await handler(authenticatedRequest, context)
           } catch (error) {
             if (error instanceof AuthError) {
@@ -307,21 +233,41 @@ export function createRoleBasedHandler() {
     },
 
     // Simple auth check without role/permission requirements
-    withAuth: (handler: (request: AuthenticatedRequest, context?: any) => Promise<NextResponse>) => {
-      return async (request: NextRequest, context?: any) => {
+    withAuth: (handler: (request: AuthenticatedRequest, context?: unknown) => Promise<NextResponse>) => {
+      return async (request: NextRequest, context?: unknown) => {
         try {
-          // Get authenticated user
-          const user = await getAuthenticatedUser(request)
+          // Get Privy user ID from header
+          const privyUserId = request.headers.get('x-privy-user-id')
           
-          // Get user profile
-          const userProfile = await getUserProfile(user.id, user.email!)
+          if (!privyUserId) {
+            return NextResponse.json(
+              { error: 'Authentication required - please sign in' },
+              { status: 401 }
+            )
+          }
+
+          // Get user profile by Privy ID
+          const userProfile = await getUserProfileByPrivyId(privyUserId)
+          
+          if (!userProfile) {
+            return NextResponse.json(
+              { error: 'User not found - please complete sign in' },
+              { status: 401 }
+            )
+          }
 
           // Create authenticated request
           const authenticatedRequest = request as AuthenticatedRequest
-          authenticatedRequest.user = user
+          authenticatedRequest.user = {
+            id: userProfile.id,
+            email: userProfile.email || '',
+            user_metadata: {
+              username: userProfile.username,
+              avatar_url: userProfile.discordAvatarUrl
+            }
+          }
           authenticatedRequest.userProfile = userProfile
 
-          // Call the handler
           return await handler(authenticatedRequest, context)
         } catch (error) {
           if (error instanceof AuthError) {

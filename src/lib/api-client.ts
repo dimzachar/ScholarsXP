@@ -1,13 +1,32 @@
 /**
- * API Client - Updated for Standardized Error Handling
+ * API Client - Updated for Privy Authentication
  *
- * Part of the API Error Handling Standardization Initiative
- * Updated to work with the new standardized error response format:
+ * Uses Privy user ID header (X-Privy-User-Id) for authentication instead of Supabase tokens.
+ * The Privy user ID is set from PrivyAuthSyncContext when the user authenticates.
+ *
+ * Response format:
  * Success: { success: true, data: any }
  * Error: { success: false, error: { error: string, code: string, details?: any } }
  */
 
-import { supabase } from '@/lib/supabase-client'
+// Module-level store for Privy user ID
+// This is set by PrivyAuthSyncContext when user authenticates
+let _privyUserId: string | null = null
+
+/**
+ * Set the Privy user ID for API authentication.
+ * Called from PrivyAuthSyncContext when user syncs.
+ */
+export function setPrivyUserId(userId: string | null): void {
+  _privyUserId = userId
+}
+
+/**
+ * Get the current Privy user ID.
+ */
+export function getPrivyUserId(): string | null {
+  return _privyUserId
+}
 
 export class ApiError extends Error {
   constructor(
@@ -39,25 +58,40 @@ export interface APIErrorResponse {
 
 export type APIResponse<T = any> = APISuccessResponse<T> | APIErrorResponse
 
-export async function getAuthHeaders(): Promise<HeadersInit> {
-  const { data: { session } } = await supabase.auth.getSession()
-  
-  if (!session?.access_token) {
-    throw new ApiError('No authentication token available', 401)
-  }
 
-  return {
-    'Authorization': `Bearer ${session.access_token}`,
+/**
+ * Get authentication headers for API requests.
+ * Uses Privy user ID header for authentication.
+ */
+export function getAuthHeaders(): HeadersInit {
+  const headers: HeadersInit = {
     'Content-Type': 'application/json',
   }
+
+  if (_privyUserId) {
+    headers['X-Privy-User-Id'] = _privyUserId
+  }
+
+  return headers
+}
+
+/**
+ * Check if user is authenticated (has Privy user ID set).
+ */
+export function isAuthenticated(): boolean {
+  return _privyUserId !== null
 }
 
 export async function authenticatedFetch(
   url: string,
   options: RequestInit = {}
 ): Promise<Response> {
+  if (!_privyUserId) {
+    throw new ApiError('Authentication required - please sign in', 401)
+  }
+
   try {
-    const headers = await getAuthHeaders()
+    const headers = getAuthHeaders()
 
     const response = await fetch(url, {
       ...options,

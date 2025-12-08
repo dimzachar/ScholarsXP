@@ -1,6 +1,6 @@
 'use client'
 
-import { useAuth, UserRole } from '@/contexts/AuthContext'
+import { usePrivyAuthSync, UserRole } from '@/contexts/PrivyAuthSyncContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Shield, AlertTriangle, ArrowLeft } from 'lucide-react'
@@ -19,7 +19,7 @@ export default function RoleGuard({
   requiredRoles, 
   fallback 
 }: RoleGuardProps) {
-  const { user, userProfile, loading, isAdmin, isReviewer } = useAuth()
+  const { user, isLoading: loading, isAdmin, isReviewer } = usePrivyAuthSync()
   const router = useRouter()
 
   // Show loading state
@@ -40,18 +40,6 @@ export default function RoleGuard({
     return null
   }
 
-  // Wait for user profile to load
-  if (!userProfile) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-sm text-muted-foreground">Loading profile...</p>
-        </div>
-      </div>
-    )
-  }
-
   // Check role permissions
   const hasPermission = () => {
     if (requiredRole) {
@@ -59,7 +47,7 @@ export default function RoleGuard({
       if (requiredRole === 'ADMIN') return isAdmin
       if (requiredRole === 'REVIEWER') return isReviewer
       if (requiredRole === 'USER') return true // All authenticated users are at least USER
-      return userProfile.role === requiredRole
+      return user.role === requiredRole
     }
 
     if (requiredRoles) {
@@ -68,7 +56,7 @@ export default function RoleGuard({
         if (role === 'ADMIN') return isAdmin
         if (role === 'REVIEWER') return isReviewer
         if (role === 'USER') return true
-        return userProfile.role === role
+        return user.role === role
       })
     }
 
@@ -97,7 +85,7 @@ export default function RoleGuard({
               <div className="bg-muted p-3 rounded-lg mb-4">
                 <div className="flex items-center justify-center space-x-2 text-sm">
                   <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-                  <span>Your role: <strong>{userProfile.role}</strong></span>
+                  <span>Your role: <strong>{user.role}</strong></span>
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   Required: {requiredRole || requiredRoles?.join(' or ')}

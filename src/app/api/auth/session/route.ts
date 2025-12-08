@@ -1,3 +1,9 @@
+/**
+ * @deprecated This route is deprecated. Privy handles session management.
+ * Kept for backward compatibility during migration.
+ * TODO: Remove after confirming all auth is migrated to Privy.
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
 
 const COOKIE_BASE_OPTIONS = {
