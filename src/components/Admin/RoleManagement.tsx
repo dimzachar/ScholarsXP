@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuth, UserProfile, UserRole } from '@/contexts/AuthContext'
+import { usePrivyAuthSync, UserRole, SyncedUser } from '@/contexts/PrivyAuthSyncContext'
 import { supabase } from '@/lib/supabase-client'
+
+type UserProfile = SyncedUser
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -14,7 +16,7 @@ import { toast } from 'sonner'
 type UserWithRole = UserProfile
 
 export default function RoleManagement() {
-  const { isAdmin, refreshUserProfile } = useAuth()
+  const { isAdmin, refreshUser } = usePrivyAuthSync()
   const [users, setUsers] = useState<UserWithRole[]>([])
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState<string | null>(null)
@@ -69,7 +71,7 @@ export default function RoleManagement() {
       ))
 
       // Refresh current user profile if they updated their own role
-      await refreshUserProfile()
+      await refreshUser()
 
       toast.success(`User role updated to ${newRole}`)
     } catch (error) {

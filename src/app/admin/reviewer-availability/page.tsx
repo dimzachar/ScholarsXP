@@ -3,7 +3,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import AuthGuard from '@/components/Auth/AuthGuard'
 import { AdminGuard } from '@/components/Auth/RoleGuard'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
@@ -36,7 +37,8 @@ interface ReviewerRecord {
 }
 
 export default function ReviewerAvailabilityPage() {
-  const { session } = useAuth()
+  const { user: _user } = usePrivyAuthSync()
+  const { getAuthHeaders } = useAuthenticatedFetch()
   const [reviewers, setReviewers] = useState<ReviewerRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [sortBy, setSortBy] = useState<string>('username')
@@ -68,10 +70,7 @@ export default function ReviewerAvailabilityPage() {
 
       const response = await fetch(`/api/admin/users?${params.toString()}`, {
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
-        }
+        headers: getAuthHeaders()
       })
 
       if (!response.ok) {
@@ -105,7 +104,7 @@ export default function ReviewerAvailabilityPage() {
     } finally {
       setLoading(false)
     }
-  }, [session?.access_token, sortBy, sortOrder])
+  }, [getAuthHeaders, sortBy, sortOrder])
 
   useEffect(() => {
     fetchReviewers()
@@ -164,10 +163,7 @@ export default function ReviewerAvailabilityPage() {
       const response = await fetch('/api/admin/users', {
         method: 'PATCH',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           action: 'setReviewAvailability',
           userIds: [reviewer.id],

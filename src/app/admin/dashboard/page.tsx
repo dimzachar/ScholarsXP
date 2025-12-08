@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -41,7 +41,7 @@ interface AdminStats {
 }
 
 export default function AdminDashboardPage() {
-  const { user: _user, loading } = useAuth()
+  const { user: _user, isLoading: loading } = usePrivyAuthSync()
   const _router = useRouter()
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [loadingStats, setLoadingStats] = useState(true)

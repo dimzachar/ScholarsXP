@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label'
 import { MobileLayout, MobileSection, MobileCardGrid } from '@/components/layout/MobileLayout'
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { toast } from 'sonner'
 import {
   ArrowLeft,
@@ -74,6 +75,7 @@ export default function UserProfilePage() {
   const router = useRouter()
   const userId = params.id as string
   const { isMobile, isTablet: _isTablet } = useResponsiveLayout()
+  const { authenticatedFetch } = useAuthenticatedFetch()
 
   const [user, setUser] = useState<UserProfileData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -88,7 +90,7 @@ export default function UserProfilePage() {
   const fetchUserProfile = useCallback(async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/admin/users/${userId}`)
+      const response = await authenticatedFetch(`/api/admin/users/${userId}`)
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -107,7 +109,7 @@ export default function UserProfilePage() {
     } finally {
       setLoading(false)
     }
-  }, [userId])
+  }, [userId, authenticatedFetch])
 
   useEffect(() => {
     fetchUserProfile()
@@ -176,11 +178,8 @@ export default function UserProfilePage() {
 
     try {
       setUpdating(true)
-      const response = await fetch(`/api/admin/users/${userId}/role`, {
+      const response = await authenticatedFetch(`/api/admin/users/${userId}/role`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ role: newRole })
       })
 
@@ -209,11 +208,8 @@ export default function UserProfilePage() {
       setUpdating(true)
       const isDeactivating = user.metrics.activityStatus !== 'deactivated'
 
-      const response = await fetch(`/api/admin/users/${userId}/status`, {
+      const response = await authenticatedFetch(`/api/admin/users/${userId}/status`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           action: isDeactivating ? 'deactivate' : 'reactivate'
         })

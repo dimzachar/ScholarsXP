@@ -2,7 +2,7 @@
 /* eslint @typescript-eslint/no-explicit-any: off */
 
 import React, { useState, useEffect } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -68,7 +68,7 @@ const getHealthColor = (health: { submissionSuccessRate: number; avgReviewScore:
 }
 
 export default function AdminDashboardPage() {
-  const { user: _user, userProfile: _userProfile, loading } = useAuth()
+  const { user: _user, isLoading: loading } = usePrivyAuthSync()
   const router = useRouter()
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [, setLoadingStats] = useState(true)
@@ -76,8 +76,11 @@ export default function AdminDashboardPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchAdminStats()
-  }, [])
+    // Only fetch stats when user is loaded and authenticated with privyUserId
+    if (!loading && _user && _user.privyUserId) {
+      fetchAdminStats()
+    }
+  }, [loading, _user, _user?.privyUserId])
 
   const fetchAdminStats = async () => {
     try {

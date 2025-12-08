@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -79,7 +80,8 @@ interface Submission {
 }
 
 export default function AdminSubmissionsPage() {
-  const { user: _user, userProfile, loading, session } = useAuth()
+  const { user, isLoading: loading, isAdmin } = usePrivyAuthSync()
+  const { getAuthHeaders } = useAuthenticatedFetch()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [submissions, setSubmissions] = useState<Submission[]>([])
@@ -168,7 +170,7 @@ export default function AdminSubmissionsPage() {
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          ...getAuthHeaders(),
         }
       })
 
@@ -207,10 +209,10 @@ export default function AdminSubmissionsPage() {
 
   useEffect(() => {
     // Only fetch when user is loaded and is admin
-    if (!loading && userProfile?.role === 'ADMIN') {
+    if (!loading && isAdmin) {
       fetchSubmissions()
     }
-  }, [fetchSubmissions, userProfile?.role, loading])
+  }, [fetchSubmissions, isAdmin, loading])
 
   const handleFilterChange = (key: string, value: string | boolean) => {
     setFilters(prev => ({ ...prev, [key]: value }))
@@ -253,10 +255,7 @@ export default function AdminSubmissionsPage() {
       const response = await fetch('/api/admin/submissions', {
         method: 'PATCH',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           action,
           submissionIds: selectedSubmissions,
@@ -321,10 +320,7 @@ export default function AdminSubmissionsPage() {
       const response = await fetch('/api/admin/bulk-reshuffle', {
         method: 'POST',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           submissionIds: selectedSubmissions,
           reason: reason.trim()
@@ -424,7 +420,7 @@ export default function AdminSubmissionsPage() {
     )
   }
 
-  if (userProfile?.role !== 'ADMIN') {
+  if (!isAdmin) {
     return null
   }
 

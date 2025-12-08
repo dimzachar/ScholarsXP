@@ -1,6 +1,7 @@
 "use client"
 import { useEffect, useMemo, useState } from 'react'
 // import { useRouter } from 'next/navigation'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import AuthGuard from '@/components/Auth/AuthGuard'
 import { AdminGuard } from '@/components/Auth/RoleGuard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -44,6 +45,7 @@ type HistoryWinner = Winner & { month: string; awardedAt: string }
 type UserResult = { id: string; username?: string | null; email?: string | null }
 
 export default function AdminLeaderboardsPage() {
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const [months, setMonths] = useState<string[]>([])
   const [month, setMonth] = useState<string>('')
   const [preview, setPreview] = useState<PreviewData | null>(null)
@@ -66,23 +68,23 @@ export default function AdminLeaderboardsPage() {
 
   useEffect(() => {
     const load = async () => {
-      const res = await fetch('/api/leaderboard/months', { credentials: 'include' })
+      const res = await authenticatedFetch('/api/leaderboard/months')
       const json = await res.json()
       const list: string[] = json?.data?.months || []
       setMonths(list)
       if (list.length) setMonth(list[0])
     }
     load()
-  }, [])
+  }, [authenticatedFetch])
 
   useEffect(() => {
     if (!month) return
     const run = async () => {
       setLoading(true)
       const [p, h] = await Promise.all([
-        fetch(`/api/admin/leaderboards/month/${month}/preview`, { credentials: 'include' })
+        authenticatedFetch(`/api/admin/leaderboards/month/${month}/preview`)
           .then(async (r) => (r.ok ? r.json() : Promise.reject(await r.text()))),
-        fetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`, { credentials: 'include' })
+        authenticatedFetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`)
           .then(async (r) => (r.ok ? r.json() : Promise.reject(await r.text()))),
       ])
       setPreview(p?.data || null)
@@ -91,7 +93,7 @@ export default function AdminLeaderboardsPage() {
       setLoading(false)
     }
     run()
-  }, [month, historyPage])
+  }, [month, historyPage, authenticatedFetch])
 
   // const nextEligible = useMemo(() => preview?.items?.find((i) => i.eligible), [preview])
 
@@ -99,13 +101,13 @@ export default function AdminLeaderboardsPage() {
     if (!month) return
     setAwardLoading(true)
     try {
-      const res = await fetch(`/api/leaderboard/winners/${month}`, { method: 'POST', credentials: 'include' })
+      const res = await authenticatedFetch(`/api/leaderboard/winners/${month}`, { method: 'POST' })
       if (res.ok) {
         const body = await res.json().catch(() => ({}))
         // Refresh preview and history so UI reflects award instantly
         const [p, h] = await Promise.all([
-          fetch(`/api/admin/leaderboards/month/${month}/preview`, { credentials: 'include' }).then((r) => r.json()),
-          fetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`, { credentials: 'include' }).then((r) => r.json()),
+          authenticatedFetch(`/api/admin/leaderboards/month/${month}/preview`).then((r) => r.json()),
+          authenticatedFetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`).then((r) => r.json()),
         ])
         setPreview(p?.data || null)
         setHistory(h?.data?.items || [])
@@ -126,17 +128,16 @@ export default function AdminLeaderboardsPage() {
 
   const handleOverride = async () => {
     if (!overrideUserId || !month) return
-    const res = await fetch(`/api/admin/leaderboards/winners/${month}/override`, {
+    const res = await authenticatedFetch(`/api/admin/leaderboards/winners/${month}/override`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({ userId: overrideUserId, reason: overrideReason }),
     })
     if (res.ok) {
       setOverrideOpen(false)
       setOverrideUserId('')
       setOverrideReason('')
-      const p = await fetch(`/api/admin/leaderboards/month/${month}/preview`, { credentials: 'include' }).then((r) => r.json())
+      const p = await authenticatedFetch(`/api/admin/leaderboards/month/${month}/preview`).then((r) => r.json())
       setPreview(p?.data || null)
     }
   }
@@ -144,15 +145,15 @@ export default function AdminLeaderboardsPage() {
   const handleBulkAward = async () => {
     try {
       setBulkAwardLoading(true)
-      const res = await fetch(`/api/admin/leaderboards/winners/bulk-award`, { method: 'POST', credentials: 'include' })
+      const res = await authenticatedFetch(`/api/admin/leaderboards/winners/bulk-award`, { method: 'POST' })
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error || 'Bulk award failed')
       setOpsMessage(`Awarded: ${json?.data?.awarded?.length || 0}, Skipped: ${json?.data?.skipped?.length || 0}, Errors: ${json?.data?.errors?.length || 0}`)
       // Refresh preview/history
       if (month) {
         const [p, h] = await Promise.all([
-          fetch(`/api/admin/leaderboards/month/${month}/preview`, { credentials: 'include' }).then((r) => r.json()),
-          fetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`, { credentials: 'include' }).then((r) => r.json()),
+          authenticatedFetch(`/api/admin/leaderboards/month/${month}/preview`).then((r) => r.json()),
+          authenticatedFetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`).then((r) => r.json()),
         ])
         setPreview(p?.data || null)
         setHistory(h?.data?.items || [])
@@ -185,12 +186,12 @@ export default function AdminLeaderboardsPage() {
   useEffect(() => {
     const id = setTimeout(async () => {
       if (!searchUser || searchUser.length < 2) { setUserResults([]); return }
-      const res = await fetch(`/api/admin/users/search?q=${encodeURIComponent(searchUser)}&limit=8`, { credentials: 'include' })
+      const res = await authenticatedFetch(`/api/admin/users/search?q=${encodeURIComponent(searchUser)}&limit=8`)
       const json = await res.json()
       setUserResults(json?.data || [])
     }, 300)
     return () => clearTimeout(id)
-  }, [searchUser])
+  }, [searchUser, authenticatedFetch])
 
   // Auto-clear ops message (toast-like)
   useEffect(() => {
@@ -289,7 +290,7 @@ export default function AdminLeaderboardsPage() {
                     <DropdownMenuItem onClick={() => window.open('/api/admin/leaderboards/winners/export', '_blank')}>Export Winners CSV</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <Button variant="ghost" onClick={async () => { await fetch('/api/admin/leaderboards/cache/revalidate?scope=monthly&month='+month, { method: 'POST' }); }}>
+                <Button variant="ghost" onClick={async () => { await authenticatedFetch('/api/admin/leaderboards/cache/revalidate?scope=monthly&month='+month, { method: 'POST' }); }}>
                   <RefreshCw className="h-4 w-4 mr-2" /> Refresh Cache
                 </Button>
                 <Button disabled={!month || loading || awardLoading} onClick={handleAward}>
@@ -349,39 +350,39 @@ export default function AdminLeaderboardsPage() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem disabled={!s.eligible || loading} onClick={async () => {
-                                  await fetch(`/api/admin/leaderboards/winners/${month}/override`, {
+                                  await authenticatedFetch(`/api/admin/leaderboards/winners/${month}/override`, {
                                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ userId: s.userId, reason: 'manual award from preview row', rank: 1 })
                                   })
                                   const [p, h] = await Promise.all([
-                                    fetch(`/api/admin/leaderboards/month/${month}/preview`).then(r => r.json()),
-                                    fetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`).then(r => r.json()),
+                                    authenticatedFetch(`/api/admin/leaderboards/month/${month}/preview`).then(r => r.json()),
+                                    authenticatedFetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`).then(r => r.json()),
                                   ])
                                   setPreview(p?.data || null)
                                   setHistory(h?.data?.items || [])
                                   setHistoryTotal(h?.data?.totalCount || 0)
                                 }}>Award as #1 (2000 XP)</DropdownMenuItem>
                                 <DropdownMenuItem disabled={!s.eligible || loading} onClick={async () => {
-                                  await fetch(`/api/admin/leaderboards/winners/${month}/override`, {
+                                  await authenticatedFetch(`/api/admin/leaderboards/winners/${month}/override`, {
                                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ userId: s.userId, reason: 'manual award from preview row', rank: 2 })
                                   })
                                   const [p, h] = await Promise.all([
-                                    fetch(`/api/admin/leaderboards/month/${month}/preview`).then(r => r.json()),
-                                    fetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`).then(r => r.json()),
+                                    authenticatedFetch(`/api/admin/leaderboards/month/${month}/preview`).then(r => r.json()),
+                                    authenticatedFetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`).then(r => r.json()),
                                   ])
                                   setPreview(p?.data || null)
                                   setHistory(h?.data?.items || [])
                                   setHistoryTotal(h?.data?.totalCount || 0)
                                 }}>Award as #2 (1500 XP)</DropdownMenuItem>
                                 <DropdownMenuItem disabled={!s.eligible || loading} onClick={async () => {
-                                  await fetch(`/api/admin/leaderboards/winners/${month}/override`, {
+                                  await authenticatedFetch(`/api/admin/leaderboards/winners/${month}/override`, {
                                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ userId: s.userId, reason: 'manual award from preview row', rank: 3 })
                                   })
                                   const [p, h] = await Promise.all([
-                                    fetch(`/api/admin/leaderboards/month/${month}/preview`).then(r => r.json()),
-                                    fetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`).then(r => r.json()),
+                                    authenticatedFetch(`/api/admin/leaderboards/month/${month}/preview`).then(r => r.json()),
+                                    authenticatedFetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`).then(r => r.json()),
                                   ])
                                   setPreview(p?.data || null)
                                   setHistory(h?.data?.items || [])
@@ -427,11 +428,11 @@ export default function AdminLeaderboardsPage() {
                       setOpsMessage('Revoking all winners for selected month...')
                       if (!month) return
                       try {
-                        const res = await fetch(`/api/admin/leaderboards/winners/${month}/revoke-all`, { method: 'POST' })
+                        const res = await authenticatedFetch(`/api/admin/leaderboards/winners/${month}/revoke-all`, { method: 'POST' })
                         if (res.ok) {
                           const [p, h] = await Promise.all([
-                            fetch(`/api/admin/leaderboards/month/${month}/preview`).then(r => r.json()),
-                            fetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`).then(r => r.json()),
+                            authenticatedFetch(`/api/admin/leaderboards/month/${month}/preview`).then(r => r.json()),
+                            authenticatedFetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`).then(r => r.json()),
                           ])
                           setPreview(p?.data || null)
                           setHistory(h?.data?.items || [])
@@ -450,7 +451,7 @@ export default function AdminLeaderboardsPage() {
                       // Try server bulk-revoke endpoint; if it fails, fallback to client-side by-id deletes
                       let ok = false
                       try {
-                        const res = await fetch(`/api/admin/leaderboards/winners/revoke-all`, { method: 'POST' })
+                        const res = await authenticatedFetch(`/api/admin/leaderboards/winners/revoke-all`, { method: 'POST' })
                         ok = res.ok
                       } catch {}
 
@@ -460,12 +461,12 @@ export default function AdminLeaderboardsPage() {
                           let page = 1
                           const limit = 100
                           while (true) {
-                            const list = await fetch(`/api/admin/leaderboards/winners?limit=${limit}&page=${page}`).then(r => r.json())
+                            const list = await authenticatedFetch(`/api/admin/leaderboards/winners?limit=${limit}&page=${page}`).then(r => r.json())
                             const items = list?.data?.items || []
                             if (!items.length) break
                             // delete page in parallel to speed up
                             await Promise.all((items as Array<{ id: string }>).map((w) => (
-                              fetch(`/api/admin/leaderboards/winners/by-id/${w.id}`, { method: 'DELETE' })
+                              authenticatedFetch(`/api/admin/leaderboards/winners/by-id/${w.id}`, { method: 'DELETE' })
                             )))
                             if (items.length < limit) break
                             page++
@@ -476,8 +477,8 @@ export default function AdminLeaderboardsPage() {
 
                       if (ok) {
                         const [p, h] = await Promise.all([
-                          fetch(`/api/admin/leaderboards/month/${month}/preview`).then(r => r.json()),
-                          fetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`).then(r => r.json()),
+                          authenticatedFetch(`/api/admin/leaderboards/month/${month}/preview`).then(r => r.json()),
+                          authenticatedFetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`).then(r => r.json()),
                         ])
                         setPreview(p?.data || null)
                         setHistory(h?.data?.items || [])
@@ -517,13 +518,13 @@ export default function AdminLeaderboardsPage() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem onClick={async () => {
-                                  await fetch(`/api/admin/leaderboards/winners/by-id/${w.id}`, { method: 'DELETE' })
-                                  const h = await fetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`).then(r => r.json())
+                                  await authenticatedFetch(`/api/admin/leaderboards/winners/by-id/${w.id}`, { method: 'DELETE' })
+                                  const h = await authenticatedFetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`).then(r => r.json())
                                   setHistory(h?.data?.items || [])
                                   setHistoryTotal(h?.data?.totalCount || 0)
                                   // Also refresh the currently selected month's preview so eligibility updates instantly
                                   if (month) {
-                                    const p = await fetch(`/api/admin/leaderboards/month/${month}/preview`).then(r => r.json())
+                                    const p = await authenticatedFetch(`/api/admin/leaderboards/month/${month}/preview`).then(r => r.json())
                                     setPreview(p?.data || null)
                                   }
                                   setOpsMessage(`Revoked winner for ${w.month}`)
