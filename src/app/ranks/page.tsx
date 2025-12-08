@@ -17,9 +17,9 @@ export default function RanksTestPage() {
     return (
         <div className="container mx-auto py-8 px-4">
             <div className="mb-8">
-                <h1 className="text-4xl font-bold mb-2">Gamified Rank System</h1>
+                <h1 className="text-4xl font-bold mb-2">Rank System</h1>
                 <p className="text-muted-foreground">
-                    All 21 progression levels with Lucide React icons
+                    All 21 progression levels
                 </p>
             </div>
 
@@ -72,7 +72,7 @@ export default function RanksTestPage() {
             </div>
 
             {/* All Ranks in One View */}
-            <Card className="mt-8">
+            {/* <Card className="mt-8">
                 <CardHeader>
                     <CardTitle>All Ranks (Linear View)</CardTitle>
                 </CardHeader>
@@ -88,10 +88,10 @@ export default function RanksTestPage() {
                         ))}
                     </div>
                 </CardContent>
-            </Card>
+            </Card> */}
 
             {/* Size Comparison */}
-            <Card className="mt-8">
+            {/* <Card className="mt-8">
                 <CardHeader>
                     <CardTitle>Size Variants</CardTitle>
                 </CardHeader>
@@ -109,7 +109,7 @@ export default function RanksTestPage() {
                         ))}
                     </div>
                 </CardContent>
-            </Card>
+            </Card> */}
         </div>
     )
 }
