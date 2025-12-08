@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { createAuthenticatedClient, createServiceClient } from '@/lib/supabase-server'
-import { getTaskType } from '@/lib/task-types'
 import {
   resolveTaskFromPlatform,
   getXpForTier,
@@ -76,7 +75,7 @@ export const POST = withPermission('review_content')(
       }, { status: 404 })
     }
 
-    // Compute XP via v2 mapping when category+tier provided; otherwise support legacy xpScore validation
+    // Compute XP via v2 mapping (category+tier required)
     let computedXp: number
     if (rejected) {
       computedXp = getRejectedXp()
@@ -91,7 +90,7 @@ export const POST = withPermission('review_content')(
           }
         }, { status: 400 })
       }
-      // Enforce platform restrictions: A => Twitter only; B => Medium/Reddit only
+      // Enforce platform restrictions: A => Twitter only; B => Medium/Reddit/Notion only
       if (task === 'A' && submission.platform !== 'Twitter') {
         return NextResponse.json({
           success: false,
@@ -112,39 +111,10 @@ export const POST = withPermission('review_content')(
       }
       computedXp = getXpForTier(task, category, tier)
     } else {
-      // Legacy path: validate numeric xpScore against task-specific range if available, else 0-100
-      const xpScore = Number(xpScoreInput)
-      if (Number.isNaN(xpScore)) {
-        return NextResponse.json({
-          success: false,
-          error: { error: 'Invalid xpScore', code: 'VALIDATION_ERROR' }
-        }, { status: 400 })
-      }
-      if (submission.taskTypes && submission.taskTypes.length > 0) {
-        const primaryTaskType = submission.taskTypes[0]
-        const taskTypeConfig = getTaskType(primaryTaskType)
-        const { min, max } = taskTypeConfig.xpRange
-        if (xpScore < min || xpScore > max) {
-          return NextResponse.json({
-            success: false,
-            error: {
-              error: `XP score must be between ${min} and ${max} for task type ${primaryTaskType}`,
-              code: 'VALIDATION_ERROR',
-              details: { min, max, taskType: primaryTaskType, provided: xpScore }
-            }
-          }, { status: 400 })
-        }
-      } else if (xpScore < 0 || xpScore > 100) {
-        return NextResponse.json({
-          success: false,
-          error: {
-            error: 'XP score must be between 0 and 100',
-            code: 'VALIDATION_ERROR',
-            details: { min: 0, max: 100, provided: xpScore }
-          }
-        }, { status: 400 })
-      }
-      computedXp = Math.round(xpScore)
+      // category+tier is required for v2 reviews
+      throw new ValidationError('Category and tier are required for review submission', {
+        required: ['category', 'tier']
+      })
     }
 
     // Check if reviewer has an active assignment for this submission

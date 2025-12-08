@@ -2,6 +2,31 @@ export type TaskIdV2 = 'A' | 'B'
 export type TaskCategory = 'strategy' | 'guide' | 'technical'
 export type QualityTier = 'basic' | 'average' | 'awesome'
 
+/**
+ * Task display metadata for UI components
+ */
+export interface TaskDisplayInfo {
+  id: TaskIdV2
+  name: string
+  description: string
+  platforms: string[]
+}
+
+export const TASK_DISPLAY_INFO: Record<TaskIdV2, TaskDisplayInfo> = {
+  A: {
+    id: 'A',
+    name: 'Thread or Long Article',
+    description: 'Twitter/X thread (5+ tweets) OR Twitter Article',
+    platforms: ['Twitter', 'X']
+  },
+  B: {
+    id: 'B',
+    name: 'Platform Article',
+    description: 'Article on Medium, Reddit, or Notion (2000+ characters)',
+    platforms: ['Medium', 'Reddit', 'Notion']
+  }
+}
+
 export const ALLOWED_XP: Record<TaskIdV2, Record<TaskCategory, [number, number, number]>> = {
   A: {
     strategy: [50, 100, 150],
@@ -44,4 +69,27 @@ export function isValidCategory(value: unknown): value is TaskCategory {
 
 export function isValidTier(value: unknown): value is QualityTier {
   return value === 'basic' || value === 'average' || value === 'awesome'
+}
+
+/**
+ * Get task display info by ID (for UI components)
+ * Supports both active task types (A, B) and legacy types (C-F) for backwards compatibility
+ */
+export function getTaskDisplayInfo(taskId: string): TaskDisplayInfo {
+  if (taskId === 'A' || taskId === 'B') {
+    return TASK_DISPLAY_INFO[taskId]
+  }
+  // Legacy task types (C-F) - return placeholder info for backwards compatibility
+  const legacyNames: Record<string, string> = {
+    'C': 'Tutorial/Guide',
+    'D': 'Protocol Explanation',
+    'E': 'Correction Bounty',
+    'F': 'Strategies'
+  }
+  return {
+    id: taskId as TaskIdV2,
+    name: legacyNames[taskId] || `Task ${taskId}`,
+    description: `Legacy task type ${taskId} (no longer active)`,
+    platforms: []
+  }
 }
