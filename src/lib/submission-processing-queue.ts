@@ -46,17 +46,22 @@ export class SubmissionProcessingQueue {
 
       // Create processing record using raw SQL
       await prisma.$executeRaw`
-        INSERT INTO "SubmissionProcessing" ("submissionId", "status", "priority")
-        VALUES (${submissionId}::uuid, 'PENDING', ${priority})
+        INSERT INTO "SubmissionProcessing" ("id", "submissionId", "status", "priority", "createdAt", "updatedAt")
+        VALUES (gen_random_uuid(), ${submissionId}::uuid, 'PENDING', ${priority}, NOW(), NOW())
       `
 
       console.log(`📥 Queued submission ${submissionId} for processing (priority: ${priority})`)
 
       if (this.shouldProcessInline()) {
-        // Fire and forget so local/dev environments can still process immediately
-        this.processQueue().catch(error => {
+        // Process synchronously to avoid serverless function termination issues
+        // This adds latency but ensures processing actually happens
+        try {
+          const result = await this.processQueue()
+          console.log(`✅ Inline processing complete: ${result.processed} processed, ${result.failed} failed`)
+        } catch (error) {
           console.error('❌ Error in inline submission processing:', error)
-        })
+          // Don't throw - submission is queued, cron can pick it up later
+        }
       }
     } catch (error) {
       console.error(`❌ Failed to queue submission ${submissionId}:`, error)

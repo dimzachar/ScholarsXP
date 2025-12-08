@@ -409,6 +409,7 @@ export class AchievementEngine {
         .single()
 
       if (achievement && achievement.xpReward > 0) {
+        // recordXpTransaction now handles updating User.totalXp and currentWeekXp
         await xpAnalyticsService.recordXpTransaction(
           userId,
           achievement.xpReward,
@@ -417,7 +418,8 @@ export class AchievementEngine {
           achievementId
         )
 
-        await this.applyAchievementXpReward(userId, achievementId, achievement.xpReward)
+        // Update WeeklyStats for achievement XP (User totals already updated by recordXpTransaction)
+        await this.updateWeeklyStatsForAchievement(userId, achievement.xpReward)
       }
 
       console.log(`🏆 Achievement awarded: ${achievement?.name} to user ${userId}`)
@@ -513,6 +515,45 @@ export class AchievementEngine {
     const startOfYear = new Date(now.getFullYear(), 0, 1)
     const dayOfYear = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000))
     return Math.ceil((dayOfYear + startOfYear.getDay() + 1) / 7)
+  }
+
+  /**
+   * Update WeeklyStats for achievement XP (User totals handled by recordXpTransaction)
+   */
+  private async updateWeeklyStatsForAchievement(userId: string, xpReward: number): Promise<void> {
+    try {
+      const weekNumber = this.getCurrentWeekNumber()
+
+      const { data: weeklyStats, error: weeklyFetchError } = await supabase
+        .from('WeeklyStats')
+        .select('xpTotal, reviewsDone, reviewsMissed, earnedStreak')
+        .eq('userId', userId)
+        .eq('weekNumber', weekNumber)
+        .maybeSingle()
+
+      if (weeklyFetchError && weeklyFetchError.code !== 'PGRST116') {
+        console.error('Error fetching weekly stats for achievement XP:', weeklyFetchError)
+      }
+
+      const existingWeeklyXp = weeklyStats?.xpTotal || 0
+
+      const { error: weeklyUpsertError } = await supabase
+        .from('WeeklyStats')
+        .upsert({
+          userId,
+          weekNumber,
+          xpTotal: existingWeeklyXp + xpReward,
+          reviewsDone: weeklyStats?.reviewsDone ?? 0,
+          reviewsMissed: weeklyStats?.reviewsMissed ?? 0,
+          earnedStreak: weeklyStats?.earnedStreak ?? (existingWeeklyXp + xpReward >= 100)
+        }, { onConflict: 'userId,weekNumber' })
+
+      if (weeklyUpsertError) {
+        console.error('Error updating weekly stats for achievement XP:', weeklyUpsertError)
+      }
+    } catch (error) {
+      console.error('Failed to update weekly stats for achievement:', error)
+    }
   }
 
   /**

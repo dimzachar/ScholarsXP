@@ -340,20 +340,7 @@ export class ReviewIncentivesService {
     submissionId: string,
     rewardDetails: ReviewReward
   ): Promise<void> {
-    // Update user XP
-    await prisma.user.update({
-      where: { id: reviewerId },
-      data: {
-        totalXp: {
-          increment: amount
-        },
-        currentWeekXp: {
-          increment: amount
-        }
-      }
-    })
-
-    // Record XP transaction after successful update
+    // Record XP transaction - this also updates User.totalXp and currentWeekXp
     await xpAnalyticsService.recordXpTransaction(
       reviewerId,
       amount,
@@ -375,7 +362,9 @@ export class ReviewIncentivesService {
     submissionId: string,
     reason: string
   ): Promise<void> {
-    // Record XP transaction (penalty is negative)
+    // Record XP transaction (penalty is negative) - this also updates User.totalXp and currentWeekXp
+    // Note: recordXpTransaction handles negative amounts, but doesn't enforce min 0
+    // So we need to handle the floor logic separately
     await xpAnalyticsService.recordXpTransaction(
       reviewerId,
       penalty,
@@ -384,29 +373,19 @@ export class ReviewIncentivesService {
       submissionId
     )
 
-    await prisma.$transaction(async (tx) => {
-      const user = await tx.user.findUnique({
-        where: { id: reviewerId },
-        select: {
-          totalXp: true,
-          currentWeekXp: true
-        }
-      })
-
-      if (!user) {
-        return
+    // Ensure XP doesn't go below 0 (recordXpTransaction may have set negative values)
+    await prisma.user.updateMany({
+      where: { 
+        id: reviewerId,
+        OR: [
+          { totalXp: { lt: 0 } },
+          { currentWeekXp: { lt: 0 } }
+        ]
+      },
+      data: {
+        totalXp: 0,
+        currentWeekXp: 0
       }
-
-      const nextTotal = Math.max(0, (user.totalXp ?? 0) + penalty)
-      const nextWeek = Math.max(0, (user.currentWeekXp ?? 0) + penalty)
-
-      await tx.user.update({
-        where: { id: reviewerId },
-        data: {
-          totalXp: nextTotal,
-          currentWeekXp: nextWeek
-        }
-      })
     })
   }
 

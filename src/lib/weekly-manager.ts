@@ -67,12 +67,14 @@ export async function processWeeklyReset(): Promise<WeeklyProcessingResult> {
           // Award Parthenon XP bonus for 4-week streak
           if (newStreakWeeks % 4 === 0) {
             const bonusXp = 50 // Parthenon bonus
-            await prisma.user.update({
-              where: { id: user.id },
-              data: {
-                totalXp: { increment: bonusXp }
-              }
-            })
+            // Use recordXpTransaction to update User.totalXp AND create transaction record
+            const { xpAnalyticsService } = await import('@/lib/xp-analytics')
+            await xpAnalyticsService.recordXpTransaction(
+              user.id,
+              bonusXp,
+              'STREAK_BONUS',
+              `Parthenon bonus for ${newStreakWeeks}-week streak`
+            )
             console.log(`Awarded ${bonusXp} Parthenon XP to user ${user.username} for ${newStreakWeeks}-week streak`)
 
             // Invalidate user profile cache after streak bonus
@@ -92,16 +94,23 @@ export async function processWeeklyReset(): Promise<WeeklyProcessingResult> {
         const reviewPenalty = user.missedReviews * 50 // 50 XP penalty per missed review
         if (reviewPenalty > 0) {
           penaltiesApplied++
+          // Record penalty transaction (this also updates User.totalXp)
+          const { xpAnalyticsService } = await import('@/lib/xp-analytics')
+          await xpAnalyticsService.recordXpTransaction(
+            user.id,
+            -reviewPenalty,
+            'PENALTY',
+            `Weekly penalty for ${user.missedReviews} missed reviews`
+          )
         }
 
-        // Update user for new week
+        // Update user for new week (totalXp already handled by recordXpTransaction if penalty applied)
         await prisma.user.update({
           where: { id: user.id },
           data: {
             currentWeekXp: 0, // Reset weekly XP
             streakWeeks: newStreakWeeks,
-            missedReviews: 0, // Reset missed reviews counter
-            totalXp: { decrement: reviewPenalty } // Apply penalties
+            missedReviews: 0 // Reset missed reviews counter
           }
         })
 

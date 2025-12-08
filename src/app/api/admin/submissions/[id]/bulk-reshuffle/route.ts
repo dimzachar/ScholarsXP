@@ -4,6 +4,9 @@ import { withPermission, type AuthenticatedRequest } from '@/lib/auth-middleware
 import { createServiceClient } from '@/lib/supabase-server'
 import { reviewerPoolService } from '@/lib/reviewer-pool'
 import { logAdminAction } from '@/lib/audit-log'
+import { xpAnalyticsService } from '@/lib/xp-analytics'
+
+const MISSED_REVIEW_PENALTY = -10
 
 interface RouteContext {
   params: {
@@ -44,6 +47,38 @@ async function reshuffleSingleAssignment(supabase: any, assignmentId: string, re
         success: false,
         error: `Cannot reshuffle assignment with status: ${assignment.status}`,
         details: { currentStatus: assignment.status }
+      }
+    }
+
+    // Check if assignment is overdue and apply penalty
+    const deadline = new Date(assignment.deadline)
+    const now = new Date()
+    const isOverdue = deadline < now
+    let penaltyApplied = false
+
+    if (isOverdue) {
+      try {
+        // Increment missed reviews counter
+        await supabase
+          .from('User')
+          .update({
+            missedReviews: supabase.sql`COALESCE("missedReviews", 0) + 1`
+          })
+          .eq('id', assignment.reviewerId)
+
+        // Record penalty XP transaction
+        await xpAnalyticsService.recordXpTransaction(
+          assignment.reviewerId,
+          MISSED_REVIEW_PENALTY,
+          'PENALTY',
+          `Missed review deadline for submission ${assignment.submissionId} (bulk reshuffled)`,
+          assignment.submissionId
+        )
+
+        penaltyApplied = true
+        console.log(`⚠️ Penalty applied to reviewer ${assignment.reviewerId} for overdue assignment ${assignmentId}`)
+      } catch (penaltyError) {
+        console.error(`Failed to apply penalty for assignment ${assignmentId}:`, penaltyError)
       }
     }
 
@@ -125,7 +160,10 @@ async function reshuffleSingleAssignment(supabase: any, assignmentId: string, re
       details: {
         oldReviewerId: assignment.reviewerId,
         newReviewerId: newReviewer.id,
-        newReviewerName: newReviewer.username || newReviewer.email
+        newReviewerName: newReviewer.username || newReviewer.email,
+        wasOverdue: isOverdue,
+        penaltyApplied,
+        penaltyAmount: penaltyApplied ? MISSED_REVIEW_PENALTY : 0
       }
     }
 
