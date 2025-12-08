@@ -13,6 +13,7 @@ import {
   ContentData
 } from '@/types/task-types'
 import { hasRequiredMention, hasRequiredHashtag } from '@/lib/content-validator'
+import { getWeekNumber } from '@/lib/utils'
 
 export interface TwitterThreadData {
   tweets: TwitterTweet[]
@@ -306,13 +307,4 @@ function assessTwitterOriginality(twitterData: TwitterThreadData): boolean {
   return hasPersonalVoice || twitterData.totalCharacters > 500
 }
 
-/**
- * Get week number from date (placeholder - should use actual implementation)
- */
-function getWeekNumber(date: Date): number {
-  // This should use the actual getWeekNumber implementation from utils
-  const start = new Date(date.getFullYear(), 0, 1)
-  const diff = date.getTime() - start.getTime()
-  const oneWeek = 1000 * 60 * 60 * 24 * 7
-  return Math.floor(diff / oneWeek) + 1
-}
+// getWeekNumber is now imported from @/lib/utils (ISO 8601 compliant)

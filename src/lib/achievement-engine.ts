@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { ENABLE_ACHIEVEMENTS } from '@/config/feature-flags'
 import { xpAnalyticsService } from './xp-analytics'
+import { getWeekNumber } from '@/lib/utils'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -511,10 +512,7 @@ export class AchievementEngine {
   }
 
   private getCurrentWeekNumber(): number {
-    const now = new Date()
-    const startOfYear = new Date(now.getFullYear(), 0, 1)
-    const dayOfYear = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000))
-    return Math.ceil((dayOfYear + startOfYear.getDay() + 1) / 7)
+    return getWeekNumber(new Date())
   }
 
   /**
