@@ -67,6 +67,7 @@ supabase/migrations/*
 .idea/
 *.swp
 *.swo
+cline_mcp_settings.json
 
 # SWC compiler cache
 .swc/
