@@ -328,7 +328,7 @@ export class XpAnalyticsService {
       // Get user's current XP
       const { data: user, error: userError } = await supabase
         .from('User')
-        .select('totalXp, currentWeekXp')
+        .select('totalXp')
         .eq('id', userId)
         .single()
 
@@ -337,32 +337,31 @@ export class XpAnalyticsService {
         return { weekly: 0, allTime: 0, totalUsers: 0 }
       }
 
-
-
       // Get all-time rank by counting users with higher totalXp
       const { count: allTimeRank, error: _allTimeError } = await supabase
         .from('User')
         .select('*', { count: 'exact', head: true })
         .gt('totalXp', user.totalXp)
 
-      // Get weekly rank from WeeklyStats
-      const { data: userWeeklyStats, error: weeklyStatsError } = await supabase
-        .from('WeeklyStats')
-        .select('xpTotal')
-        .eq('userId', userId)
+      // Get weekly rank from XpTransaction (source of truth)
+      const { data: allWeeklyXp, error: weeklyXpError } = await supabase
+        .from('XpTransaction')
+        .select('userId, amount')
         .eq('weekNumber', currentWeek)
-        .single()
 
       let weeklyRank = 0
-      if (!weeklyStatsError && userWeeklyStats) {
-        const { count: weeklyRankCount, error: weeklyRankError } = await supabase
-          .from('WeeklyStats')
-          .select('*', { count: 'exact', head: true })
-          .eq('weekNumber', currentWeek)
-          .gt('xpTotal', userWeeklyStats.xpTotal)
-
-        if (!weeklyRankError) {
-          weeklyRank = (weeklyRankCount || 0) + 1
+      if (!weeklyXpError && allWeeklyXp) {
+        // Aggregate XP by user
+        const xpByUser: Record<string, number> = {}
+        for (const tx of allWeeklyXp) {
+          xpByUser[tx.userId] = (xpByUser[tx.userId] || 0) + (tx.amount || 0)
+        }
+        
+        const userWeeklyXp = xpByUser[userId] || 0
+        if (userWeeklyXp > 0) {
+          // Count users with higher XP
+          const usersAbove = Object.values(xpByUser).filter(xp => xp > userWeeklyXp).length
+          weeklyRank = usersAbove + 1
         }
       }
 
