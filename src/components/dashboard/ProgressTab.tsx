@@ -179,8 +179,14 @@ export function ProgressTab({
               <div className="flex items-center space-x-2">
                 <Trophy className="h-4 w-4 text-yellow-500 shrink-0" />
                 <div className="min-w-0">
-                  <p className="text-xs sm:text-sm font-medium truncate">Rank</p>
-                  <p className="text-xl sm:text-2xl font-bold">#{profileData?.statistics?.rank?.allTime || 'N/A'}</p>
+                  <p className="text-xs sm:text-sm font-medium truncate">
+                    {selectedTimeframe === 'current_week' ? 'Weekly Rank' : 'Rank'}
+                  </p>
+                  <p className="text-xl sm:text-2xl font-bold">
+                    #{selectedTimeframe === 'current_week' 
+                      ? (profileData?.statistics?.rank?.weekly || 'N/A')
+                      : (profileData?.statistics?.rank?.allTime || 'N/A')}
+                  </p>
                 </div>
               </div>
             </Card>

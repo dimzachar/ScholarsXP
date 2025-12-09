@@ -90,7 +90,8 @@ async function getOptimizedCompleteProfile(
         reviewsResult,
         reviewCountResult,
         achievementsResult,
-        xpTransactionsResult
+        xpTransactionsResult,
+        currentWeekXpResult
       ] = await Promise.all([
         // Get recent submissions only (limit to 5 for smaller response)
         serviceSupabase
@@ -159,7 +160,14 @@ async function getOptimizedCompleteProfile(
         supabase
           .from('XpTransaction')
           .select('type, amount')
+          .eq('userId', userId),
+
+        // Get current week XP from transactions (source of truth)
+        serviceSupabase
+          .from('XpTransaction')
+          .select('amount')
           .eq('userId', userId)
+          .eq('weekNumber', getWeekNumber(new Date()))
       ])
 
       // Calculate statistics efficiently (include legacy submissions)
@@ -196,8 +204,17 @@ async function getOptimizedCompleteProfile(
       // Calculate user rank
       const rankData = await xpAnalyticsService.getUserRank(userId)
 
+      // Calculate current week XP from transactions (source of truth)
+      const currentWeekXpTransactions = currentWeekXpResult.data || []
+      const calculatedCurrentWeekXp = currentWeekXpTransactions.reduce(
+        (sum: number, tx: { amount: number }) => sum + tx.amount,
+        0
+      )
+
       // Transform to optimized DTOs
       const profile = ResponseTransformer.toUserProfileDTO(userProfile)
+      // Override currentWeekXp with calculated value from XpTransaction (source of truth)
+      profile.currentWeekXp = calculatedCurrentWeekXp
 
       const statistics = {
         totalSubmissions,

@@ -4,15 +4,13 @@
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import { useDashboardData } from '@/hooks/useDashboardData'
+import { useDashboardData, useMonthlyStats } from '@/hooks/useDashboardData'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
 
 
-import { WeeklyProgressIndicator } from '@/components/dashboard/MiniChart'
-
 import { ProgressTab } from '@/components/dashboard/ProgressTab'
-import { ResponsiveStatCard, createStatCardData } from '@/components/ui/responsive-stat-card'
+import { StatCard, PeriodStatCard, StreakBadge } from '@/components/dashboard/StatCard'
 import { MobileTabNavigation, createTabItem } from '@/components/dashboard/MobileTabNavigation'
 import { MobileActionCard, createActionCardData } from '@/components/dashboard/MobileActionCard'
 import { GestureWrapper } from '@/components/ui/gesture-wrapper'
@@ -29,9 +27,7 @@ import {
   TrendingUp,
   User,
   BarChart3,
-  Calendar,
-  Flame,
-  ArrowUp
+  Calendar
 } from 'lucide-react'
 
 export default function DashboardPage() {
@@ -107,7 +103,7 @@ export default function DashboardPage() {
           icon={BarChart3}
           spacing="normal"
         >
-          <StatCardsSection profileData={profileData} />
+          <StatCardsSection profileData={profileData} analyticsData={analyticsData} />
         </MobileSection>
 
         {/* Mobile-Optimized Tabbed Interface */}
@@ -179,115 +175,70 @@ export default function DashboardPage() {
   )
 }
 
-// Mobile-optimized stat cards section
-function StatCardsSection({ profileData }: { profileData: any }) {
-
-  // Create stat card data using the new responsive format
-  // Fix: Access correct data paths from API response
+// Stat cards section - 3 cards: Total XP, This Week (XP + rank), This Month (XP + rank)
+function StatCardsSection({ profileData, analyticsData }: { profileData: any; analyticsData: any }) {
   const userProfile = profileData?.profile || {}
-  // const userStats = profileData?.statistics || {}
-
-  const totalXpData = createStatCardData(
-    'Total XP',
-    userProfile?.totalXp || 0,
-    {
-      color: 'primary',
-      icon: BarChart3,
-      progress: {
-        current: userProfile?.totalXp || 0,
-        max: Math.max(userProfile?.totalXp || 1000, 1000),
-        label: 'Lifetime'
-      },
-      trend: userProfile?.xpAnalytics?.weeklyTrends?.length > 1 ? {
-        data: userProfile.xpAnalytics.weeklyTrends,
-        direction: 'up' as const,
-        percentage: userProfile.xpAnalytics.projectedWeeklyXp
-      } : undefined,
-      additionalInfo: userProfile?.xpAnalytics?.projectedWeeklyXp && (
-        <div className="flex items-center">
-          <ArrowUp className="h-4 w-4 mr-1" />
-          <span className="text-sm">+{userProfile.xpAnalytics.projectedWeeklyXp} this week</span>
-        </div>
-      )
-    }
-  )
-
-  // FIXED: Use stored currentWeekXp value (now correctly calculated from transactions)
-  // The root cause was fixed in weekly-manager.ts - it now calculates weekly XP from transactions
-  // instead of using the outdated stored value
-  const weeklyXpDisplay = userProfile?.currentWeekXp || 0
+  const statistics = profileData?.statistics || {}
+  const { data: monthlyStats } = useMonthlyStats()
   
-  // Debug logging removed - XP fix is complete and dashboard shows correct values
-  // console.log(`✅ Dashboard weekly XP: ${weeklyXpDisplay}`)
-  // console.log(`👤 Using stored currentWeekXp (now correctly calculated): ${weeklyXpDisplay}`)
+  const totalXp = userProfile?.totalXp || 0
+  const weeklyXp = userProfile?.currentWeekXp || 0
+  const weeklyRank = statistics?.rank?.weekly || 0
+  const weeklyActiveUsers = statistics?.rank?.weeklyActiveUsers || 0
+  const streakWeeks = userProfile?.streakWeeks || 0
 
-  const weeklyXpData = createStatCardData(
-    'This Week',
-    weeklyXpDisplay,
-    {
-      color: 'secondary',
-      icon: Calendar,
-      progress: {
-        current: weeklyXpDisplay,
-        max: Math.max(weeklyXpDisplay || 100, 100),
-        label: 'Activity'
-      },
-      subtitle: `Week ${getWeekNumber(new Date())}`,
-      additionalInfo: (
-        <div className="space-y-2">
-          {userProfile?.streakWeeks && userProfile.streakWeeks > 0 && (
-            <div className="flex items-center">
-              <Flame className="h-4 w-4 mr-1" />
-              <span className="text-sm">{userProfile.streakWeeks}w streak</span>
-            </div>
-          )}
-          <WeeklyProgressIndicator
-            currentWeek={getWeekNumber(new Date())}
-            totalWeeks={52}
-          />
-        </div>
-      )
-    }
-  )
+  // Monthly stats
+  const monthlyXp = monthlyStats?.xp || 0
+  const monthlyRank = monthlyStats?.rank || 0
+  const monthlyTotalUsers = monthlyStats?.totalUsers || 0
 
-  // Get weekly rank from statistics
-  const weeklyRank = profileData?.statistics?.rank?.weekly
-  const totalScholars = profileData?.statistics?.rank?.totalUsers || 0
-  const currentWeekXp = profileData?.profile?.currentWeekXp || 0
+  // Get weekly trends for sparkline and change
+  const weeklyTrends: Array<{ week: number; xpEarned: number }> = analyticsData?.weeklyTrends || []
+  const currentWeekNumber = getWeekNumber(new Date())
   
-  const rankData = createStatCardData(
-    'Weekly Rank',
-    weeklyRank || 0,
-    {
-      color: 'accent',
-      icon: Users,
-      progress: {
-        current: weeklyRank || 0,
-        max: Math.max(totalScholars, 100),
-        label: 'Community'
-      },
-      subtitle: totalScholars > 0 ? `of ${totalScholars} scholars` : 'of — scholars',
-      additionalInfo: weeklyRank ? (
-        <div className="flex items-center text-sm">
-          <Trophy className="h-4 w-4 mr-1 text-yellow-500" />
-          <span>#{weeklyRank}</span>
-        </div>
-      ) : (
-        <div className="flex items-center text-sm text-muted-foreground">
-          <span>No activity this week</span>
-        </div>
-      )
-    }
-  )
+  const sparklineData = weeklyTrends.length > 1 
+    ? weeklyTrends.slice(-6).map(w => w.xpEarned || 0)
+    : undefined
+  
+  const previousWeekData = weeklyTrends.find(w => w.week === currentWeekNumber - 1)
+  const previousWeekXp = previousWeekData?.xpEarned || 0
+  const xpChange = previousWeekXp > 0 ? weeklyXp - previousWeekXp : 0
 
   return (
     <MobileCardGrid
-      columns={{ mobile: 1, tablet: 2, desktop: 3 }}
+      columns={{ mobile: 1, tablet: 3, desktop: 3 }}
       gap="md"
     >
-      <ResponsiveStatCard data={totalXpData} />
-      <ResponsiveStatCard data={weeklyXpData} />
-      <ResponsiveStatCard data={rankData} />
+      <StatCard
+        title="Total XP"
+        value={totalXp}
+        icon={BarChart3}
+        variant="primary"
+        subtitle="Lifetime"
+        sparklineData={sparklineData}
+      />
+
+      <PeriodStatCard
+        title="This Week"
+        xp={weeklyXp}
+        rank={weeklyRank}
+        totalUsers={weeklyActiveUsers}
+        icon={Calendar}
+        variant="secondary"
+        subtitle={`Week ${currentWeekNumber}`}
+        badge={<StreakBadge weeks={streakWeeks} />}
+        change={xpChange}
+      />
+
+      <PeriodStatCard
+        title="This Month"
+        xp={monthlyXp}
+        rank={monthlyRank}
+        totalUsers={monthlyTotalUsers}
+        icon={Calendar}
+        variant="accent"
+        subtitle={new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+      />
     </MobileCardGrid>
   )
 }

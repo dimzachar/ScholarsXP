@@ -51,7 +51,7 @@ next-env.d.ts
 !README.md
 !ARCHITECTURE.md
 !changelog.md
-
+docs/*
 *.py
 
 *.csv
@@ -149,7 +149,6 @@ tmp_*
 backup/*
 *.png
 debug-*
-docs/*
 _drafts/*
 
 fucks-or-sucks-main/*

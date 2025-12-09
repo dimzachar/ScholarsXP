@@ -44,6 +44,7 @@ export interface XpAnalytics {
     weekly: number
     allTime: number
     totalUsers: number
+    weeklyActiveUsers: number
   }
 }
 
@@ -334,7 +335,7 @@ export class XpAnalyticsService {
 
       if (userError || !user) {
         console.error('Error fetching user data for rank:', userError)
-        return { weekly: 0, allTime: 0, totalUsers: 0 }
+        return { weekly: 0, allTime: 0, totalUsers: 0, weeklyActiveUsers: 0 }
       }
 
       // Get all-time rank by counting users with higher totalXp
@@ -350,12 +351,16 @@ export class XpAnalyticsService {
         .eq('weekNumber', currentWeek)
 
       let weeklyRank = 0
+      let weeklyActiveUsers = 0
       if (!weeklyXpError && allWeeklyXp) {
         // Aggregate XP by user
         const xpByUser: Record<string, number> = {}
         for (const tx of allWeeklyXp) {
           xpByUser[tx.userId] = (xpByUser[tx.userId] || 0) + (tx.amount || 0)
         }
+        
+        // Count active users (users with XP > 0 this week)
+        weeklyActiveUsers = Object.keys(xpByUser).length
         
         const userWeeklyXp = xpByUser[userId] || 0
         if (userWeeklyXp > 0) {
@@ -372,11 +377,12 @@ export class XpAnalyticsService {
       return {
         weekly: weeklyRank,
         allTime: (allTimeRank || 0) + 1, // Add 1 because count gives users above
-        totalUsers: totalUsers || 0
+        totalUsers: totalUsers || 0,
+        weeklyActiveUsers
       }
     } catch (error) {
       console.error('Error in getUserRank:', error)
-      return { weekly: 0, allTime: 0, totalUsers: 0 }
+      return { weekly: 0, allTime: 0, totalUsers: 0, weeklyActiveUsers: 0 }
     }
   }
 
