@@ -279,10 +279,14 @@ export async function getOptimizedAdminSubmissions(
       const offset = typeof query.skip === 'number' ? query.skip : (pagination.page - 1) * pagination.limit
       const limit = typeof query.take === 'number' ? query.take : pagination.limit
 
-      const [regularCount, legacyCount, stats] = await Promise.all([
+      // Skip legacy count when filtering by platform or taskType (legacy doesn't have these)
+      const skipLegacy = !!cleanedFilters.platform || !!cleanedFilters.taskType
+
+      const [regularCount, legacyCount, stats, filterOptions] = await Promise.all([
         getSubmissionCount(baseWhere),
-        getLegacySubmissionCount(cleanedFilters),
-        getSubmissionStats(baseWhere, cleanedFilters)
+        skipLegacy ? Promise.resolve(0) : getLegacySubmissionCount(cleanedFilters),
+        getSubmissionStats(baseWhere, cleanedFilters),
+        getFilterOptions()
       ])
 
       const regularSkip = Math.min(offset, regularCount)
@@ -296,7 +300,7 @@ export async function getOptimizedAdminSubmissions(
         regularTake > 0
           ? getOptimizedSubmissions({ ...query, where: baseWhere, orderBy, skip: regularSkip, take: regularTake })
           : Promise.resolve([]),
-        legacyTake > 0
+        legacyTake > 0 && !skipLegacy
           ? getOptimizedLegacySubmissions({ ...query, skip: legacySkip, take: legacyTake }, cleanedFilters)
           : Promise.resolve([])
       ])
@@ -312,7 +316,8 @@ export async function getOptimizedAdminSubmissions(
         submissions: submissions.map(ResponseTransformer.toAdminSubmissionDTO),
         pagination: ResponseTransformer.toPaginationDTO(pagination.page, pagination.limit, totalCount),
         filters,
-        stats
+        stats,
+        filterOptions
       }
     },
     { logPerformance: true, skipCache: !!opts.skipCache }
@@ -350,8 +355,23 @@ function cleanFilters(filters: any): Record<string, any> {
  * FIXED: Now properly excludes REASSIGNED reviewers from review count
  */
 async function getOptimizedSubmissions(query: any) {
+  let whereClause = query.where
+
+  // Handle RESHUFFLE_NEEDED filter - need to fetch IDs first since Prisma can't use raw SQL in where
+  if (whereClause && whereClause.id && whereClause.id.in && whereClause.status === 'UNDER_PEER_REVIEW') {
+    const reshuffleIds = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT DISTINCT s.id
+      FROM "Submission" s
+      INNER JOIN "ReviewAssignment" ra ON s.id = ra."submissionId"
+      WHERE s.status = 'UNDER_PEER_REVIEW'
+      AND ra.status = 'MISSED'
+      AND ra.deadline < NOW()
+    `
+    whereClause = { id: { in: reshuffleIds.map(r => r.id) } }
+  }
+
   return await prisma.submission.findMany({
-    where: query.where,
+    where: whereClause,
     include: {
       user: {
         select: {
@@ -669,16 +689,30 @@ async function getLegacyStatusCounts(filters: any = {}): Promise<Record<string, 
  * Note: Legacy submissions are counted separately by getLegacySubmissionCount()
  */
 async function getSubmissionCount(whereClause: any): Promise<number> {
-  const cacheKey = QueryCache.createKey('admin_submission_count', whereClause)
+  // Serialize whereClause properly for cache key to avoid [object Object] issues
+  const cacheKey = QueryCache.createKey('admin_submission_count', { where: JSON.stringify(whereClause) })
 
   return await withQueryCache(
     cacheKey,
     CacheTTL.SUBMISSIONS_LIST,
     async () => {
       // Only count regular submissions - legacy submissions are counted separately
-      // Check if whereClause contains raw SQL (for lowReviews filter)
-      if (whereClause && whereClause.id && whereClause.id.in && whereClause.id.in.strings) {
-        // Use raw SQL for counting when using subquery
+      // Check if whereClause contains raw SQL (for lowReviews or RESHUFFLE_NEEDED filter)
+      if (whereClause && whereClause.id && whereClause.id.in) {
+        // Check if this is a RESHUFFLE_NEEDED filter (has status = UNDER_PEER_REVIEW)
+        if (whereClause.status === 'UNDER_PEER_REVIEW') {
+          // Use the reshuffle needed count query
+          const result = await prisma.$queryRaw<{ count: bigint }[]>`
+            SELECT COUNT(DISTINCT s.id) as count
+            FROM "Submission" s
+            INNER JOIN "ReviewAssignment" ra ON s.id = ra."submissionId"
+            WHERE s.status = 'UNDER_PEER_REVIEW'
+            AND ra.status = 'MISSED'
+            AND ra.deadline < NOW()
+          `
+          return Number(result[0]?.count || 0)
+        }
+        // Use raw SQL for counting when using subquery (lowReviews filter)
         const result = await prisma.$queryRaw<{ count: bigint }[]>`
           SELECT COUNT(*) as count 
           FROM "Submission" s 
@@ -686,11 +720,11 @@ async function getSubmissionCount(whereClause: any): Promise<number> {
             SELECT s2.id 
             FROM "Submission" s2 
             LEFT JOIN (
-              SELECT submissionId, COUNT(*) as assignment_count 
+              SELECT "submissionId", COUNT(*) as assignment_count 
               FROM "ReviewAssignment" 
               WHERE status != 'REASSIGNED'
-              GROUP BY submissionId
-            ) ra ON s2.id = ra.submissionId 
+              GROUP BY "submissionId"
+            ) ra ON s2.id = ra."submissionId" 
             WHERE ra.assignment_count IS NULL OR ra.assignment_count < 3
           )`
         return Number(result[0]?.count || 0)
@@ -751,6 +785,50 @@ export async function getSubmissionStats(whereClause: any, filters: any = {}) {
         statusCounts: statusCountsMap,
         totalSubmissions,
         reshuffleNeeded: reshuffleNeededCount
+      }
+    }
+  )
+}
+
+/**
+ * Get available filter options (platforms and task types) from actual data
+ */
+async function getFilterOptions(): Promise<{ platforms: string[]; taskTypes: string[] }> {
+  const cacheKey = QueryCache.createKey('admin_filter_options', {})
+
+  return await withQueryCache(
+    cacheKey,
+    CacheTTL.ANALYTICS,
+    async () => {
+      try {
+        const [platformsResult, taskTypesResult] = await Promise.all([
+          prisma.submission.findMany({
+            select: { platform: true },
+            distinct: ['platform']
+          }),
+          prisma.$queryRaw<{ taskType: string }[]>`
+            SELECT DISTINCT unnest("taskTypes") as "taskType"
+            FROM "Submission"
+            WHERE "taskTypes" IS NOT NULL AND array_length("taskTypes", 1) > 0
+            ORDER BY "taskType"
+          `
+        ])
+
+        const platforms = platformsResult
+          .map(p => p.platform)
+          .filter((p): p is string => !!p)
+          .sort()
+
+        const taskTypes = taskTypesResult
+          .map(t => t.taskType)
+          .filter((t): t is string => !!t)
+          .sort()
+
+        console.log('📋 Filter options loaded:', { platforms, taskTypes })
+        return { platforms, taskTypes }
+      } catch (error) {
+        console.error('❌ Error loading filter options:', error)
+        return { platforms: [], taskTypes: [] }
       }
     }
   )

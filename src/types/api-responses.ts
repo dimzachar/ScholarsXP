@@ -99,6 +99,11 @@ export interface AdminSubmissionsResponseDTO {
   stats: {
     statusCounts: Record<string, number>
     totalSubmissions: number
+    reshuffleNeeded?: number
+  }
+  filterOptions?: {
+    platforms: string[]
+    taskTypes: string[]
   }
   // Removed: detailed user metrics, review assignments, admin actions
 }
