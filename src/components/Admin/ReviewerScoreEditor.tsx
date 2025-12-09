@@ -15,7 +15,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { AlertTriangle, User, RefreshCw, Star } from 'lucide-react'
+
+const CONTENT_CATEGORIES = ['strategy', 'guide', 'technical'] as const
+const QUALITY_TIERS = ['basic', 'average', 'awesome'] as const
 
 interface PeerReview {
   id: string
@@ -24,6 +34,8 @@ interface PeerReview {
   comments: string | null
   timeSpent: number | null
   qualityRating: number | null
+  contentCategory: string | null
+  qualityTier: string | null
   isLate: boolean
   createdAt: string
   reviewer: {
@@ -50,6 +62,8 @@ export default function ReviewerScoreEditor({
   const [newScore, setNewScore] = useState(review.xpScore.toString())
   const [newComments, setNewComments] = useState(review.comments || '')
   const [newQualityRating, setNewQualityRating] = useState(review.qualityRating?.toString() || '')
+  const [newContentCategory, setNewContentCategory] = useState(review.contentCategory || '')
+  const [newQualityTier, setNewQualityTier] = useState(review.qualityTier || '')
   const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -106,6 +120,8 @@ export default function ReviewerScoreEditor({
         xpScore: scoreValue,
         comments: newComments.trim() || null,
         qualityRating: qualityValue,
+        contentCategory: newContentCategory || null,
+        qualityTier: newQualityTier || null,
         reason: reason.trim()
       }
 
@@ -140,6 +156,8 @@ export default function ReviewerScoreEditor({
     setNewScore(review.xpScore.toString())
     setNewComments(review.comments || '')
     setNewQualityRating(review.qualityRating?.toString() || '')
+    setNewContentCategory(review.contentCategory || '')
+    setNewQualityTier(review.qualityTier || '')
     setReason('')
     setError(null)
     setValidationErrors([])
@@ -156,7 +174,9 @@ export default function ReviewerScoreEditor({
   const isScoreIncrease = scoreDifference > 0
   const hasChanges = scoreDifference !== 0 || 
                     newComments !== (review.comments || '') ||
-                    (newQualityRating ? parseInt(newQualityRating) : null) !== review.qualityRating
+                    (newQualityRating ? parseInt(newQualityRating) : null) !== review.qualityRating ||
+                    newContentCategory !== (review.contentCategory || '') ||
+                    newQualityTier !== (review.qualityTier || '')
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString()
@@ -278,6 +298,52 @@ export default function ReviewerScoreEditor({
                 <div className="text-sm text-muted-foreground mb-1">Current:</div>
                 {renderStars(review.qualityRating)}
               </div>
+            </div>
+          </div>
+
+          {/* Content Category & Quality Tier */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="contentCategory">Content Category</Label>
+              <Select value={newContentCategory || 'none'} onValueChange={(v) => setNewContentCategory(v === 'none' ? '' : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {CONTENT_CATEGORIES.map((cat) => (
+                    <SelectItem key={cat} value={cat} className="capitalize">
+                      {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {review.contentCategory && (
+                <div className="text-xs text-muted-foreground">
+                  Current: <span className="capitalize">{review.contentCategory}</span>
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="qualityTier">Quality Tier</Label>
+              <Select value={newQualityTier || 'none'} onValueChange={(v) => setNewQualityTier(v === 'none' ? '' : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select tier" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {QUALITY_TIERS.map((tier) => (
+                    <SelectItem key={tier} value={tier} className="capitalize">
+                      {tier}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {review.qualityTier && (
+                <div className="text-xs text-muted-foreground">
+                  Current: <span className="capitalize">{review.qualityTier}</span>
+                </div>
+              )}
             </div>
           </div>
 

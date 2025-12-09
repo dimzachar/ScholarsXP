@@ -6,8 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { getTaskType } from '@/lib/task-types'
-import type { TaskTypeId } from '@/types/task-types'
+import { getTaskDisplayInfo } from '@/lib/xp-rules-v2'
 import {
   Target,
   Calendar,
@@ -57,9 +56,9 @@ export default function WeeklyGoalsWidget({
   const totalGoals = goalProgress.length
   const overallProgress = totalGoals > 0 ? (completedGoals / totalGoals) * 100 : 0
 
-  // Calculate potential XP
+  // Calculate potential XP (max values from xp-rules-v2: A=150, B=250)
   const taskTypeXpValues = {
-    'A': 30, 'B': 150, 'C': 30, 'D': 75, 'E': 75, 'F': 75
+    'A': 150, 'B': 250
   }
 
   const maxPossibleXp = goalProgress.reduce((sum, goal) => {
@@ -74,30 +73,16 @@ export default function WeeklyGoalsWidget({
 
   // Get task type details using the actual task type configuration
   const getTaskTypeDetails = (taskType: string) => {
-    try {
-      const taskConfig = getTaskType(taskType as TaskTypeId)
-      const colorMap = {
-        'A': { color: 'bg-chart-1', lightBg: 'bg-primary/10', textColor: 'text-chart-1' },
-        'B': { color: 'bg-chart-2', lightBg: 'bg-secondary/10', textColor: 'text-chart-2' },
-        'C': { color: 'bg-chart-3', lightBg: 'bg-accent/10', textColor: 'text-chart-3' },
-        'D': { color: 'bg-warning', lightBg: 'bg-warning/10', textColor: 'text-warning' },
-        'E': { color: 'bg-destructive', lightBg: 'bg-destructive/10', textColor: 'text-destructive' },
-        'F': { color: 'bg-purple', lightBg: 'bg-purple/10', textColor: 'text-purple' }
-      }
-      const colors = colorMap[taskType as keyof typeof colorMap] || { color: 'bg-chart-5', lightBg: 'bg-muted/10', textColor: 'text-muted-foreground' }
+    const taskConfig = getTaskDisplayInfo(taskType)
+    const colorMap = {
+      'A': { color: 'bg-chart-1', lightBg: 'bg-primary/10', textColor: 'text-chart-1' },
+      'B': { color: 'bg-chart-2', lightBg: 'bg-secondary/10', textColor: 'text-chart-2' }
+    }
+    const colors = colorMap[taskType as keyof typeof colorMap] || { color: 'bg-chart-5', lightBg: 'bg-muted/10', textColor: 'text-muted-foreground' }
 
-      return {
-        name: taskConfig.name,
-        ...colors
-      }
-    } catch (error) {
-      // Fallback for invalid task types
-      return {
-        name: taskType,
-        color: 'bg-chart-5',
-        lightBg: 'bg-muted/10',
-        textColor: 'text-muted-foreground'
-      }
+    return {
+      name: taskConfig.name,
+      ...colors
     }
   }
 

@@ -550,14 +550,10 @@ async function getWeeklyStats(week?: string, filters?: any) {
 }
 
 /**
- * Get current week number
+ * Get current week number (uses ISO 8601 from utils)
  */
 function getCurrentWeekNumber(): number {
-  const now = new Date()
-  const start = new Date(now.getFullYear(), 0, 1)
-  const diff = now.getTime() - start.getTime()
-  const oneWeek = 1000 * 60 * 60 * 24 * 7
-  return Math.ceil(diff / oneWeek)
+  return getWeekNumber(new Date())
 }
 
 /**

@@ -3,8 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
-import { getTaskType } from '@/lib/task-types'
-import type { TaskTypeId } from '@/types/task-types'
+import { getTaskDisplayInfo } from '@/lib/xp-rules-v2'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -326,13 +325,7 @@ export default function AdminAnalyticsPage() {
                     <div className="space-y-4">
                       {Object.entries(analyticsData.distributions.taskTypes).map(([taskType, count]) => {
                         const percentage = (count / analyticsData.overview.totalSubmissions) * 100
-                        let taskTypeName = taskType
-                        try {
-                          const taskConfig = getTaskType(taskType as TaskTypeId)
-                          taskTypeName = taskConfig.name
-                        } catch {
-                          // Keep original taskType if not found
-                        }
+                        const taskTypeName = getTaskDisplayInfo(taskType).name
                         return (
                           <div key={taskType} className="space-y-2">
                             <div className="flex justify-between text-sm">
@@ -547,13 +540,7 @@ export default function AdminAnalyticsPage() {
                 <CardContent>
                   <div className="space-y-4">
                     {analyticsData.qualityMetrics.taskTypeSuccessRates.map((taskType) => {
-                      let taskTypeName = `Task Type ${taskType.taskType}`
-                      try {
-                        const taskConfig = getTaskType(taskType.taskType as TaskTypeId)
-                        taskTypeName = taskConfig.name
-                      } catch {
-                        // Keep original name if not found
-                      }
+                      const taskTypeName = getTaskDisplayInfo(taskType.taskType).name
                       return (
                         <div key={taskType.taskType} className="space-y-2">
                           <div className="flex justify-between text-sm">

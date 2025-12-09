@@ -189,28 +189,36 @@ export class DeadlineMonitorService {
       throw new Error(`Failed to mark assignment as missed: ${assignmentError.message}`)
     }
 
-    // Apply penalty to reviewer
+    // Increment missed reviews counter
     const { error: userError } = await supabase
       .from('User')
       .update({
-        missedReviews: supabase.sql`"missedReviews" + 1`,
-        totalXp: supabase.sql`GREATEST(0, "totalXp" + ${this.PENALTY_XP})`,
-        currentWeekXp: supabase.sql`GREATEST(0, "currentWeekXp" + ${this.PENALTY_XP})`
+        missedReviews: supabase.sql`"missedReviews" + 1`
       })
       .eq('id', assignment.reviewerId)
 
     if (userError) {
-      console.error('Failed to apply penalty:', userError)
-    } else {
-      // Record XP transaction
-      await xpAnalyticsService.recordXpTransaction(
-        assignment.reviewerId,
-        this.PENALTY_XP,
-        'PENALTY',
-        `Missed review deadline for submission ${assignment.submissionId}`,
-        assignment.submissionId
-      )
+      console.error('Failed to increment missed reviews:', userError)
     }
+
+    // Record XP transaction - this also updates User.totalXp and currentWeekXp
+    await xpAnalyticsService.recordXpTransaction(
+      assignment.reviewerId,
+      this.PENALTY_XP,
+      'PENALTY',
+      `Missed review deadline for submission ${assignment.submissionId}`,
+      assignment.submissionId
+    )
+
+    // Ensure XP doesn't go below 0
+    await supabase
+      .from('User')
+      .update({
+        totalXp: 0,
+        currentWeekXp: 0
+      })
+      .eq('id', assignment.reviewerId)
+      .lt('totalXp', 0)
 
     // TODO: Send notification to reviewer about missed deadline and penalty
 

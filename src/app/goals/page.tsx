@@ -23,17 +23,12 @@ import {
   AlertTriangle
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { getTaskType } from '@/lib/task-types'
-import type { TaskTypeId } from '@/types/task-types'
+import { getTaskDisplayInfo } from '@/lib/xp-rules-v2'
 
 // Helper function to get task type display name
 const getTaskTypeDisplayName = (taskType: string): string => {
-  try {
-    const taskConfig = getTaskType(taskType as TaskTypeId)
-    return taskConfig.name
-  } catch {
-    return `Task ${taskType}`
-  }
+  const taskConfig = getTaskDisplayInfo(taskType)
+  return taskConfig.name
 }
 
 export default function GoalsPage() {

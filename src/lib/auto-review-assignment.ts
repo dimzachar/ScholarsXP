@@ -11,19 +11,82 @@ export interface EnsureReviewAssignmentsResult {
   error?: string
 }
 
+const MAX_RETRIES = 3
+const INITIAL_DELAY_MS = 500
+
+/**
+ * Helper to detect connection pool errors
+ */
+function isConnectionPoolError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase()
+    return (
+      msg.includes('connection pool') ||
+      msg.includes('timed out fetching') ||
+      msg.includes('connection limit') ||
+      msg.includes('too many connections') ||
+      msg.includes('p2024') // Prisma connection pool timeout error code
+    )
+  }
+  return false
+}
+
+/**
+ * Sleep helper for retry delays
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/**
+ * Retry wrapper with exponential backoff for connection pool errors
+ */
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  context: string
+): Promise<T> {
+  let lastError: Error | null = null
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      return await operation()
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+
+      if (!isConnectionPoolError(error)) {
+        throw error
+      }
+
+      if (attempt < MAX_RETRIES - 1) {
+        const delay = INITIAL_DELAY_MS * Math.pow(2, attempt)
+        console.warn(
+          `[PeerReview] Connection pool error in ${context}, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES}):`,
+          lastError.message
+        )
+        await sleep(delay)
+      }
+    }
+  }
+
+  throw lastError
+}
+
 export async function ensureReviewAssignments(
   submissionId: string,
   submissionUserId: string,
   options: ReviewerPoolOptions = {}
 ): Promise<EnsureReviewAssignmentsResult> {
   try {
-    const existingAssignments = await prisma.reviewAssignment.findMany({
-      where: {
-        submissionId,
-        status: { not: 'REASSIGNED' }
-      },
-      select: { reviewerId: true }
-    })
+    const existingAssignments = await withRetry(
+      () => prisma.reviewAssignment.findMany({
+        where: {
+          submissionId,
+          status: { not: 'REASSIGNED' }
+        },
+        select: { reviewerId: true }
+      }),
+      `findExistingAssignments(${submissionId})`
+    )
 
     const mergedOptions: ReviewerPoolOptions = {
       ...options
@@ -74,10 +137,13 @@ export async function ensureReviewAssignments(
     mergedOptions.excludeUserIds = Array.from(excludeUserIds)
     mergedOptions.minimumReviewers = remainingNeeded
 
-    const assignmentResult = await reviewerPoolService.assignReviewers(
-      submissionId,
-      submissionUserId,
-      mergedOptions
+    const assignmentResult = await withRetry(
+      () => reviewerPoolService.assignReviewers(
+        submissionId,
+        submissionUserId,
+        mergedOptions
+      ),
+      `assignReviewers(${submissionId})`
     )
 
     if (assignmentResult.success) {
@@ -90,10 +156,13 @@ export async function ensureReviewAssignments(
         let submissionUrl: string | null = null
 
         try {
-          const submission = await prisma.submission.findUnique({
-            where: { id: submissionId },
-            select: { url: true }
-          })
+          const submission = await withRetry(
+            () => prisma.submission.findUnique({
+              where: { id: submissionId },
+              select: { url: true }
+            }),
+            `fetchSubmissionUrl(${submissionId})`
+          )
 
           submissionUrl = submission?.url ?? null
         } catch (error) {

@@ -1,10 +1,11 @@
 import { prisma } from '@/lib/prisma'
-import { fetchContentFromUrl, evaluateContent } from '@/lib/ai-evaluator'
-import { validateSubmission } from '@/lib/content-validator'
-import { enhancedDuplicateDetectionService } from '@/lib/enhanced-duplicate-detection'
-import { aiEvaluationQueue } from '@/lib/ai-evaluation-queue'
+// LEGACY: AI evaluation and content validation are disabled in production
+// import { fetchContentFromUrl, evaluateContent } from '@/lib/ai-evaluator'
+// import { validateSubmission } from '@/lib/content-validator'
+// import { enhancedDuplicateDetectionService } from '@/lib/enhanced-duplicate-detection'
+// import { aiEvaluationQueue } from '@/lib/ai-evaluation-queue'
 import { createNotification, NotificationType } from '@/lib/notifications'
-import { storeContentFingerprint } from '@/lib/duplicate-content-detector'
+// import { storeContentFingerprint } from '@/lib/duplicate-content-detector'
 import { ensureReviewAssignments } from '@/lib/auto-review-assignment'
 
 /**
@@ -46,17 +47,22 @@ export class SubmissionProcessingQueue {
 
       // Create processing record using raw SQL
       await prisma.$executeRaw`
-        INSERT INTO "SubmissionProcessing" ("submissionId", "status", "priority")
-        VALUES (${submissionId}::uuid, 'PENDING', ${priority})
+        INSERT INTO "SubmissionProcessing" ("id", "submissionId", "status", "priority", "createdAt", "updatedAt")
+        VALUES (gen_random_uuid(), ${submissionId}::uuid, 'PENDING', ${priority}, NOW(), NOW())
       `
 
       console.log(`📥 Queued submission ${submissionId} for processing (priority: ${priority})`)
 
       if (this.shouldProcessInline()) {
-        // Fire and forget so local/dev environments can still process immediately
-        this.processQueue().catch(error => {
+        // Process synchronously to avoid serverless function termination issues
+        // This adds latency but ensures processing actually happens
+        try {
+          const result = await this.processQueue()
+          console.log(`✅ Inline processing complete: ${result.processed} processed, ${result.failed} failed`)
+        } catch (error) {
           console.error('❌ Error in inline submission processing:', error)
-        })
+          // Don't throw - submission is queued, cron can pick it up later
+        }
       }
     } catch (error) {
       console.error(`❌ Failed to queue submission ${submissionId}:`, error)
@@ -77,8 +83,8 @@ export class SubmissionProcessingQueue {
       const staleThreshold = new Date(Date.now() - this.PROCESSING_TIMEOUT)
 
       // Claim a batch of jobs atomically so multiple workers can operate safely
-      const pendingSubmissions = await prisma.$transaction(async tx => {
-        return tx.$queryRaw`
+      const pendingSubmissions = (await prisma.$transaction(async tx => {
+        return await tx.$queryRaw`
           WITH next_jobs AS (
             SELECT
               sp.id,
@@ -141,8 +147,8 @@ export class SubmissionProcessingQueue {
               WHEN 'LOW' THEN 1
             END DESC,
             updated.job_created_at ASC
-        ` as any[]
-      })
+        `
+      })) as any[]
 
       if (pendingSubmissions.length === 0) {
         console.log('📭 No submissions to process')
@@ -200,7 +206,7 @@ export class SubmissionProcessingQueue {
    */
   private async processSubmission(processing: any): Promise<boolean> {
     const { submissionId, submission } = processing
-    const startTime = Date.now()
+    const _startTime = Date.now() // Prefixed with _ as it's only used in commented AI evaluation code
 
     try {
       console.log(`🔄 Processing submission ${submissionId}: ${submission.url}`)
@@ -330,6 +336,14 @@ export class SubmissionProcessingQueue {
         return true
       }
 
+      // ============================================================================
+      // LEGACY CODE BLOCK - AI EVALUATION (DISABLED IN PRODUCTION)
+      // This code path is never reached because DISABLE_CONTENT_FETCH=true and
+      // ENABLE_AI_EVALUATION=false in production. The flow always takes the
+      // fast-path above which skips content fetching and validation.
+      // Kept commented for reference if AI evaluation is re-enabled.
+      // ============================================================================
+      /*
       // Step 1: Fetch content (URL duplicates already checked in fast API)
       console.log(`📄 Fetching content for ${submissionId}`)
       let contentData
@@ -355,7 +369,7 @@ export class SubmissionProcessingQueue {
             `len=${contentData.content.length})\n` +
             `${preview}${contentData.content.length > 600 ? '…' : ''}`)
         }
-      } catch (fetchError) {
+      } catch (fetchError: any) {
         // If content fetching fails completely, reject with specific error
         if (fetchError.message.includes('timeout') || fetchError.message.includes('429')) {
           throw fetchError // Let the rate limit handler deal with this
@@ -432,7 +446,14 @@ export class SubmissionProcessingQueue {
 
       const processingTime = Date.now() - startTime
       console.log(`✅ Successfully processed ${submissionId} in ${processingTime}ms`)
+      */
 
+      // Since AI evaluation is disabled, this code path should never be reached.
+      // If we get here, something is wrong with the env flags.
+      console.error(`❌ Unexpected code path reached for ${submissionId} - AI evaluation code is disabled but was called`)
+      return false
+
+      /*
       // Notification message for non-Twitter platforms (Twitter handled earlier)
       const notificationMessage = 'Your submission has been validated and is being prepared for peer review. You\'ll be notified when it\'s ready!'
 
@@ -446,12 +467,14 @@ export class SubmissionProcessingQueue {
       )
 
       return true
+      */
 
-    } catch (error) {
+    } catch (error: unknown) {
+      const err = error as Error
       console.error(`❌ Error processing submission ${submissionId}:`, error)
 
       // Handle rate limiting errors with longer delay
-      if (error.message.includes('429') || error.message.includes('Rate limit')) {
+      if (err.message?.includes('429') || err.message?.includes('Rate limit')) {
         console.log(`⏳ Rate limit hit for ${submissionId}, will retry with longer delay`)
         // Don't count rate limit as a regular retry - just delay and try again
         setTimeout(() => {
@@ -507,7 +530,12 @@ export class SubmissionProcessingQueue {
           notificationMessage = 'This content has already been submitted. Please submit original content only.'
         } else if (reason === 'VALIDATION_FAILED' && validationErrors) {
           // Group errors by type to avoid duplicates
-          const errorGroups = {
+          const errorGroups: {
+            mention: boolean
+            hashtag: boolean
+            length: string[]
+            other: string[]
+          } = {
             mention: false,
             hashtag: false,
             length: [],

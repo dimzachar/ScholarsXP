@@ -98,3 +98,25 @@ export async function awardMonthlyWinners(month: string): Promise<MonthlyWinner[
     return { ...rest, month: month_text } as MonthlyWinner
   })
 }
+
+// Get a user's monthly XP and rank for the current month
+export async function getUserMonthlyStats(userId: string, month?: string): Promise<{ xp: number; rank: number; totalUsers: number }> {
+  const targetMonth = month || getCurrentMonthUTC()
+  
+  try {
+    // Get full leaderboard to find user's position (limit high enough to include most users)
+    const standings = await getMonthlyLeaderboard(targetMonth, 1000, 0)
+    
+    const userIndex = standings.findIndex(s => s.userId === userId)
+    const userStanding = standings[userIndex]
+    
+    return {
+      xp: userStanding?.total || 0,
+      rank: userIndex >= 0 ? userIndex + 1 : 0,
+      totalUsers: standings.length
+    }
+  } catch (error) {
+    console.error('getUserMonthlyStats error:', error)
+    return { xp: 0, rank: 0, totalUsers: 0 }
+  }
+}

@@ -5,6 +5,63 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+const MAX_RETRIES = 3
+const INITIAL_DELAY_MS = 500
+
+/**
+ * Helper to detect retryable errors (connection/timeout issues)
+ */
+function isRetryableError(error: unknown): boolean {
+  if (error && typeof error === 'object') {
+    const msg = String((error as any).message || (error as any).error || '').toLowerCase()
+    return (
+      msg.includes('connection') ||
+      msg.includes('timeout') ||
+      msg.includes('network') ||
+      msg.includes('econnreset') ||
+      msg.includes('socket') ||
+      msg.includes('fetch failed')
+    )
+  }
+  return false
+}
+
+/**
+ * Sleep helper for retry delays
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/**
+ * Retry wrapper with exponential backoff for transient errors
+ */
+async function withRetry<T>(
+  operation: () => Promise<{ data: T | null; error: any }>,
+  context: string
+): Promise<{ data: T | null; error: any }> {
+  let lastResult: { data: T | null; error: any } = { data: null, error: null }
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    lastResult = await operation()
+
+    if (!lastResult.error || !isRetryableError(lastResult.error)) {
+      return lastResult
+    }
+
+    if (attempt < MAX_RETRIES - 1) {
+      const delay = INITIAL_DELAY_MS * Math.pow(2, attempt)
+      console.warn(
+        `[ReviewerPool] Retryable error in ${context}, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES}):`,
+        lastResult.error
+      )
+      await sleep(delay)
+    }
+  }
+
+  return lastResult
+}
+
 export interface ReviewerPoolOptions {
   maxActiveAssignments?: number
   excludeUserIds?: string[]
@@ -63,20 +120,23 @@ export class ReviewerPoolService {
 
     try {
       // Get users with reviewer privileges
-      const { data: users, error: usersError } = await supabase
-        .from('User')
-        .select(`
-          id,
-          username,
-          email,
-          role,
-          totalXp,
-          missedReviews,
-          lastActiveAt,
-          preferences
-        `)
-        .in('role', this.REVIEWER_ROLES)
-        .not('id', 'in', `(${excludedIds.map(id => `"${id}"`).join(',')})`)
+      const { data: users, error: usersError } = await withRetry(
+        () => supabase
+          .from('User')
+          .select(`
+            id,
+            username,
+            email,
+            role,
+            totalXp,
+            missedReviews,
+            lastActiveAt,
+            preferences
+          `)
+          .in('role', this.REVIEWER_ROLES)
+          .not('id', 'in', `(${excludedIds.map(id => `"${id}"`).join(',')})`),
+        'getAvailableReviewers.fetchUsers'
+      )
 
       if (usersError) {
         console.error('Error fetching users:', usersError)
@@ -89,11 +149,13 @@ export class ReviewerPoolService {
 
       // Get active assignments count for each user
       const userIds = users.map(user => user.id)
-      const { data: assignments, error: assignmentsError } = await supabase
-        .from('ReviewAssignment')
-        .select('reviewerId')
-        .in('reviewerId', userIds)
-        .in('status', ['PENDING', 'IN_PROGRESS'])
+      const { data: assignments, error: assignmentsError } = await withRetry(
+        () => supabase.from('ReviewAssignment')
+          .select('reviewerId')
+          .in('reviewerId', userIds)
+          .in('status', ['PENDING', 'IN_PROGRESS']),
+        'getAvailableReviewers.fetchAssignments'
+      )
 
       if (assignmentsError) {
         console.error('Error fetching assignments:', assignmentsError)
@@ -209,10 +271,13 @@ export class ReviewerPoolService {
         assignedAt: new Date().toISOString()
       }))
 
-      const { data: createdAssignments, error: assignmentError } = await supabase
-        .from('ReviewAssignment')
-        .insert(assignments)
-        .select()
+      const { data: createdAssignments, error: assignmentError } = await withRetry(
+        () => supabase
+          .from('ReviewAssignment')
+          .insert(assignments)
+          .select(),
+        'assignReviewers.createAssignments'
+      )
 
       if (assignmentError) {
         result.errors.push(`Failed to create assignments: ${assignmentError.message}`)
@@ -220,11 +285,14 @@ export class ReviewerPoolService {
       }
 
       let liveAssignmentCount: number | null = null
-      const { count: assignmentCount, error: countError } = await supabase
-        .from('ReviewAssignment')
-        .select('id', { count: 'exact', head: true })
-        .eq('submissionId', submissionId)
-        .not('status', 'eq', 'REASSIGNED')
+      const { count: assignmentCount, error: countError } = await withRetry(
+        () => supabase
+          .from('ReviewAssignment')
+          .select('id', { count: 'exact', head: true })
+          .eq('submissionId', submissionId)
+          .not('status', 'eq', 'REASSIGNED'),
+        'assignReviewers.countAssignments'
+      )
 
       if (countError) {
         result.warnings.push(`Failed to recalc assignment count: ${countError.message}`)
@@ -233,14 +301,17 @@ export class ReviewerPoolService {
       }
 
       // Update submission status and deadline
-      const { error: submissionError } = await supabase
-        .from('Submission')
-        .update({
-          status: 'UNDER_PEER_REVIEW',
-          reviewDeadline: deadline.toISOString(),
-          reviewCount: liveAssignmentCount ?? selectedReviewers.length
-        })
-        .eq('id', submissionId)
+      const { error: submissionError } = await withRetry(
+        () => supabase
+          .from('Submission')
+          .update({
+            status: 'UNDER_PEER_REVIEW',
+            reviewDeadline: deadline.toISOString(),
+            reviewCount: liveAssignmentCount ?? selectedReviewers.length
+          })
+          .eq('id', submissionId),
+        'assignReviewers.updateSubmission'
+      )
 
       if (submissionError) {
         result.warnings.push(`Failed to update submission status: ${submissionError.message}`)

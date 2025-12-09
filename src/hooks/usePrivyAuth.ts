@@ -5,10 +5,9 @@ import {
   usePrivy, 
   useLogin as usePrivyLogin, 
   useLogout as usePrivyLogout,
+  useCreateWallet,
   User as PrivyUser,
 } from '@privy-io/react-auth'
-// IMPORTANT: useCreateWallet must be imported from extended-chains for chainType support
-import { useCreateWallet } from '@privy-io/react-auth/extended-chains'
 
 export interface WalletInfo {
   address: string

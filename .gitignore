@@ -51,6 +51,7 @@ next-env.d.ts
 !README.md
 !ARCHITECTURE.md
 !changelog.md
+docs/*
 *.py
 
 *.csv
@@ -66,6 +67,7 @@ supabase/migrations/*
 .idea/
 *.swp
 *.swo
+cline_mcp_settings.json
 
 # SWC compiler cache
 .swc/

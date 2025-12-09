@@ -1,8 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { supabaseClient } from '@/lib/supabase'
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
 import { getWeekNumber } from '@/lib/utils'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
-import { multiLayerCache } from '@/lib/cache/enhanced-cache'
 
 export const GET = withPermission('authenticated')(async (request: AuthenticatedRequest) => {
 
@@ -52,28 +51,15 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
 })
 
 async function fetchUserPositionFromDatabase(userId: string, currentWeek: number, type: string) {
-  try {
-    const supabase = supabaseClient
+  // Get user data first
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, username: true, email: true, totalXp: true, profileImageUrl: true }
+  })
 
-    console.log('Fetching user data for userId:', userId)
-
-    // Get user data first
-    const { data: user, error: userError } = await supabase
-      .from('User')
-      .select('id, username, email, totalXp, profileImageUrl')
-      .eq('id', userId)
-      .single()
-
-    console.log('User query result:', { user, userError })
-
-    if (userError) {
-      console.error('Error fetching user:', userError)
-      throw new Error(`User fetch error: ${userError.message}`)
-    }
-
-    if (!user) {
-      throw new Error('User not found')
-    }
+  if (!user) {
+    throw new Error('User not found')
+  }
 
   const result: any = {
     user: {
@@ -85,104 +71,51 @@ async function fetchUserPositionFromDatabase(userId: string, currentWeek: number
     }
   }
 
-    // Get weekly position if requested
-    if (type === 'weekly' || type === 'both') {
-      try {
-        console.log('Fetching weekly stats for user:', user.id, 'week:', currentWeek)
+  // Get weekly position if requested
+  if (type === 'weekly' || type === 'both') {
+    // Get user's weekly XP and rank using raw SQL for efficiency
+    const weeklyData = await prisma.$queryRaw<Array<{ 
+      user_xp: bigint
+      user_rank: bigint
+      total_participants: bigint 
+    }>>`
+      WITH user_totals AS (
+        SELECT "userId", SUM(amount) as total_xp
+        FROM "XpTransaction"
+        WHERE "weekNumber" = ${currentWeek}
+        GROUP BY "userId"
+      ),
+      ranked AS (
+        SELECT "userId", total_xp, RANK() OVER (ORDER BY total_xp DESC) as rank
+        FROM user_totals
+      )
+      SELECT 
+        COALESCE((SELECT total_xp FROM ranked WHERE "userId" = ${userId}::uuid), 0) as user_xp,
+        COALESCE((SELECT rank FROM ranked WHERE "userId" = ${userId}::uuid), 0) as user_rank,
+        (SELECT COUNT(*) FROM user_totals) as total_participants
+    `
 
-        // Get user's weekly stats
-        const { data: weeklyStats, error: weeklyError } = await supabase
-          .from('WeeklyStats')
-          .select('xpTotal')
-          .eq('userId', user.id)
-          .eq('weekNumber', currentWeek)
-          .single()
-
-        console.log('Weekly stats query result:', { weeklyStats, weeklyError })
-
-        if (weeklyError && weeklyError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
-          console.error('Error getting weekly stats:', weeklyError)
-        }
-
-        const weeklyXp = weeklyStats?.xpTotal || 0
-        console.log('Weekly XP for user:', weeklyXp)
-
-        // Get user's weekly rank by counting users with higher weekly XP
-        const { count: weeklyRank, error: weeklyRankError } = await supabase
-          .from('WeeklyStats')
-          .select('*', { count: 'exact', head: true })
-          .eq('weekNumber', currentWeek)
-          .gt('xpTotal', weeklyXp)
-
-        if (weeklyRankError) {
-          console.error('Error getting weekly rank:', weeklyRankError)
-        }
-
-        // Get total weekly participants
-        const { count: totalWeeklyParticipants, error: totalWeeklyError } = await supabase
-          .from('WeeklyStats')
-          .select('*', { count: 'exact', head: true })
-          .eq('weekNumber', currentWeek)
-
-        if (totalWeeklyError) {
-          console.error('Error getting total weekly participants:', totalWeeklyError)
-        }
-
-        result.weekly = {
-          rank: (weeklyRank || 0) + 1, // Add 1 because count gives users above, so rank is count + 1
-          xp: weeklyXp,
-          totalParticipants: totalWeeklyParticipants || 0
-        }
-      } catch (error) {
-        console.error('Error processing weekly data:', error)
-        result.weekly = {
-          rank: 0,
-          xp: 0,
-          totalParticipants: 0
-        }
-      }
+    const data = weeklyData[0]
+    result.weekly = {
+      rank: Number(data?.user_rank || 0),
+      xp: Number(data?.user_xp || 0),
+      totalParticipants: Number(data?.total_participants || 0)
     }
-
-    // Get all-time position if requested
-    if (type === 'alltime' || type === 'both') {
-      try {
-        // Get user's all-time rank by counting users with higher total XP
-        const { count: allTimeRank, error: allTimeRankError } = await supabase
-          .from('User')
-          .select('*', { count: 'exact', head: true })
-          .gt('totalXp', user.totalXp)
-
-        if (allTimeRankError) {
-          console.error('Error getting all-time rank:', allTimeRankError)
-        }
-
-        // Get total users count
-        const { count: totalUsers, error: totalUsersError } = await supabase
-          .from('User')
-          .select('*', { count: 'exact', head: true })
-
-        if (totalUsersError) {
-          console.error('Error getting total users:', totalUsersError)
-        }
-
-        result.allTime = {
-          rank: (allTimeRank || 0) + 1, // Add 1 because count gives users above, so rank is count + 1
-          xp: user.totalXp,
-          totalUsers: totalUsers || 0
-        }
-      } catch (error) {
-        console.error('Error processing all-time data:', error)
-        result.allTime = {
-          rank: 0,
-          xp: user.totalXp,
-          totalUsers: 0
-        }
-      }
-    }
-
-    return result
-  } catch (error) {
-    console.error('Error in fetchUserPositionFromDatabase:', error)
-    throw error
   }
+
+  // Get all-time position if requested
+  if (type === 'alltime' || type === 'both') {
+    const [usersAbove, totalUsers] = await Promise.all([
+      prisma.user.count({ where: { totalXp: { gt: user.totalXp } } }),
+      prisma.user.count()
+    ])
+
+    result.allTime = {
+      rank: usersAbove + 1,
+      xp: user.totalXp,
+      totalUsers
+    }
+  }
+
+  return result
 }

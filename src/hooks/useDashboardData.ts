@@ -11,6 +11,7 @@ const CACHE_TTL = {
   leaderboard: 60 * 1000, // 1 minute
   analytics: 2 * 60 * 1000, // 2 minutes
   achievements: 10 * 60 * 1000, // 10 minutes
+  monthlyStats: 60 * 1000, // 1 minute
 } as const
 
 const EMPTY_ACHIEVEMENTS_SUMMARY = {
@@ -280,6 +281,39 @@ export function useDashboardData(userId?: string, activeTab = 'overview', timefr
     refetchAll,
     forceRefreshAll
   }
+}
+
+// Hook for monthly stats
+export function useMonthlyStats() {
+  const [state, setState] = useState<FetchState<{ month: string; xp: number; rank: number; totalUsers: number }>>({
+    data: null,
+    loading: true,
+    error: null
+  })
+
+  const fetchData = useCallback(async () => {
+    try {
+      setState(prev => ({ ...prev, loading: true, error: null }))
+      const data = await fetchWithCache(
+        '/api/user/monthly-stats',
+        'monthly-stats',
+        CACHE_TTL.monthlyStats
+      )
+      setState({ data: data as unknown, loading: false, error: null })
+    } catch (error) {
+      setState({
+        data: null,
+        loading: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch monthly stats'
+      })
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  return { ...state, refetch: fetchData }
 }
 
 // Cache management utilities

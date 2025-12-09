@@ -6,8 +6,7 @@ import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Target, TrendingUp, CheckCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getTaskType } from '@/lib/task-types'
-import type { TaskTypeId } from '@/types/task-types'
+import { getTaskDisplayInfo } from '@/lib/xp-rules-v2'
 
 interface GoalProgressData {
   taskType: string
@@ -27,21 +26,13 @@ interface GoalProgressWidgetProps {
 
 // Get task type display names from the actual task configuration
 const getTaskTypeDisplayName = (taskType: string): string => {
-  try {
-    const taskConfig = getTaskType(taskType as TaskTypeId)
-    return `Task ${taskType} - ${taskConfig.name}`
-  } catch (error) {
-    return `Task ${taskType}`
-  }
+  const taskConfig = getTaskDisplayInfo(taskType)
+  return `Task ${taskType} - ${taskConfig.name}`
 }
 
 const taskTypeColors: Record<string, string> = {
   'A': 'bg-chart-1',
-  'B': 'bg-chart-2',
-  'C': 'bg-chart-3',
-  'D': 'bg-warning',
-  'E': 'bg-destructive',
-  'F': 'bg-purple'
+  'B': 'bg-chart-2'
 }
 
 export function GoalProgressWidget({ 

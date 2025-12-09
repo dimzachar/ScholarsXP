@@ -219,7 +219,23 @@ export class PaginationHelper {
     const where: any = {}
 
     if (filters.status) {
-      where.status = filters.status
+      // Handle special RESHUFFLE_NEEDED virtual status
+      if (filters.status === 'RESHUFFLE_NEEDED') {
+        where.status = 'UNDER_PEER_REVIEW'
+        // Will be combined with missed reviewer filter below
+        where.id = {
+          in: Prisma.sql`(
+            SELECT DISTINCT s.id
+            FROM "Submission" s
+            INNER JOIN "ReviewAssignment" ra ON s.id = ra."submissionId"
+            WHERE s.status = 'UNDER_PEER_REVIEW'
+            AND ra.status = 'MISSED'
+            AND ra.deadline < NOW()
+          )`
+        }
+      } else {
+        where.status = filters.status
+      }
     }
 
     if (filters.platform) {

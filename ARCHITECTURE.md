@@ -147,7 +147,7 @@ sequenceDiagram
 
 ### 3. Content Submission & Evaluation Workflow
 
-**Implementation**: `src/app/api/submissions/route.ts`, `src/lib/ai-evaluator.ts`
+**Implementation**: `src/app/api/submissions/route.ts`, `src/lib/submission-processing-queue.ts`
 
 ```mermaid
 flowchart TD
@@ -345,27 +345,17 @@ erDiagram
 
 ## Services Architecture
 
-### AI Evaluation Service
-
-**File**: `src/lib/ai-evaluator.ts`
-
-**Responsibilities**:
-- Content fetching from various platforms
-- AI-powered quality assessment using OpenRouter GPT-4
-- Task type classification and XP scoring
-- Originality detection and spam prevention
-
-**Integration**: OpenRouter API with fallback error handling
-
 ### Background Processing Services
 
-**Files**: `src/lib/submission-processing-queue.ts`, `src/lib/ai-evaluation-queue.ts`
+**File**: `src/lib/submission-processing-queue.ts`
 
 **Queue Management**:
 - Database-backed job queues for serverless environments
 - Automatic retry mechanisms for failed operations
 - Priority-based processing for time-sensitive tasks
 - Comprehensive error logging and monitoring
+
+> **Note**: AI evaluation (`ai-evaluator.ts`, `ai-evaluation-queue.ts`, `content-validator.ts`) has been disabled in production. The system now relies on peer reviews for content evaluation.
 
 **Scheduled Operations**:
 - Weekly XP aggregation and leaderboard updates

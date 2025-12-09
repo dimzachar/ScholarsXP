@@ -44,6 +44,7 @@ export interface XpAnalytics {
     weekly: number
     allTime: number
     totalUsers: number
+    weeklyActiveUsers: number
   }
 }
 
@@ -328,16 +329,14 @@ export class XpAnalyticsService {
       // Get user's current XP
       const { data: user, error: userError } = await supabase
         .from('User')
-        .select('totalXp, currentWeekXp')
+        .select('totalXp')
         .eq('id', userId)
         .single()
 
       if (userError || !user) {
         console.error('Error fetching user data for rank:', userError)
-        return { weekly: 0, allTime: 0, totalUsers: 0 }
+        return { weekly: 0, allTime: 0, totalUsers: 0, weeklyActiveUsers: 0 }
       }
-
-
 
       // Get all-time rank by counting users with higher totalXp
       const { count: allTimeRank, error: _allTimeError } = await supabase
@@ -345,24 +344,29 @@ export class XpAnalyticsService {
         .select('*', { count: 'exact', head: true })
         .gt('totalXp', user.totalXp)
 
-      // Get weekly rank from WeeklyStats
-      const { data: userWeeklyStats, error: weeklyStatsError } = await supabase
-        .from('WeeklyStats')
-        .select('xpTotal')
-        .eq('userId', userId)
+      // Get weekly rank from XpTransaction (source of truth)
+      const { data: allWeeklyXp, error: weeklyXpError } = await supabase
+        .from('XpTransaction')
+        .select('userId, amount')
         .eq('weekNumber', currentWeek)
-        .single()
 
       let weeklyRank = 0
-      if (!weeklyStatsError && userWeeklyStats) {
-        const { count: weeklyRankCount, error: weeklyRankError } = await supabase
-          .from('WeeklyStats')
-          .select('*', { count: 'exact', head: true })
-          .eq('weekNumber', currentWeek)
-          .gt('xpTotal', userWeeklyStats.xpTotal)
-
-        if (!weeklyRankError) {
-          weeklyRank = (weeklyRankCount || 0) + 1
+      let weeklyActiveUsers = 0
+      if (!weeklyXpError && allWeeklyXp) {
+        // Aggregate XP by user
+        const xpByUser: Record<string, number> = {}
+        for (const tx of allWeeklyXp) {
+          xpByUser[tx.userId] = (xpByUser[tx.userId] || 0) + (tx.amount || 0)
+        }
+        
+        // Count active users (users with XP > 0 this week)
+        weeklyActiveUsers = Object.keys(xpByUser).length
+        
+        const userWeeklyXp = xpByUser[userId] || 0
+        if (userWeeklyXp > 0) {
+          // Count users with higher XP
+          const usersAbove = Object.values(xpByUser).filter(xp => xp > userWeeklyXp).length
+          weeklyRank = usersAbove + 1
         }
       }
 
@@ -373,11 +377,12 @@ export class XpAnalyticsService {
       return {
         weekly: weeklyRank,
         allTime: (allTimeRank || 0) + 1, // Add 1 because count gives users above
-        totalUsers: totalUsers || 0
+        totalUsers: totalUsers || 0,
+        weeklyActiveUsers
       }
     } catch (error) {
       console.error('Error in getUserRank:', error)
-      return { weekly: 0, allTime: 0, totalUsers: 0 }
+      return { weekly: 0, allTime: 0, totalUsers: 0, weeklyActiveUsers: 0 }
     }
   }
 
@@ -488,13 +493,29 @@ export class XpAnalyticsService {
       })
     })
 
-    const { other, ...normalized } = breakdown
-    return normalized
+    // Include 'other' XP in submissions bucket to preserve total accuracy
+    // This ensures unrecognized transaction types don't silently disappear
+    return {
+      submissions: breakdown.submissions + breakdown.other,
+      reviews: breakdown.reviews,
+      streaks: breakdown.streaks,
+      achievements: breakdown.achievements,
+      penalties: breakdown.penalties,
+      adminAdjustments: breakdown.adminAdjustments,
+      total: breakdown.total
+    }
   }
 
   private getEmptyBreakdown(): XpBreakdown {
-    const { other, ...empty } = createEmptyBreakdown()
-    return empty
+    return {
+      submissions: 0,
+      reviews: 0,
+      streaks: 0,
+      achievements: 0,
+      penalties: 0,
+      adminAdjustments: 0,
+      total: 0
+    }
   }
 
   private calculateProjectedWeeklyXp(trends: XpTrend[]): number {

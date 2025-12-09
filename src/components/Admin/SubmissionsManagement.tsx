@@ -145,6 +145,12 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
     reshuffleNeeded: 0 // Add this for submissions under peer review that need reshuffling
   })
 
+  // Dynamic filter options (fetched from API)
+  const [filterOptions, setFilterOptions] = useState({
+    platforms: [] as string[],
+    taskTypes: [] as string[]
+  })
+
   // Quick Edit Modal State
   const [quickEditModal, setQuickEditModal] = useState<{
     open: boolean
@@ -220,13 +226,21 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
           statusCounts: {},
           totalSubmissions: 0
         })
+        
+        // Update dynamic filter options from response
+        console.log('📋 API response filterOptions:', data.filterOptions)
+        if (data.filterOptions) {
+          setFilterOptions(data.filterOptions)
+        } else {
+          console.warn('⚠️ No filterOptions in API response')
+        }
       }
     } catch (error) {
       console.error('Error fetching submissions:', error)
     } finally {
       setLoadingSubmissions(false)
     }
-  }, [pagination.page, pagination.limit, filters, sortBy, sortOrder])
+  }, [pagination.page, pagination.limit, sortBy, sortOrder, filters, session.access_token])
 
   useEffect(() => {
     // Only fetch when user is loaded with privyUserId and is admin, and pagination is initialized
@@ -387,7 +401,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
       ]
 
       // Helper function to escape CSV values
-      const escapeCSV = (value: any): string => {
+      const escapeCSV = (value: unknown): string => {
         if (value === null || value === undefined) return 'N/A'
         const str = String(value)
         // If the value contains comma, quote, or newline, wrap in quotes and escape internal quotes
@@ -767,6 +781,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                   <SelectItem value="PENDING">Pending</SelectItem>
                   <SelectItem value="AI_REVIEWED">AI Reviewed</SelectItem>
                   <SelectItem value="UNDER_PEER_REVIEW">Peer Review</SelectItem>
+                  <SelectItem value="RESHUFFLE_NEEDED">Reshuffle Needed</SelectItem>
                   <SelectItem value="FINALIZED">Completed</SelectItem>
                   <SelectItem value="REJECTED">Rejected</SelectItem>
                 </SelectContent>
@@ -781,10 +796,11 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All platforms</SelectItem>
-                  <SelectItem value="TWITTER">Twitter</SelectItem>
-                  <SelectItem value="LINKEDIN">LinkedIn</SelectItem>
-                  <SelectItem value="MEDIUM">Medium</SelectItem>
-                  <SelectItem value="YOUTUBE">YouTube</SelectItem>
+                  {filterOptions.platforms.map((platform) => (
+                    <SelectItem key={platform} value={platform}>
+                      {platform}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -797,12 +813,11 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All types</SelectItem>
-                  <SelectItem value="A">Type A</SelectItem>
-                  <SelectItem value="B">Type B</SelectItem>
-                  <SelectItem value="C">Type C</SelectItem>
-                  <SelectItem value="D">Type D</SelectItem>
-                  <SelectItem value="E">Type E</SelectItem>
-                  <SelectItem value="F">Type F</SelectItem>
+                  {filterOptions.taskTypes.map((taskType) => (
+                    <SelectItem key={taskType} value={taskType}>
+                      Type {taskType}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -999,7 +1014,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                   })
                   return
                 }
-                setBulkReshuffleModal({ open: false })
+                setBulkReshuffleModal({ open: false, reason: '' })
                 await handleBulkReshuffleConfirm(reason)
               }}
               disabled={bulkLoading || !bulkReshuffleModal.reason?.trim()}
