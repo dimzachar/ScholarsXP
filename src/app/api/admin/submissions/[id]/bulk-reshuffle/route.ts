@@ -58,13 +58,29 @@ async function reshuffleSingleAssignment(supabase: any, assignmentId: string, re
 
     if (isOverdue) {
       try {
-        // Increment missed reviews counter
-        await supabase
+        // Fetch current missedReviews count and increment
+        const { data: userData, error: userFetchError } = await supabase
           .from('User')
-          .update({
-            missedReviews: supabase.sql`COALESCE("missedReviews", 0) + 1`
-          })
+          .select('missedReviews')
           .eq('id', assignment.reviewerId)
+          .single()
+
+        if (userFetchError) {
+          console.error(`Failed to fetch user for penalty:`, userFetchError)
+        } else {
+          const currentMissed = userData?.missedReviews || 0
+          const { error: updateError } = await supabase
+            .from('User')
+            .update({
+              missedReviews: currentMissed + 1,
+              updatedAt: new Date().toISOString()
+            })
+            .eq('id', assignment.reviewerId)
+
+          if (updateError) {
+            console.error(`Failed to increment missedReviews:`, updateError)
+          }
+        }
 
         // Record penalty XP transaction
         await xpAnalyticsService.recordXpTransaction(
@@ -76,7 +92,7 @@ async function reshuffleSingleAssignment(supabase: any, assignmentId: string, re
         )
 
         penaltyApplied = true
-        console.log(`⚠️ Penalty applied to reviewer ${assignment.reviewerId} for overdue assignment ${assignmentId}`)
+        console.log(`⚠️ Penalty applied to reviewer ${assignment.reviewerId} for overdue assignment ${assignmentId}: ${MISSED_REVIEW_PENALTY} XP`)
       } catch (penaltyError) {
         console.error(`Failed to apply penalty for assignment ${assignmentId}:`, penaltyError)
       }
