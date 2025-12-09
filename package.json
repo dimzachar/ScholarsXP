@@ -8,7 +8,7 @@
     "build:analyze": "ANALYZE=true next build",
     "analyze": "pnpm run build:analyze",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "postinstall": "npx prisma generate",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -67,7 +67,7 @@
     "last 2 Edge versions"
   ],
   "devDependencies": {
-    "@eslint/eslintrc": "^3",
+    "@eslint/eslintrc": "^3.3.3",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
