@@ -10,11 +10,90 @@ export interface WeeklyProcessingResult {
   notificationsCleaned: number
 }
 
-export async function processWeeklyReset(): Promise<WeeklyProcessingResult> {
-  try {
-    const currentWeek = getWeekNumber(new Date())
-    const previousWeek = currentWeek - 1
+const LOCK_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes
 
+/**
+ * Acquire a distributed lock using AutomationLog to prevent concurrent weekly resets
+ */
+async function acquireWeeklyResetLock(weekNumber: number): Promise<string | null> {
+  const jobName = `weekly_reset_week_${weekNumber}`
+  const now = new Date()
+  const lockExpiry = new Date(now.getTime() - LOCK_TIMEOUT_MS)
+
+  try {
+    // Check for existing running job (not expired)
+    const existingJob = await prisma.automationLog.findFirst({
+      where: {
+        jobName,
+        status: 'RUNNING',
+        startedAt: { gt: lockExpiry }
+      }
+    })
+
+    if (existingJob) {
+      console.log(`Weekly reset for week ${weekNumber} already in progress (job ${existingJob.id})`)
+      return null
+    }
+
+    // Create new lock entry
+    const lock = await prisma.automationLog.create({
+      data: {
+        jobName,
+        jobType: 'weekly_reset',
+        triggeredBy: 'system',
+        status: 'RUNNING'
+      }
+    })
+
+    return lock.id
+  } catch (error) {
+    console.error('Failed to acquire weekly reset lock:', error)
+    return null
+  }
+}
+
+/**
+ * Release the distributed lock after weekly reset completes
+ */
+async function releaseWeeklyResetLock(lockId: string, success: boolean, result?: string): Promise<void> {
+  try {
+    const completedAt = new Date()
+    const log = await prisma.automationLog.findUnique({ where: { id: lockId } })
+    const duration = log ? completedAt.getTime() - log.startedAt.getTime() : 0
+
+    await prisma.automationLog.update({
+      where: { id: lockId },
+      data: {
+        status: success ? 'SUCCESS' : 'FAILED',
+        completedAt,
+        duration,
+        result
+      }
+    })
+  } catch (error) {
+    console.error('Failed to release weekly reset lock:', error)
+  }
+}
+
+export async function processWeeklyReset(): Promise<WeeklyProcessingResult> {
+  const currentWeek = getWeekNumber(new Date())
+  const previousWeek = currentWeek - 1
+
+  // Acquire distributed lock to prevent concurrent execution
+  const lockId = await acquireWeeklyResetLock(previousWeek)
+  if (!lockId) {
+    console.log(`Weekly reset for week ${previousWeek} already in progress, skipping`)
+    return {
+      usersProcessed: 0,
+      streaksAwarded: 0,
+      penaltiesApplied: 0,
+      leaderboardGenerated: false,
+      rateLimitRecordsCleaned: 0,
+      notificationsCleaned: 0
+    }
+  }
+
+  try {
     console.log(`Processing weekly reset for week ${previousWeek} -> ${currentWeek}`)
 
     // Get all users
@@ -26,100 +105,103 @@ export async function processWeeklyReset(): Promise<WeeklyProcessingResult> {
 
     for (const user of users) {
       try {
-        // Get or create weekly stats for previous week
-        let weeklyStats = await prisma.weeklyStats.findFirst({
-          where: {
-            userId: user.id,
-            weekNumber: previousWeek
-          }
-        })
-
-        if (!weeklyStats) {
-          // Calculate correct weekly XP from transactions instead of using stored value
-          const transactions = await prisma.xpTransaction.findMany({
+        // Process each user in a transaction to ensure atomicity
+        await prisma.$transaction(async (tx) => {
+          // Get or create weekly stats for previous week
+          let weeklyStats = await tx.weeklyStats.findFirst({
             where: {
               userId: user.id,
               weekNumber: previousWeek
             }
           })
-          
-          const calculatedXpTotal = transactions.reduce((sum, tx) => sum + tx.amount, 0)
-          
-          weeklyStats = await prisma.weeklyStats.create({
-            data: {
-              userId: user.id,
-              weekNumber: previousWeek,
-              xpTotal: calculatedXpTotal, // Use calculated value instead of stored value
-              reviewsDone: 0,
-              reviewsMissed: user.missedReviews
+
+          if (!weeklyStats) {
+            // Calculate correct weekly XP from transactions instead of using stored value
+            const transactions = await tx.xpTransaction.findMany({
+              where: {
+                userId: user.id,
+                weekNumber: previousWeek
+              }
+            })
+            
+            const calculatedXpTotal = transactions.reduce((sum, t) => sum + t.amount, 0)
+            
+            weeklyStats = await tx.weeklyStats.create({
+              data: {
+                userId: user.id,
+                weekNumber: previousWeek,
+                xpTotal: calculatedXpTotal,
+                reviewsDone: 0,
+                reviewsMissed: user.missedReviews
+              }
+            })
+          }
+
+          // Check for streak eligibility (100+ XP for the week)
+          let newStreakWeeks = user.streakWeeks
+          let earnedStreak = false
+
+          if (weeklyStats.xpTotal >= 100) {
+            newStreakWeeks += 1
+            earnedStreak = true
+            
+            // Award Parthenon XP bonus for 4-week streak
+            if (newStreakWeeks % 4 === 0) {
+              const bonusXp = 50 // Parthenon bonus
+              // Use recordXpTransaction to update User.totalXp AND create transaction record
+              const { xpAnalyticsService } = await import('@/lib/xp-analytics')
+              await xpAnalyticsService.recordXpTransaction(
+                user.id,
+                bonusXp,
+                'STREAK_BONUS',
+                `Parthenon bonus for ${newStreakWeeks}-week streak`
+              )
+              console.log(`Awarded ${bonusXp} Parthenon XP to user ${user.username} for ${newStreakWeeks}-week streak`)
+
+              // Invalidate user profile cache after streak bonus
+              const { CacheInvalidation } = await import('@/lib/cache/invalidation')
+              const { multiLayerCache } = await import('@/lib/cache/enhanced-cache')
+              const cacheInvalidation = new CacheInvalidation(multiLayerCache)
+              await cacheInvalidation.invalidateOnUserAction('xp_awarded', user.id)
             }
-          })
-        }
+            
+            streaksAwarded++
+          } else {
+            // Reset streak if didn't meet minimum XP
+            newStreakWeeks = 0
+          }
 
-        // Check for streak eligibility (100+ XP for the week)
-        let newStreakWeeks = user.streakWeeks
-        let earnedStreak = false
-
-        if (weeklyStats.xpTotal >= 100) {
-          newStreakWeeks += 1
-          earnedStreak = true
-          
-          // Award Parthenon XP bonus for 4-week streak
-          if (newStreakWeeks % 4 === 0) {
-            const bonusXp = 50 // Parthenon bonus
-            // Use recordXpTransaction to update User.totalXp AND create transaction record
+          // Apply review penalties
+          const reviewPenalty = user.missedReviews * 50 // 50 XP penalty per missed review
+          if (reviewPenalty > 0) {
+            penaltiesApplied++
+            // Record penalty transaction (this also updates User.totalXp)
             const { xpAnalyticsService } = await import('@/lib/xp-analytics')
             await xpAnalyticsService.recordXpTransaction(
               user.id,
-              bonusXp,
-              'STREAK_BONUS',
-              `Parthenon bonus for ${newStreakWeeks}-week streak`
+              -reviewPenalty,
+              'PENALTY',
+              `Weekly penalty for ${user.missedReviews} missed reviews`
             )
-            console.log(`Awarded ${bonusXp} Parthenon XP to user ${user.username} for ${newStreakWeeks}-week streak`)
-
-            // Invalidate user profile cache after streak bonus
-            const { CacheInvalidation } = await import('@/lib/cache/invalidation')
-            const { multiLayerCache } = await import('@/lib/cache/enhanced-cache')
-            const cacheInvalidation = new CacheInvalidation(multiLayerCache)
-            await cacheInvalidation.invalidateOnUserAction('xp_awarded', user.id)
           }
-          
-          streaksAwarded++
-        } else {
-          // Reset streak if didn't meet minimum XP
-          newStreakWeeks = 0
-        }
 
-        // Apply review penalties
-        const reviewPenalty = user.missedReviews * 50 // 50 XP penalty per missed review
-        if (reviewPenalty > 0) {
-          penaltiesApplied++
-          // Record penalty transaction (this also updates User.totalXp)
-          const { xpAnalyticsService } = await import('@/lib/xp-analytics')
-          await xpAnalyticsService.recordXpTransaction(
-            user.id,
-            -reviewPenalty,
-            'PENALTY',
-            `Weekly penalty for ${user.missedReviews} missed reviews`
-          )
-        }
+          // Update user for new week
+          await tx.user.update({
+            where: { id: user.id },
+            data: {
+              currentWeekXp: 0,
+              streakWeeks: newStreakWeeks,
+              missedReviews: 0
+            }
+          })
 
-        // Update user for new week (totalXp already handled by recordXpTransaction if penalty applied)
-        await prisma.user.update({
-          where: { id: user.id },
-          data: {
-            currentWeekXp: 0, // Reset weekly XP
-            streakWeeks: newStreakWeeks,
-            missedReviews: 0 // Reset missed reviews counter
-          }
-        })
-
-        // Update weekly stats
-        await prisma.weeklyStats.update({
-          where: { id: weeklyStats.id },
-          data: {
-            earnedStreak
-          }
+          // Update weekly stats
+          await tx.weeklyStats.update({
+            where: { id: weeklyStats.id },
+            data: {
+              earnedStreak
+            }
+          })
         })
 
         usersProcessed++
@@ -140,7 +222,7 @@ export async function processWeeklyReset(): Promise<WeeklyProcessingResult> {
 
     console.log(`Weekly reset completed: ${usersProcessed} users processed, ${streaksAwarded} streaks awarded, ${penaltiesApplied} penalties applied, ${rateLimitRecordsCleaned} rate limit records cleaned, ${notificationsCleaned} old notifications cleaned`)
 
-    return {
+    const result: WeeklyProcessingResult = {
       usersProcessed,
       streaksAwarded,
       penaltiesApplied,
@@ -149,8 +231,12 @@ export async function processWeeklyReset(): Promise<WeeklyProcessingResult> {
       notificationsCleaned
     }
 
+    await releaseWeeklyResetLock(lockId, true, JSON.stringify(result))
+    return result
+
   } catch (error) {
     console.error('Error in weekly reset:', error)
+    await releaseWeeklyResetLock(lockId, false, error instanceof Error ? error.message : 'Unknown error')
     throw new Error('Failed to process weekly reset')
   }
 }

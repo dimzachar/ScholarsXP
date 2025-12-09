@@ -488,13 +488,29 @@ export class XpAnalyticsService {
       })
     })
 
-    const { other, ...normalized } = breakdown
-    return normalized
+    // Include 'other' XP in submissions bucket to preserve total accuracy
+    // This ensures unrecognized transaction types don't silently disappear
+    return {
+      submissions: breakdown.submissions + breakdown.other,
+      reviews: breakdown.reviews,
+      streaks: breakdown.streaks,
+      achievements: breakdown.achievements,
+      penalties: breakdown.penalties,
+      adminAdjustments: breakdown.adminAdjustments,
+      total: breakdown.total
+    }
   }
 
   private getEmptyBreakdown(): XpBreakdown {
-    const { other, ...empty } = createEmptyBreakdown()
-    return empty
+    return {
+      submissions: 0,
+      reviews: 0,
+      streaks: 0,
+      achievements: 0,
+      penalties: 0,
+      adminAdjustments: 0,
+      total: 0
+    }
   }
 
   private calculateProjectedWeeklyXp(trends: XpTrend[]): number {
