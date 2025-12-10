@@ -53,7 +53,6 @@ export const GET = withPermission('admin_access')(async (_req: NextRequest, { pa
       rank: s.rank,
       userId: s.userId,
       username: userMap.get(s.userId)?.username || '',
-      email: userMap.get(s.userId)?.email || '',
       points: s.total,
       eligible: blocked.length === 0 ? 'yes' : 'no',
       cooldown_reasons: blocked.join('; '),
@@ -82,7 +81,7 @@ function getPreviousMonths(month: string, count: number) {
 }
 
 function toCsv(rows: any[]) {
-  if (!rows.length) return 'rank,userId,username,email,points,eligible,cooldown_reasons\n'
+  if (!rows.length) return 'rank,userId,username,points,eligible,cooldown_reasons\n'
   const headers = Object.keys(rows[0])
   const escape = (val: any) => {
     const s = String(val ?? '')
