@@ -8,7 +8,7 @@ import NotificationCenter from '@/components/NotificationCenter'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import ProfileDropdown from '@/components/ProfileDropdown'
 import { MobileBottomNav, createNavItem } from '@/components/navigation/MobileBottomNav'
-import { Home, Users, Trophy, Gem, Settings, Zap } from 'lucide-react'
+import { Home, Users, Trophy, Gem, Settings, Zap, Gavel } from 'lucide-react'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { usePrivyAuth } from '@/hooks/usePrivyAuth'
 
@@ -36,9 +36,12 @@ export default function Navigation() {
       baseItems.push({ href: '/review', label: 'Review', icon: Users })
     }
 
-    // Add leaderboard for everyone
-    baseItems.push({ href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
-      { href: '/featured', label: 'Featured', icon: Gem },)
+    // Add leaderboard and featured for everyone
+    baseItems.push(
+      { href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
+      { href: '/featured', label: 'Featured', icon: Gem },
+      { href: '/vote', label: 'Vote', icon: Gavel },
+    )
 
     // Add admin for admins only
     if (isAdmin) {
@@ -53,9 +56,10 @@ export default function Navigation() {
   // Mobile navigation items (same order as desktop)
   const mobileNavItems = [
     createNavItem('/dashboard', 'Submit', Home),
-    createNavItem('/featured', 'Featured', Trophy),
+    createNavItem('/featured', 'Featured', Gem),
     ...(isReviewer || isAdmin ? [createNavItem('/review', 'Review', Users)] : []),
     createNavItem('/leaderboard', 'Leaderboard', Trophy),
+    createNavItem('/vote', 'Vote', Gavel),
     ...(isAdmin ? [createNavItem('/admin', 'Admin', Settings)] : []),
   ]
 

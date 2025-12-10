@@ -1,16 +1,16 @@
 'use client'
 
-import { useWallet } from '@aptos-labs/wallet-adapter-react'
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Scale, Gavel, Loader2, Wallet, ExternalLink, ThumbsDown, ThumbsUp } from 'lucide-react'
+import { Scale, Gavel, Loader2, ExternalLink, ThumbsDown, ThumbsUp, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
-import { WalletSelector } from '@/components/WalletSelector'
-import { WalletLinkPrompt } from '@/components/wallet/WalletLinkPrompt'
 import { useWalletSync } from '@/contexts/WalletSyncContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { MobileLayout, MobileHeader, MobileSection } from '@/components/layout/MobileLayout'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import Link from 'next/link'
 
 interface JudgmentCase {
     submissionId: string
@@ -19,68 +19,22 @@ interface JudgmentCase {
     divergentScores: [number, number]
 }
 
-
-
-// Connect Wallet Screen - shown when user needs to connect or link wallet
-function ConnectWalletScreen({ needsLink }: { needsLink?: boolean }) {
-    if (needsLink) {
-        // User is connected but hasn't linked wallet to profile
-        return (
-            <MobileLayout variant="centered">
-                <div className="w-full max-w-md space-y-4">
-                    <div className="text-center mb-6">
-                        <div className="mx-auto mb-4 p-4 rounded-full bg-primary/10 w-fit">
-                            <Gavel className="w-12 h-12 text-primary" />
-                        </div>
-                        <h1 className="text-2xl font-bold">The Daily Judgment</h1>
-                        <p className="text-muted-foreground mt-2">
-                            Link your wallet to your profile to start voting
-                        </p>
-                    </div>
-                    <WalletLinkPrompt
-                        title="Link Your Wallet"
-                        description="Save your connected wallet to your profile to participate in voting."
-                    />
-                </div>
-            </MobileLayout>
-        )
-    }
-
-    // User needs to connect wallet
+// Wallet Required Screen - shown when user needs to link wallet
+function WalletRequiredScreen() {
     return (
         <MobileLayout variant="centered">
-            <Card className="w-full max-w-md border-0 shadow-xl bg-card">
-                <CardHeader className="text-center pb-2">
-                    <div className="mx-auto mb-4 p-4 rounded-full bg-primary/10">
+            <Card className="w-full max-w-md border-0 shadow-xl bg-card text-center">
+                <CardContent className="pt-8 pb-8">
+                    <div className="mx-auto mb-4 p-4 rounded-full bg-primary/10 w-fit">
                         <Wallet className="w-12 h-12 text-primary" />
                     </div>
-                    <CardTitle className="text-2xl font-bold">The Daily Judgment</CardTitle>
-                    <CardDescription className="text-base mt-2">
-                        Connect your Movement wallet to participate in community voting.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6 pt-4">
-                    <div className="space-y-3 text-sm text-muted-foreground">
-                        <div className="flex items-start gap-3">
-                            <Scale className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
-                            <span>Vote on submissions with divergent AI scores</span>
-                        </div>
-                        <div className="flex items-start gap-3">
-                            <Gavel className="w-5 h-5 text-secondary mt-0.5 flex-shrink-0" />
-                            <span>Your vote helps calibrate the XP system</span>
-                        </div>
-                    </div>
-                    
-                    <WalletSelector>
-                        <Button className="w-full h-12 text-base font-semibold">
-                            <Wallet className="w-5 h-5 mr-2" />
-                            Connect Wallet
-                        </Button>
-                    </WalletSelector>
-                    
-                    <p className="text-xs text-center text-muted-foreground">
-                        Nightly wallet recommended for Movement Network
+                    <h2 className="text-xl font-bold mb-2">Wallet Required</h2>
+                    <p className="text-muted-foreground mb-4">
+                        Link a wallet to your profile to participate in voting.
                     </p>
+                    <Link href="/profile">
+                        <Button>Go to Profile</Button>
+                    </Link>
                 </CardContent>
             </Card>
         </MobileLayout>
@@ -414,9 +368,12 @@ function VoteContent({
 }
 
 export default function VotePage() {
-    const { account, connected, signMessage } = useWallet()
-    const { hasLinkedWallet, isLoading: walletLoading, needsWalletLink } = useWalletSync()
-
+    const { isLoading: walletLoading, needsWalletLink } = useWalletSync()
+    const { user, isLoading: userLoading } = usePrivyAuthSync()
+    const { authenticatedFetch } = useAuthenticatedFetch()
+    
+    const [primaryWallet, setPrimaryWallet] = useState<string | null>(null)
+    const [walletFetched, setWalletFetched] = useState(false)
     const [cases, setCases] = useState<JudgmentCase[]>([])
     const [currentIndex, setCurrentIndex] = useState(0)
     const [loading, setLoading] = useState(true)
@@ -426,71 +383,94 @@ export default function VotePage() {
     const currentCase = cases[currentIndex] || null
     const remaining = cases.length - currentIndex
     const total = cases.length
+    
+    // Combined loading state - wait for all data to be ready
+    const isInitializing = walletLoading || userLoading || (!walletFetched && !!user)
 
-    // Fetch cases when wallet is connected and linked
+    // Fetch primary wallet from UserWallet table
     useEffect(() => {
-        if (connected && hasLinkedWallet) {
+        const fetchPrimaryWallet = async () => {
+            if (!user) {
+                setWalletFetched(true)
+                return
+            }
+            try {
+                const res = await authenticatedFetch('/api/user/wallet')
+                if (res.ok) {
+                    const data = await res.json()
+                    console.log('[VotePage] Primary wallet:', data.primaryWallet)
+                    setPrimaryWallet(data.primaryWallet || null)
+                }
+            } catch (error) {
+                console.error('Failed to fetch primary wallet:', error)
+            } finally {
+                setWalletFetched(true)
+            }
+        }
+        fetchPrimaryWallet()
+    }, [user, authenticatedFetch])
+
+    // Fetch cases when wallet is available
+    useEffect(() => {
+        const fetchCases = async () => {
+            try {
+                setLoading(true)
+                // Pass userId to filter out submissions user has voted on (from any wallet)
+                const url = user?.id 
+                    ? `/api/vote?userId=${encodeURIComponent(user.id)}`
+                    : '/api/vote'
+                const res = await fetch(url)
+                if (!res.ok) throw new Error('Failed to fetch cases')
+                
+                const data = await res.json()
+                if (data.cases && data.cases.length > 0) {
+                    setCases(data.cases)
+                    setCurrentIndex(0)
+                } else {
+                    setCases([])
+                }
+            } catch (error) {
+                toast.error('Failed to load judgment cases')
+                console.error(error)
+                setCases([])
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        // Only fetch cases after wallet is fetched
+        if (!walletFetched) return
+        
+        if (primaryWallet) {
             fetchCases()
         } else if (!walletLoading) {
             setLoading(false)
         }
-    }, [connected, hasLinkedWallet, walletLoading])
-
-    const fetchCases = async () => {
-        try {
-            setLoading(true)
-            const res = await fetch('/api/vote')
-            if (!res.ok) throw new Error('Failed to fetch cases')
-            
-            const data = await res.json()
-            if (data.cases && data.cases.length > 0) {
-                setCases(data.cases)
-                setCurrentIndex(0)
-            } else {
-                setCases([])
-            }
-        } catch (error) {
-            toast.error('Failed to load judgment cases')
-            console.error(error)
-            setCases([])
-        } finally {
-            setLoading(false)
-        }
-    }
+    }, [walletFetched, walletLoading, primaryWallet, user?.id])
 
     const handleVote = useCallback(async (xp: number, _direction: 'left' | 'right'): Promise<boolean> => {
-        if (!connected || !account || !currentCase) {
-            toast.error('Please connect your wallet to vote')
+        if (!primaryWallet || !currentCase) {
+            toast.error('Wallet not linked')
             return false
         }
 
-        // Get wallet address from account
-        const walletAddress = account.address?.toString()
-        if (!walletAddress) {
-            toast.error('Could not get wallet address')
-            return false
-        }
+        setVoting(true)
 
         try {
-            setVoting(true)
+            // Generate a simple signature (timestamp-based for now)
+            // In production, this would use Privy's signMessage or Shinami sponsored tx
+            const signature = `vote_${currentCase.submissionId}_${xp}_${Date.now()}`
 
-            const message = `I vote ${xp} XP for submission ${currentCase.submissionId}`
-
-            // Sign the vote message
-            const signResult = await signMessage({
-                message,
-                nonce: Math.random().toString(36).substring(7),
-            })
-
-            // Submit vote to API with wallet address
+            // Submit vote to API with wallet address and userId
             const response = await fetch('/api/vote', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     submissionId: currentCase.submissionId,
-                    walletAddress,
+                    walletAddress: primaryWallet,
                     voteXp: xp,
-                    signature: signResult.signature.toString()
+                    signature,
+                    userId: user?.id,
                 })
             })
 
@@ -501,46 +481,31 @@ export default function VotePage() {
 
             toast.success(`Vote recorded: ${xp} XP`)
 
-            // Move to next case after short delay
-            setTimeout(() => {
-                setCurrentIndex(prev => prev + 1)
-                setResetKey(prev => prev + 1)
-            }, 400)
+            // Move to next case after animation completes
+            setCurrentIndex(prev => prev + 1)
+            setResetKey(prev => prev + 1)
+            setVoting(false)
 
             return true
 
         } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : 'Vote cancelled'
-            // Don't show error for user cancellation
-            if (!errorMessage.includes('rejected') && !errorMessage.includes('cancelled')) {
-                toast.error(errorMessage)
-            }
+            const errorMessage = error instanceof Error ? error.message : 'Vote failed'
+            toast.error(errorMessage)
             // Increment resetKey to snap card back
             setResetKey(prev => prev + 1)
-            return false
-        } finally {
             setVoting(false)
+            return false
         }
-    }, [connected, account, currentCase, signMessage])
+    }, [primaryWallet, currentCase, user?.id])
 
-    // Show loading while checking wallet state
-    if (walletLoading) {
+    // Show loading while initializing (wallet context, user, primary wallet fetch)
+    if (isInitializing || loading) {
         return <LoadingScreen />
     }
 
-    // Not connected - show connect wallet screen
-    if (!connected) {
-        return <ConnectWalletScreen />
-    }
-
-    // Connected but wallet not linked to profile - show link prompt
-    if (needsWalletLink || !hasLinkedWallet) {
-        return <ConnectWalletScreen needsLink />
-    }
-
-    // Loading cases
-    if (loading) {
-        return <LoadingScreen />
+    // Wallet not linked to profile - show link prompt
+    if (needsWalletLink || !primaryWallet) {
+        return <WalletRequiredScreen />
     }
 
     // No cases available

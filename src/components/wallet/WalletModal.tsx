@@ -45,9 +45,10 @@ interface LinkedWallet {
 
 interface WalletModalProps {
   trigger?: React.ReactNode
+  onWalletChange?: () => void
 }
 
-export function WalletModal({ trigger }: WalletModalProps) {
+export function WalletModal({ trigger, onWalletChange }: WalletModalProps) {
   const [open, setOpen] = useState(false)
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
   const [isCreatingEmbedded, setIsCreatingEmbedded] = useState(false)
@@ -142,6 +143,7 @@ export function WalletModal({ trigger }: WalletModalProps) {
       
       await fetchWallets()
       await refreshUser()
+      onWalletChange?.()
       toast.success('Wallet linked!')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to link wallet')
@@ -161,6 +163,7 @@ export function WalletModal({ trigger }: WalletModalProps) {
       
       await fetchWallets()
       await refreshUser()
+      onWalletChange?.()
       toast.success('Wallet unlinked')
     } catch {
       toast.error('Failed to unlink wallet')
@@ -181,6 +184,7 @@ export function WalletModal({ trigger }: WalletModalProps) {
       
       await fetchWallets()
       await refreshUser()
+      onWalletChange?.()
       toast.success('Primary wallet updated')
     } catch {
       toast.error('Failed to set primary wallet')

@@ -149,7 +149,6 @@ tmp_*
 backup/*
 *.png
 debug-*
-docs/*
 _drafts/*
 fucks-or-sucks-main/*
 Movement-Network-ConnectWallet-Template/*

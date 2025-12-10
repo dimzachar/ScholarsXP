@@ -207,6 +207,8 @@ export const PATCH = withPermission('authenticated')(async (request: Authenticat
     const wallet = wallets[0]
 
     if (isPrimary === true) {
+      console.log('[wallet PATCH] Setting primary wallet:', { userId, walletAddress })
+      
       // Unset other primary wallets
       await prisma.$executeRaw`
         UPDATE "UserWallet" SET "isPrimary" = false WHERE "userId" = ${userId}::uuid AND id != ${wallet.id}::uuid
@@ -214,10 +216,11 @@ export const PATCH = withPermission('authenticated')(async (request: Authenticat
       await prisma.$executeRaw`
         UPDATE "UserWallet" SET "isPrimary" = true, "updatedAt" = NOW() WHERE id = ${wallet.id}::uuid
       `
-      // Update legacy field
-      await prisma.$executeRaw`
-        UPDATE "User" SET "movementWalletAddress" = ${walletAddress} WHERE id = ${userId}::uuid
+      // Update legacy field on User table
+      const updateResult = await prisma.$executeRaw`
+        UPDATE "User" SET "movementWalletAddress" = ${walletAddress}, "updatedAt" = NOW() WHERE id = ${userId}::uuid
       `
+      console.log('[wallet PATCH] User.movementWalletAddress update result:', updateResult)
     }
 
     if (label !== undefined) {

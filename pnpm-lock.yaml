@@ -71,6 +71,9 @@ importers:
       '@radix-ui/react-tooltip':
         specifier: ^1.2.7
         version: 1.2.7(@types/react-dom@19.1.6(@types/react@19.1.8))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@shinami/clients':
+        specifier: ^0.9.8
+        version: 0.9.8(@aptos-labs/ts-sdk@5.1.5(got@11.8.6))(bufferutil@4.0.9)(utf-8-validate@5.0.10)
       '@supabase/auth-ui-react':
         specifier: ^0.4.7
         version: 0.4.7(@supabase/supabase-js@2.52.1(bufferutil@4.0.9)(utf-8-validate@5.0.10))
@@ -1313,6 +1316,9 @@ packages:
     resolution: {integrity: sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==}
     engines: {node: '>=12.4.0'}
 
+  '@open-rpc/client-js@2.0.0':
+    resolution: {integrity: sha512-knfuwdPPVJlmNIgvjvrgbwaU+eF0pVCb6V7/c9OH/UYW1jAPE2wrKL3FOa3qpXlVpAF516syYrO9h0s402zXyA==}
+
   '@panva/hkdf@1.2.1':
     resolution: {integrity: sha512-6oclG6Y3PiDFcoyk8srjLfVKyMfVCKJ27JwNPViuXziFpmdz+MZnZN/aKY0JGXgYuO/VghU0jcOAZgWXZ1Dmrw==}
 
@@ -2021,6 +2027,18 @@ packages:
 
   '@scure/bip39@1.6.0':
     resolution: {integrity: sha512-+lF0BbLiJNwVlev4eKelw1WWLaiKXw7sSl8T6FvBlWkdX+94aGJ4o8XjUdlyhTCjd8c+B3KT3JfS8P0bLRNU6A==}
+
+  '@shinami/clients@0.9.8':
+    resolution: {integrity: sha512-GjJTC3Kgk+upcS7GFCsjHgkaks6mHLOrAhruFhsR1UifSW/xFfwAhP2q1jmLR/3RLGeEsnZoRAwEuYK8JGL8Cw==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@aptos-labs/ts-sdk': '>=1.13.3'
+      '@mysten/sui': '>=1.0.4'
+    peerDependenciesMeta:
+      '@aptos-labs/ts-sdk':
+        optional: true
+      '@mysten/sui':
+        optional: true
 
   '@simplewebauthn/browser@13.2.2':
     resolution: {integrity: sha512-FNW1oLQpTJyqG5kkDg5ZsotvWgmBaC6jCHR7Ej0qUNep36Wl9tj2eZu7J5rP+uhXgHaLk+QQ3lqcw2vS5MX1IA==}
@@ -4763,6 +4781,11 @@ packages:
     peerDependencies:
       ws: '*'
 
+  isomorphic-ws@5.0.0:
+    resolution: {integrity: sha512-muId7Zzn9ywDsyXgTIafTry2sV3nySZeUDe6YedVd1Hvuuep5AsIlqK+XefWpYTyJG5e503F2xIuT2lcU6rCSw==}
+    peerDependencies:
+      ws: '*'
+
   isows@1.0.6:
     resolution: {integrity: sha512-lPHCayd40oW98/I0uvgaHKWCSvkzY27LjWLbtzOm64yQ+G3Q5npjjbdppU65iZXkK1Zt+kH9pfegli0AYfwYYw==}
     peerDependencies:
@@ -6215,6 +6238,9 @@ packages:
 
   stream-shift@1.0.3:
     resolution: {integrity: sha512-76ORR0DO1o1hlKwTbi/DM3EXWGf3ZJYO8cXX5RJwnul2DEg2oyoZyjLNoQM8WsvZiFKCRfC1O0J7iCvie3RZmQ==}
+
+  strict-event-emitter-types@2.0.0:
+    resolution: {integrity: sha512-Nk/brWYpD85WlOgzw5h173aci0Teyv8YdIAEtV+N88nDB0dLlazZyJMIsN6eo1/AR61l+p6CJTG1JIyFaoNEEA==}
 
   strict-uri-encode@2.0.0:
     resolution: {integrity: sha512-QwiXZgpRcKkhTj2Scnn++4PKtWsH0kpzZ62L2R6c/LUVYv7hVnZqcg2+sMuT6R7Jusu1vviK/MFsu6kNJfWlEQ==}
@@ -8324,6 +8350,15 @@ snapshots:
 
   '@nolyfill/is-core-module@1.0.39': {}
 
+  '@open-rpc/client-js@2.0.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)':
+    dependencies:
+      isomorphic-ws: 5.0.0(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
+      strict-event-emitter-types: 2.0.0
+      ws: 8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
   '@panva/hkdf@1.2.1': {}
 
   '@paulmillr/qr@0.2.1': {}
@@ -9613,6 +9648,16 @@ snapshots:
     dependencies:
       '@noble/hashes': 1.8.0
       '@scure/base': 1.2.6
+
+  '@shinami/clients@0.9.8(@aptos-labs/ts-sdk@5.1.5(got@11.8.6))(bufferutil@4.0.9)(utf-8-validate@5.0.10)':
+    dependencies:
+      '@open-rpc/client-js': 2.0.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+      superstruct: 2.0.2
+    optionalDependencies:
+      '@aptos-labs/ts-sdk': 5.1.5(got@11.8.6)
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   '@simplewebauthn/browser@13.2.2': {}
 
@@ -13710,6 +13755,10 @@ snapshots:
     dependencies:
       ws: 7.5.10(bufferutil@4.0.9)(utf-8-validate@5.0.10)
 
+  isomorphic-ws@5.0.0(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)):
+    dependencies:
+      ws: 8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+
   isows@1.0.6(ws@8.18.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)):
     dependencies:
       ws: 8.18.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)
@@ -15463,6 +15512,8 @@ snapshots:
       stream-chain: 2.2.5
 
   stream-shift@1.0.3: {}
+
+  strict-event-emitter-types@2.0.0: {}
 
   strict-uri-encode@2.0.0: {}
 

@@ -1,9 +1,11 @@
 'use client'
 
+import { useState, useEffect, useCallback } from 'react'
 import { Wallet, Link2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { WalletModal } from './WalletModal'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 
 function truncateAddress(address: string): string {
   if (address.length <= 10) return address
@@ -18,12 +20,29 @@ interface WalletBadgeProps {
  * WalletBadge - Compact wallet indicator for profile hero section
  * 
  * Shows linked wallet status and opens WalletModal on click.
- * Matches the styling of other badges in the profile (Rank, Weekly, etc.)
+ * Fetches primary wallet from UserWallet table.
  */
 export function WalletBadge({ className }: WalletBadgeProps) {
   const { user } = usePrivyAuthSync()
-  // Primary wallet from User table (backward compatible)
-  const primaryWallet = user?.movementWalletAddress
+  const { authenticatedFetch } = useAuthenticatedFetch()
+  const [primaryWallet, setPrimaryWallet] = useState<string | null>(null)
+
+  const fetchPrimaryWallet = useCallback(async () => {
+    if (!user) return
+    try {
+      const res = await authenticatedFetch('/api/user/wallet')
+      if (res.ok) {
+        const data = await res.json()
+        setPrimaryWallet(data.primaryWallet || null)
+      }
+    } catch (error) {
+      console.error('Failed to fetch primary wallet:', error)
+    }
+  }, [user, authenticatedFetch])
+
+  useEffect(() => {
+    fetchPrimaryWallet()
+  }, [fetchPrimaryWallet])
 
   return (
     <WalletModal
@@ -46,6 +65,7 @@ export function WalletBadge({ className }: WalletBadgeProps) {
           </Badge>
         )
       }
+      onWalletChange={fetchPrimaryWallet}
     />
   )
 }

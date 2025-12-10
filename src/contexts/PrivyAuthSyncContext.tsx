@@ -204,11 +204,13 @@ export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) 
     if (!privyUser) return
     
     try {
-      const response = await fetch(`/api/user/me?privyUserId=${encodeURIComponent(privyUser.id)}`)
+      // Add cache-busting timestamp to ensure fresh data
+      const response = await fetch(`/api/user/me?privyUserId=${encodeURIComponent(privyUser.id)}&_t=${Date.now()}`)
       
       if (response.ok) {
         const data = await response.json()
         if (data.user) {
+          console.log('refreshUser: updated user data:', data.user.movementWalletAddress)
           setUser(data.user)
         }
       }
