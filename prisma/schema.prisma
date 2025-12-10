@@ -41,6 +41,7 @@ model User {
   xpTransactions     XpTransaction[]
   notifications      Notification[]
   rolePromotionNotifications RolePromotionNotification[]
+  wallets            UserWallet[]
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
 
@@ -539,6 +540,32 @@ model JudgmentVote {
 
   @@unique([submissionId, walletAddress]) // One vote per wallet per submission
   @@index([walletAddress]) // Look up votes by wallet
+}
+
+model UserWallet {
+  id            String      @id @default(uuid()) @db.Uuid
+  userId        String      @db.Uuid
+  address       String      // Wallet address (0x...)
+  label         String?     // User-defined label (e.g., "Main", "Trading")
+  type          WalletType  @default(EXTERNAL)
+  isPrimary     Boolean     @default(false) // Primary wallet for on-chain activities
+  linkedAt      DateTime    @default(now())
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([address]) // Each wallet can only be linked to one user
+  @@unique([userId, address]) // Prevent duplicate wallet per user
+  @@index([userId])
+  @@index([address])
+  @@index([userId, isPrimary])
+  @@map("UserWallet")
+}
+
+enum WalletType {
+  EMBEDDED  // Created via Privy
+  EXTERNAL  // Connected via browser extension (Nightly, etc.)
 }
 
 enum JudgmentStatus {

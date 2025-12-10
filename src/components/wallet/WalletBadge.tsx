@@ -22,18 +22,19 @@ interface WalletBadgeProps {
  */
 export function WalletBadge({ className }: WalletBadgeProps) {
   const { user } = usePrivyAuthSync()
-  const linkedWallet = user?.movementWalletAddress
+  // Primary wallet from User table (backward compatible)
+  const primaryWallet = user?.movementWalletAddress
 
   return (
     <WalletModal
       trigger={
-        linkedWallet ? (
+        primaryWallet ? (
           <Badge 
             variant="outline" 
             className={`px-3 py-1.5 text-sm border-purple-500/30 bg-purple-500/5 text-purple-600 dark:text-purple-400 backdrop-blur-sm shadow-sm cursor-pointer hover:bg-purple-500/10 transition-colors ${className}`}
           >
             <Wallet className="h-3.5 w-3.5 mr-1.5 text-purple-500" />
-            {truncateAddress(linkedWallet)}
+            {truncateAddress(primaryWallet)}
           </Badge>
         ) : (
           <Badge 

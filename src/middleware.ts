@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkRateLimit } from '@/lib/security'
+import { checkEdgeRateLimit } from '@/lib/edge-rate-limit'
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -85,7 +85,7 @@ export async function middleware(request: NextRequest) {
       maxRequests = 6
     }
 
-    const rateLimitPassed = await checkRateLimit(clientIP, maxRequests, windowMs, endpointType)
+    const rateLimitPassed = checkEdgeRateLimit(clientIP, maxRequests, windowMs, endpointType)
     if (!rateLimitPassed) {
       return NextResponse.json(
         {
