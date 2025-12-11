@@ -3,8 +3,11 @@
 import { RANK_THRESHOLDS } from '@/lib/gamified-ranks'
 import { GamifiedRankBadge } from '@/components/gamified'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import Link from 'next/link'
+import { ArrowLeft, Trophy } from 'lucide-react'
 
-export default function RanksTestPage() {
+export default function RanksPage() {
     // Group ranks by category
     const ranksByCategory = RANK_THRESHOLDS.reduce((acc, rank) => {
         if (!acc[rank.category]) {
@@ -15,11 +18,22 @@ export default function RanksTestPage() {
     }, {} as Record<string, typeof RANK_THRESHOLDS>)
 
     return (
+        <div className="min-h-screen bg-gradient-to-br from-background via-muted/50 to-muted">
         <div className="container mx-auto py-8 px-4">
+            {/* Header with back navigation */}
             <div className="mb-8">
-                <h1 className="text-4xl font-bold mb-2">Rank System</h1>
+                <Link href="/leaderboard">
+                    <Button variant="ghost" size="sm" className="mb-4 -ml-2">
+                        <ArrowLeft className="h-4 w-4 mr-2" />
+                        Back to Leaderboard
+                    </Button>
+                </Link>
+                <div className="flex items-center gap-3 mb-2">
+                    <Trophy className="h-8 w-8 text-primary" />
+                    <h1 className="text-4xl font-bold">Rank System</h1>
+                </div>
                 <p className="text-muted-foreground">
-                    All 21 progression levels
+                    Progress through {RANK_THRESHOLDS.length} ranks across 5 categories. Earn XP through submissions and reviews to climb the ranks!
                 </p>
             </div>
 
@@ -110,6 +124,7 @@ export default function RanksTestPage() {
                     </div>
                 </CardContent>
             </Card> */}
+        </div>
         </div>
     )
 }

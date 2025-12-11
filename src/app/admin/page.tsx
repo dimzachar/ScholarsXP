@@ -366,7 +366,7 @@ export default function AdminDashboardPage() {
     return (
       <AuthGuard>
         <AdminGuard>
-          <div className="min-h-screen bg-background">
+          <div className="min-h-screen bg-gradient-to-br from-background via-muted/50 to-muted">
             <div className="container mx-auto px-4 py-8">
               <div className="text-center">
                 <div className="inline-flex items-center space-x-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6">
@@ -386,7 +386,7 @@ export default function AdminDashboardPage() {
   return (
     <AuthGuard>
       <AdminGuard>
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen bg-gradient-to-br from-background via-muted/50 to-muted">
           <div className="container mx-auto px-4 py-8 pb-20 md:pb-8">
             {/* Header */}
             <div className="mb-8">

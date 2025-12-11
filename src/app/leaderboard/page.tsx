@@ -26,7 +26,8 @@ import {
   Calendar,
   BarChart3
 } from 'lucide-react'
-import { getGamifiedRank } from '@/lib/gamified-ranks'
+import { getGamifiedRank, getDiscordRoles } from '@/lib/gamified-ranks'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface LeaderboardEntry {
   rank: number
@@ -38,11 +39,11 @@ interface LeaderboardEntry {
   reviews: number
 }
 
-export const normalizeLeaderboardEntries = (entries: unknown[] = []): LeaderboardEntry[] =>
+export const normalizeLeaderboardEntries = (entries: Record<string, unknown>[] = []): LeaderboardEntry[] =>
   entries.map((entry) => ({
-    ...entry,
-    submissions: entry.submissions ?? entry.totalSubmissions ?? entry.submissionCount ?? 0,
-    reviews: entry.reviews ?? entry.reviewCount ?? entry.reviewsCount ?? 0
+    ...(entry as unknown as LeaderboardEntry),
+    submissions: (entry.submissions ?? entry.totalSubmissions ?? entry.submissionCount ?? 0) as number,
+    reviews: (entry.reviews ?? entry.reviewCount ?? entry.reviewsCount ?? 0) as number
   }))
 
 interface WeeklyStats {
@@ -59,13 +60,33 @@ interface AllTimeStats {
   averageXp: number
 }
 
+interface UserPosition {
+  user: {
+    id: string
+    username: string
+    email: string
+    totalXp: number
+    profileImageUrl: string | null
+  }
+  weekly: {
+    rank: number
+    xp: number
+    totalParticipants: number
+  }
+  allTime: {
+    rank: number
+    xp: number
+    totalUsers: number
+  }
+}
+
 export default function LeaderboardPage() {
   const { user } = useAuth()
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats | null>(null)
   const [allTimeLeaders, setAllTimeLeaders] = useState<LeaderboardEntry[]>([])
   const [allTimePagination, setAllTimePagination] = useState<PaginationInfo | null>(null)
   const [allTimeStats, setAllTimeStats] = useState<AllTimeStats | null>(null)
-  const [currentUserPosition, setCurrentUserPosition] = useState<unknown>(null)
+  const [currentUserPosition, setCurrentUserPosition] = useState<UserPosition | null>(null)
   const [loading, setLoading] = useState(true)
   const [weeklyPage, setWeeklyPage] = useState(1)
   const [allTimePage, setAllTimePage] = useState(1)
@@ -84,8 +105,8 @@ export default function LeaderboardPage() {
       const data = await apiGet('/api/leaderboard/user-position?type=both')
       // console.log('User position data received:', data)
       return data
-    } catch (error) {
-      // console.error('Error fetching user position:', error)
+    } catch {
+      // Return a default structure so the UI doesn't break
       // Return a default structure so the UI doesn't break
       return {
         user: {
@@ -226,7 +247,7 @@ export default function LeaderboardPage() {
           </div>
 
           <Avatar className="h-10 w-10 ring-2 ring-primary/30">
-            <AvatarImage src={userInfo.profileImageUrl} />
+            <AvatarImage src={userInfo.profileImageUrl || undefined} />
             <AvatarFallback className="bg-primary text-primary-foreground font-bold">
               {userInfo.username?.slice(0, 2).toUpperCase() || 'ME'}
             </AvatarFallback>
@@ -242,8 +263,8 @@ export default function LeaderboardPage() {
             <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
               <span>
                 {type === 'weekly'
-                  ? `${userData.totalParticipants || 0} participants this week`
-                  : `${userData.totalUsers || 0} total users`
+                  ? `${(userData as UserPosition['weekly']).totalParticipants || 0} participants this week`
+                  : `${(userData as UserPosition['allTime']).totalUsers || 0} total users`
                 }
               </span>
             </div>
@@ -266,9 +287,208 @@ export default function LeaderboardPage() {
     return 'text-muted-foreground'
   }
 
+  // Rank Progression Component
+  const RankProgression = () => {
+    const discordRoles = getDiscordRoles()
+    const userXp = currentUserPosition?.allTime?.xp || currentUserPosition?.user?.totalXp || 0
+    const userRank = getGamifiedRank(userXp)
+    const currentRankIndex = userRank ? discordRoles.findIndex(r => r.category === userRank.category) : 0
+    
+    // Progress line width: percentage based on current rank position (0-100%)
+    // 5 nodes = 4 segments, each segment is 25%
+    const progressWidth = (currentRankIndex / (discordRoles.length - 1)) * 100
+    
+    // Build gradient that only includes colors up to current rank
+    // Each rank takes equal portion of the gradient
+    const buildProgressGradient = () => {
+      if (currentRankIndex === 0) return discordRoles[0].color
+      const colors = discordRoles.slice(0, currentRankIndex + 1).map((role, i) => {
+        const percent = (i / currentRankIndex) * 100
+        return `${role.color} ${percent}%`
+      })
+      return `linear-gradient(to right, ${colors.join(', ')})`
+    }
+    
+    // Next rank info
+    const nextRankCategory = discordRoles[currentRankIndex + 1]
+    const nextRankXp = nextRankCategory?.minXp || userXp
+    const remainingXp = Math.max(0, nextRankXp - userXp)
+    
+    // Calculate progress percentage: userXp / nextRankXp * 100, rounded
+    const progressPercent = nextRankCategory 
+      ? Math.round((userXp / nextRankXp) * 100)
+      : 100
+    
+    // Calculate user's percentile rank (top X%)
+    const userRankPosition = currentUserPosition?.allTime?.rank || 0
+    const totalUsers = currentUserPosition?.allTime?.totalUsers || 1
+    const topPercent = totalUsers > 0 ? Math.max(1, Math.round((userRankPosition / totalUsers) * 100)) : 0
+
+    return (
+      <Card className="border-0 shadow-xl overflow-hidden">
+        <CardContent className="p-6">
+          {/* Header */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+            <div>
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                Rank Progression
+                {userRank && (
+                  <span 
+                    className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border"
+                    style={{ 
+                      backgroundColor: `${userRank.color}15`,
+                      color: userRank.color,
+                      borderColor: `${userRank.color}30`
+                    }}
+                  >
+                    {userRank.category}
+                  </span>
+                )}
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                {topPercent > 0 ? `You are in the top ${topPercent}% of scholars.` : 'Start earning XP to unlock ranks!'}
+              </p>
+            </div>
+            <Link href="/ranks" className="text-sm font-medium text-primary hover:text-primary/80 transition-colors flex items-center gap-1 group">
+              View all 25 ranks
+              <span className="transform group-hover:translate-x-1 transition-transform">→</span>
+            </Link>
+          </div>
+
+          {/* Progress Track */}
+          <div className="relative px-2 md:px-6 py-4">
+            {/* Background line */}
+            <div className="absolute top-1/2 left-0 w-full h-1 bg-muted -translate-y-1/2 rounded-full z-0" />
+            {/* Progress line with gradient - colors only up to current rank */}
+            <div 
+              className="absolute top-1/2 left-0 h-1 -translate-y-1/2 rounded-full z-0 transition-all duration-1000 ease-out"
+              style={{ 
+                width: `${progressWidth}%`,
+                background: buildProgressGradient()
+              }}
+            />
+            
+            {/* Rank nodes */}
+            <div className="relative z-10 flex justify-between items-center w-full">
+              {discordRoles.map((role, index) => {
+                const Icon = role.icon
+                const isPast = index < currentRankIndex
+                const isCurrent = index === currentRankIndex
+                const isFuture = index > currentRankIndex
+                
+                return (
+                  <TooltipProvider key={role.displayName}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className={`flex flex-col items-center ${isFuture ? 'opacity-60 hover:opacity-100' : ''} transition-opacity cursor-pointer group`}>
+                          {/* Icon circle */}
+                          <div 
+                            className={`
+                              flex items-center justify-center rounded-full mb-3 transition-transform hover:scale-110
+                              ${isCurrent ? 'w-14 h-14' : 'w-10 h-10'}
+                            `}
+                            style={{ 
+                              background: isCurrent 
+                                ? `linear-gradient(to bottom right, ${role.color}, ${role.color}dd)` 
+                                : isPast 
+                                  ? 'hsl(var(--background))' 
+                                  : 'hsl(var(--muted))',
+                              border: isCurrent 
+                                ? '4px solid hsl(var(--background))' 
+                                : `2px solid ${isPast ? role.color : 'hsl(var(--border))'}`  ,
+                              boxShadow: isCurrent ? `0 0 15px ${role.color}50` : 'none',
+                              color: isCurrent ? 'white' : isPast ? role.color : 'hsl(var(--muted-foreground))'
+                            }}
+                          >
+                            <Icon 
+                              className={isCurrent ? 'h-6 w-6' : 'h-4 w-4'}
+                              strokeWidth={2.5}
+                            />
+                          </div>
+                          
+                          {/* Label */}
+                          <span 
+                            className={`text-xs font-bold uppercase tracking-wider ${isFuture ? 'group-hover:text-foreground' : ''}`}
+                            style={{ color: isPast || isCurrent ? role.color : undefined }}
+                          >
+                            {role.category}
+                          </span>
+                          
+                          {/* Current rank badge */}
+                          {isCurrent && (
+                            <div className="absolute -bottom-6 bg-muted text-muted-foreground text-[10px] px-2 py-0.5 rounded border border-border whitespace-nowrap">
+                              Current Rank
+                            </div>
+                          )}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="font-semibold">{role.displayName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {role.minXp.toLocaleString()} - {role.maxXp === Infinity ? '∞' : role.maxXp.toLocaleString()} XP
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Stats row */}
+          <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-border pt-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center text-primary">
+                <TrendingUp className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground uppercase font-semibold">Next Rank At</div>
+                <div className="font-bold text-lg">{nextRankXp.toLocaleString()} XP</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center text-primary">
+                <Zap className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground uppercase font-semibold">Your XP</div>
+                <div className="font-bold text-lg">{userXp.toLocaleString()} XP</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded bg-muted/50 flex items-center justify-center text-muted-foreground">
+                <Target className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground uppercase font-semibold">Remaining</div>
+                <div className="font-bold text-lg text-muted-foreground">{remainingXp.toLocaleString()} XP</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Progress bar - uses current Discord role color (not tier color) */}
+          {nextRankCategory && discordRoles[currentRankIndex] && (
+            <div className="mt-4">
+              <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                <span>Progress to {nextRankCategory.category}</span>
+                <span style={{ color: discordRoles[currentRankIndex].color }}>{progressPercent}%</span>
+              </div>
+              <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                <div 
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{ width: `${progressPercent}%`, backgroundColor: discordRoles[currentRankIndex].color }}
+                />
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    )
+  }
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-background overflow-x-hidden">
+      <div className="min-h-screen bg-gradient-to-br from-background via-muted/50 to-muted overflow-x-hidden">
         <div className="container mx-auto px-4 py-8">
           <div className="text-center">
             <div className="inline-flex items-center space-x-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6">
@@ -285,7 +505,7 @@ export default function LeaderboardPage() {
 
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-background overflow-x-hidden">
+      <div className="min-h-screen bg-gradient-to-br from-background via-muted/50 to-muted overflow-x-hidden">
         <div className="container mx-auto px-4 py-8">
           {/* Header */}
           <div className="text-center mb-8">
@@ -385,7 +605,7 @@ export default function LeaderboardPage() {
               )}
               {/* Top 3 Podium */}
               {weeklyStats?.topPerformers && weeklyStats.topPerformers.length >= 3 && (
-                <Card className="border-0 shadow-xl bg-gradient-to-r from-muted/50 to-muted">
+                <Card className="border-0 shadow-xl">
                   <CardHeader className="text-center">
                     <CardTitle className="flex items-center justify-center gap-2">
                       <Crown className="h-6 w-6 text-primary" />
@@ -512,6 +732,9 @@ export default function LeaderboardPage() {
             </TabsContent>
 
             <TabsContent value="alltime" className="space-y-6">
+              {/* Rank Progression */}
+              <RankProgression />
+              
               {allTimeStats && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <Card className="border-0 shadow-lg">
@@ -603,13 +826,23 @@ export default function LeaderboardPage() {
                                 if (!rank) return null
                                 const Icon = rank.icon
                                 return (
-                                  <span title={rank.displayName}>
-                                    <Icon
-                                      className="h-5 w-5"
-                                      style={{ color: rank.color }}
-                                      strokeWidth={2.5}
-                                    />
-                                  </span>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Link href="/ranks" className="cursor-pointer hover:scale-110 transition-transform">
+                                          <Icon
+                                            className="h-5 w-5"
+                                            style={{ color: rank.color }}
+                                            strokeWidth={2.5}
+                                          />
+                                        </Link>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p className="font-semibold">{rank.displayName}</p>
+                                        <p className="text-xs text-muted-foreground">Click to view all ranks</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
                                 )
                               })()}
                               <p className="text-base sm:text-lg font-bold text-primary">{entry.totalXp.toLocaleString()} XP</p>
