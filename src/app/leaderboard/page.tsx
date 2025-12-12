@@ -300,13 +300,13 @@ export default function LeaderboardPage() {
     
     // Build gradient that only includes colors up to current rank
     // Each rank takes equal portion of the gradient
-    const buildProgressGradient = () => {
+    const buildProgressGradient = (direction: 'right' | 'bottom' = 'right') => {
       if (currentRankIndex === 0) return discordRoles[0].color
       const colors = discordRoles.slice(0, currentRankIndex + 1).map((role, i) => {
         const percent = (i / currentRankIndex) * 100
         return `${role.color} ${percent}%`
       })
-      return `linear-gradient(to right, ${colors.join(', ')})`
+      return `linear-gradient(to ${direction}, ${colors.join(', ')})`
     }
     
     // Next rank info
@@ -324,13 +324,129 @@ export default function LeaderboardPage() {
     const totalUsers = currentUserPosition?.allTime?.totalUsers || 1
     const topPercent = totalUsers > 0 ? Math.max(1, Math.round((userRankPosition / totalUsers) * 100)) : 0
 
+    // Render a single rank node for desktop (with tooltip)
+    const DesktopRankNode = ({ role, index }: { role: typeof discordRoles[0], index: number }) => {
+      const Icon = role.icon
+      const isPast = index < currentRankIndex
+      const isCurrent = index === currentRankIndex
+      const isFuture = index > currentRankIndex
+      
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className={`flex flex-col items-center ${isFuture ? 'opacity-60 hover:opacity-100' : ''} transition-opacity cursor-pointer group`}>
+                {/* Icon circle */}
+                <div 
+                  className={`
+                    flex items-center justify-center rounded-full mb-3 transition-transform hover:scale-110 shrink-0
+                    ${isCurrent ? 'w-14 h-14' : 'w-10 h-10'}
+                  `}
+                  style={{ 
+                    background: isCurrent 
+                      ? `linear-gradient(to bottom right, ${role.color}, ${role.color}dd)` 
+                      : isPast 
+                        ? 'hsl(var(--background))' 
+                        : 'hsl(var(--muted))',
+                    border: isCurrent 
+                      ? '4px solid hsl(var(--background))' 
+                      : `2px solid ${isPast ? role.color : 'hsl(var(--border))'}`  ,
+                    boxShadow: isCurrent ? `0 0 15px ${role.color}50` : 'none',
+                    color: isCurrent ? 'white' : isPast ? role.color : 'hsl(var(--muted-foreground))'
+                  }}
+                >
+                  <Icon 
+                    className={isCurrent ? 'h-6 w-6' : 'h-4 w-4'}
+                    strokeWidth={2.5}
+                  />
+                </div>
+                
+                {/* Label */}
+                <span 
+                  className={`text-xs font-bold uppercase tracking-wider ${isFuture ? 'group-hover:text-foreground' : ''}`}
+                  style={{ color: isPast || isCurrent ? role.color : undefined }}
+                >
+                  {role.category}
+                </span>
+                
+                {/* Current rank badge */}
+                {isCurrent && (
+                  <div className="absolute -bottom-6 bg-muted text-muted-foreground text-[10px] px-2 py-0.5 rounded border border-border whitespace-nowrap">
+                    Current Rank
+                  </div>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="font-semibold">{role.displayName}</p>
+              <p className="text-xs text-muted-foreground">
+                {role.minXp.toLocaleString()} - {role.maxXp === Infinity ? '∞' : role.maxXp.toLocaleString()} XP
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )
+    }
+    
+    // Render a single rank node for mobile (no tooltip, info shown inline)
+    const MobileRankNode = ({ role, index }: { role: typeof discordRoles[0], index: number }) => {
+      const Icon = role.icon
+      const isPast = index < currentRankIndex
+      const isCurrent = index === currentRankIndex
+      const isFuture = index > currentRankIndex
+      
+      return (
+        <div className={`flex flex-row items-center gap-4 ${isFuture ? 'opacity-50' : ''} transition-opacity`}>
+          {/* Icon circle */}
+          <div 
+            className={`
+              flex items-center justify-center rounded-full shrink-0 z-10
+              ${isCurrent ? 'w-11 h-11' : 'w-9 h-9'}
+            `}
+            style={{ 
+              background: isCurrent 
+                ? `linear-gradient(to bottom right, ${role.color}, ${role.color}dd)` 
+                : isPast 
+                  ? 'hsl(var(--background))' 
+                  : 'hsl(var(--muted))',
+              border: isCurrent 
+                ? '3px solid hsl(var(--background))' 
+                : `2px solid ${isPast ? role.color : 'hsl(var(--border))'}`  ,
+              boxShadow: isCurrent ? `0 0 12px ${role.color}50` : 'none',
+              color: isCurrent ? 'white' : isPast ? role.color : 'hsl(var(--muted-foreground))'
+            }}
+          >
+            <Icon 
+              className={isCurrent ? 'h-5 w-5' : 'h-4 w-4'}
+              strokeWidth={2.5}
+            />
+          </div>
+          
+          {/* Label */}
+          <div className="flex items-center gap-2">
+            <span 
+              className="text-xs font-bold uppercase tracking-wider"
+              style={{ color: isPast || isCurrent ? role.color : undefined }}
+            >
+              {role.category}
+            </span>
+            {isCurrent && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                You
+              </span>
+            )}
+          </div>
+        </div>
+      )
+    }
+
     return (
       <Card className="border-0 shadow-xl overflow-hidden">
-        <CardContent className="p-6">
+        <CardContent className="p-4 sm:p-6">
           {/* Header */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
             <div>
-              <h2 className="text-xl font-bold flex items-center gap-2">
+              <h2 className="text-lg sm:text-xl font-bold flex flex-wrap items-center gap-2">
                 Rank Progression
                 {userRank && (
                   <span 
@@ -345,7 +461,7 @@ export default function LeaderboardPage() {
                   </span>
                 )}
               </h2>
-              <p className="text-sm text-muted-foreground mt-1">
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                 {topPercent > 0 ? `You are in the top ${topPercent}% of scholars.` : 'Start earning XP to unlock ranks!'}
               </p>
             </div>
@@ -355,118 +471,84 @@ export default function LeaderboardPage() {
             </Link>
           </div>
 
-          {/* Progress Track */}
-          <div className="relative px-2 md:px-6 py-4">
+          {/* Mobile: Vertical Progress Track */}
+          <div className="block md:hidden relative py-2">
+            {/* Vertical background line - positioned to align with icon centers (icon is 36px/44px, center at ~18-22px from left edge of icon) */}
+            <div className="absolute left-[18px] top-5 bottom-5 w-1 bg-muted rounded-full z-0" />
+            {/* Vertical progress line - fills through current rank node center */}
+            {currentRankIndex > 0 && (
+              <div 
+                className="absolute left-[18px] top-5 w-1 rounded-full z-0 transition-all duration-1000 ease-out"
+                style={{ 
+                  // Calculate height: (currentIndex / totalSegments) * available height
+                  // Available height is container minus top/bottom padding (40px total)
+                  height: `calc(${(currentRankIndex / (discordRoles.length - 1)) * 100}% - 40px)`,
+                  background: buildProgressGradient('bottom')
+                }}
+              />
+            )}
+            
+            {/* Rank nodes - vertical with even spacing */}
+            <div className="relative flex flex-col gap-4">
+              {discordRoles.map((role, index) => (
+                <MobileRankNode key={role.displayName} role={role} index={index} />
+              ))}
+            </div>
+          </div>
+
+          {/* Desktop: Horizontal Progress Track */}
+          <div className="hidden md:block relative px-6 py-4">
             {/* Background line */}
             <div className="absolute top-1/2 left-0 w-full h-1 bg-muted -translate-y-1/2 rounded-full z-0" />
-            {/* Progress line with gradient - colors only up to current rank */}
+            {/* Progress line with gradient */}
             <div 
               className="absolute top-1/2 left-0 h-1 -translate-y-1/2 rounded-full z-0 transition-all duration-1000 ease-out"
               style={{ 
                 width: `${progressWidth}%`,
-                background: buildProgressGradient()
+                background: buildProgressGradient('right')
               }}
             />
             
-            {/* Rank nodes */}
+            {/* Rank nodes - horizontal */}
             <div className="relative z-10 flex justify-between items-center w-full">
-              {discordRoles.map((role, index) => {
-                const Icon = role.icon
-                const isPast = index < currentRankIndex
-                const isCurrent = index === currentRankIndex
-                const isFuture = index > currentRankIndex
-                
-                return (
-                  <TooltipProvider key={role.displayName}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className={`flex flex-col items-center ${isFuture ? 'opacity-60 hover:opacity-100' : ''} transition-opacity cursor-pointer group`}>
-                          {/* Icon circle */}
-                          <div 
-                            className={`
-                              flex items-center justify-center rounded-full mb-3 transition-transform hover:scale-110
-                              ${isCurrent ? 'w-14 h-14' : 'w-10 h-10'}
-                            `}
-                            style={{ 
-                              background: isCurrent 
-                                ? `linear-gradient(to bottom right, ${role.color}, ${role.color}dd)` 
-                                : isPast 
-                                  ? 'hsl(var(--background))' 
-                                  : 'hsl(var(--muted))',
-                              border: isCurrent 
-                                ? '4px solid hsl(var(--background))' 
-                                : `2px solid ${isPast ? role.color : 'hsl(var(--border))'}`  ,
-                              boxShadow: isCurrent ? `0 0 15px ${role.color}50` : 'none',
-                              color: isCurrent ? 'white' : isPast ? role.color : 'hsl(var(--muted-foreground))'
-                            }}
-                          >
-                            <Icon 
-                              className={isCurrent ? 'h-6 w-6' : 'h-4 w-4'}
-                              strokeWidth={2.5}
-                            />
-                          </div>
-                          
-                          {/* Label */}
-                          <span 
-                            className={`text-xs font-bold uppercase tracking-wider ${isFuture ? 'group-hover:text-foreground' : ''}`}
-                            style={{ color: isPast || isCurrent ? role.color : undefined }}
-                          >
-                            {role.category}
-                          </span>
-                          
-                          {/* Current rank badge */}
-                          {isCurrent && (
-                            <div className="absolute -bottom-6 bg-muted text-muted-foreground text-[10px] px-2 py-0.5 rounded border border-border whitespace-nowrap">
-                              Current Rank
-                            </div>
-                          )}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="font-semibold">{role.displayName}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {role.minXp.toLocaleString()} - {role.maxXp === Infinity ? '∞' : role.maxXp.toLocaleString()} XP
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )
-              })}
+              {discordRoles.map((role, index) => (
+                <DesktopRankNode key={role.displayName} role={role} index={index} />
+              ))}
             </div>
           </div>
 
           {/* Stats row */}
-          <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-border pt-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center text-primary">
-                <TrendingUp className="h-5 w-5" />
+          <div className="mt-8 md:mt-10 grid grid-cols-3 gap-2 sm:gap-4 border-t border-border pt-4 sm:pt-6">
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-2 sm:gap-3 text-center sm:text-left">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
               <div>
-                <div className="text-xs text-muted-foreground uppercase font-semibold">Next Rank At</div>
-                <div className="font-bold text-lg">{nextRankXp.toLocaleString()} XP</div>
+                <div className="text-[10px] sm:text-xs text-muted-foreground uppercase font-semibold">Next Rank</div>
+                <div className="font-bold text-sm sm:text-lg">{nextRankXp.toLocaleString()}</div>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center text-primary">
-                <Zap className="h-5 w-5" />
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-2 sm:gap-3 text-center sm:text-left">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                <Zap className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
               <div>
-                <div className="text-xs text-muted-foreground uppercase font-semibold">Your XP</div>
-                <div className="font-bold text-lg">{userXp.toLocaleString()} XP</div>
+                <div className="text-[10px] sm:text-xs text-muted-foreground uppercase font-semibold">Your XP</div>
+                <div className="font-bold text-sm sm:text-lg">{userXp.toLocaleString()}</div>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded bg-muted/50 flex items-center justify-center text-muted-foreground">
-                <Target className="h-5 w-5" />
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-2 sm:gap-3 text-center sm:text-left">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded bg-muted/50 flex items-center justify-center text-muted-foreground shrink-0">
+                <Target className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
               <div>
-                <div className="text-xs text-muted-foreground uppercase font-semibold">Remaining</div>
-                <div className="font-bold text-lg text-muted-foreground">{remainingXp.toLocaleString()} XP</div>
+                <div className="text-[10px] sm:text-xs text-muted-foreground uppercase font-semibold">Remaining</div>
+                <div className="font-bold text-sm sm:text-lg text-muted-foreground">{remainingXp.toLocaleString()}</div>
               </div>
             </div>
           </div>
 
-          {/* Progress bar - uses current Discord role color (not tier color) */}
+          {/* Progress bar */}
           {nextRankCategory && discordRoles[currentRankIndex] && (
             <div className="mt-4">
               <div className="flex justify-between text-xs text-muted-foreground mb-1">
