@@ -25,7 +25,6 @@ export const GET = withPermission('admin_access')(async (_req: NextRequest) => {
     xpAwarded: w.xpAwarded ?? '',
     userId: w.userId,
     username: userMap.get(w.userId)?.username || '',
-    email: userMap.get(w.userId)?.email || '',
     awardedAt: w.awardedAt,
   }))
 
@@ -39,7 +38,7 @@ export const GET = withPermission('admin_access')(async (_req: NextRequest) => {
 })
 
 function toCsv(rows: any[]) {
-  if (!rows.length) return 'month,userId,username,email,awardedAt\n'
+  if (!rows.length) return 'month,userId,username,awardedAt\n'
   const headers = Object.keys(rows[0])
   const escape = (val: any) => {
     const s = String(val ?? '')

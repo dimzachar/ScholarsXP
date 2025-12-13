@@ -369,7 +369,7 @@ export default function ReviewPage() {
     return (
       <AuthGuard>
         <ReviewerGuard>
-          <div className="min-h-screen bg-background">
+          <div className="min-h-screen bg-gradient-to-br from-background via-muted/50 to-muted">
             <div className="container mx-auto px-4 py-8 pb-20 md:pb-8">
               <div className="text-center">
                 <div className="inline-flex items-center space-x-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6">
@@ -389,7 +389,7 @@ export default function ReviewPage() {
   return (
     <AuthGuard>
       <ReviewerGuard>
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen bg-gradient-to-br from-background via-muted/50 to-muted">
       <div className="container mx-auto px-4 py-8 pb-24 md:pb-10">
         {/* Header */}
         <div className="text-center mb-8">

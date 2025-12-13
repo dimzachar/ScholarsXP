@@ -8,7 +8,7 @@ import NotificationCenter from '@/components/NotificationCenter'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import ProfileDropdown from '@/components/ProfileDropdown'
 import { MobileBottomNav, createNavItem } from '@/components/navigation/MobileBottomNav'
-import { Home, Users, Trophy, Gem, Settings, Zap, Gavel } from 'lucide-react'
+import { Home, Users, Trophy, Gem, Settings, Zap, Gavel, ClipboardCheck, Shield } from 'lucide-react'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { usePrivyAuth } from '@/hooks/usePrivyAuth'
 
@@ -27,13 +27,11 @@ export default function Navigation() {
 
   // Filter navigation items based on user role
   const getNavItems = () => {
-    const baseItems = [
-      { href: '/dashboard', label: 'Submit', icon: Home },
-    ]
+    const baseItems: Array<{ href: string; label: string; icon: typeof Trophy }> = []
 
     // Add review for reviewers and admins
     if (isReviewer || isAdmin) {
-      baseItems.push({ href: '/review', label: 'Review', icon: Users })
+      baseItems.push({ href: '/review', label: 'Review', icon: ClipboardCheck })
     }
 
     // Add leaderboard and featured for everyone
@@ -45,7 +43,7 @@ export default function Navigation() {
 
     // Add admin for admins only
     if (isAdmin) {
-      baseItems.push({ href: '/admin', label: 'Admin', icon: Settings })
+      baseItems.push({ href: '/admin', label: 'Admin', icon: Shield })
     }
 
     return baseItems
@@ -74,7 +72,7 @@ export default function Navigation() {
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 shadow-sm overflow-x-hidden">
       <div className="flex h-16 items-center max-w-7xl mx-auto px-3 sm:px-4 w-full">
         <div className="mr-4 hidden xl:flex">
-          <Link href="/" className="mr-6 flex items-center space-x-2">
+          <Link href={user ? '/dashboard' : '/'} className="mr-6 flex items-center space-x-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
               <Zap className="h-5 w-5 text-primary-foreground" />
             </div>
@@ -115,7 +113,7 @@ export default function Navigation() {
         <div className="flex flex-1 items-center justify-between gap-2 xl:justify-end min-w-0">
           {/* Logo - icon only on small mobile, icon+text on larger mobile */}
           <div className="flex-shrink-0 xl:hidden">
-            <Link href="/" className="flex items-center gap-2">
+            <Link href={user ? '/dashboard' : '/'} className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary flex-shrink-0">
                 <Zap className="h-5 w-5 text-primary-foreground" />
               </div>
