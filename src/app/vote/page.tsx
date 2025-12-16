@@ -3,9 +3,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Scale, Gavel, Loader2, ExternalLink, ThumbsDown, ThumbsUp, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
+import { useWallet } from '@aptos-labs/wallet-adapter-react'
 import { useWalletSync } from '@/contexts/WalletSyncContext'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
+import { useSponsoredVote } from '@/hooks/useSponsoredVote'
 import { MobileLayout, MobileHeader, MobileSection } from '@/components/layout/MobileLayout'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -64,6 +66,35 @@ function NoCasesScreen() {
                     <p className="text-muted-foreground">
                         You&apos;ve judged all available submissions. Check back later for new cases.
                     </p>
+                </CardContent>
+            </Card>
+        </MobileLayout>
+    )
+}
+
+// Connect External Wallet Screen
+function ConnectExternalWalletScreen({ onConnect, isConnecting }: { onConnect: () => void; isConnecting: boolean }) {
+    return (
+        <MobileLayout variant="centered">
+            <Card className="w-full max-w-md border-0 shadow-xl bg-card text-center">
+                <CardContent className="pt-8 pb-8">
+                    <div className="mx-auto mb-4 p-4 rounded-full bg-primary/10 w-fit">
+                        <Wallet className="w-12 h-12 text-primary" />
+                    </div>
+                    <h2 className="text-xl font-bold mb-2">Connect Your Wallet</h2>
+                    <p className="text-muted-foreground mb-4">
+                        Your external wallet (Nightly) needs to be connected to sign votes.
+                    </p>
+                    <Button onClick={onConnect} disabled={isConnecting}>
+                        {isConnecting ? (
+                            <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Connecting...
+                            </>
+                        ) : (
+                            'Connect Wallet'
+                        )}
+                    </Button>
                 </CardContent>
             </Card>
         </MobileLayout>
@@ -328,6 +359,28 @@ function SwipeCard({
     )
 }
 
+// Processing screen shown while transaction is being submitted
+function ProcessingScreen() {
+    return (
+        <MobileLayout variant="centered">
+            <Card className="w-full max-w-md border-0 shadow-xl bg-card text-center">
+                <CardContent className="pt-8 pb-8">
+                    <div className="mx-auto mb-4 p-4 rounded-full bg-primary/10 w-fit">
+                        <Loader2 className="w-12 h-12 text-primary animate-spin" />
+                    </div>
+                    <h2 className="text-xl font-bold mb-2">Processing Vote</h2>
+                    <p className="text-muted-foreground">
+                        Submitting your vote on-chain...
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                        This may take a few seconds
+                    </p>
+                </CardContent>
+            </Card>
+        </MobileLayout>
+    )
+}
+
 function VoteContent({ 
     currentCase, 
     onVote, 
@@ -343,6 +396,11 @@ function VoteContent({
     remaining: number
     total: number
 }) {
+    // Show processing screen when vote is being submitted
+    if (voting) {
+        return <ProcessingScreen />
+    }
+
     return (
         <MobileLayout>
             <MobileHeader
@@ -368,9 +426,13 @@ function VoteContent({
 }
 
 export default function VotePage() {
-    const { isLoading: walletLoading, needsWalletLink } = useWalletSync()
+    const { isLoading: walletLoading } = useWalletSync()
     const { user, isLoading: userLoading } = usePrivyAuthSync()
     const { authenticatedFetch } = useAuthenticatedFetch()
+    const { vote: sponsoredVote } = useSponsoredVote()
+    const { connected: externalWalletConnected, connect: connectWallet, wallets } = useWallet()
+    const [isConnectingWallet, setIsConnectingWallet] = useState(false)
+    const [primaryWalletType, setPrimaryWalletType] = useState<'EMBEDDED' | 'EXTERNAL' | null>(null)
     
     const [primaryWallet, setPrimaryWallet] = useState<string | null>(null)
     const [walletFetched, setWalletFetched] = useState(false)
@@ -398,8 +460,13 @@ export default function VotePage() {
                 const res = await authenticatedFetch('/api/user/wallet')
                 if (res.ok) {
                     const data = await res.json()
+                    console.log('[VotePage] Wallet API response:', data)
                     console.log('[VotePage] Primary wallet:', data.primaryWallet)
+                    console.log('[VotePage] Primary wallet type:', data.primaryWalletType)
                     setPrimaryWallet(data.primaryWallet || null)
+                    setPrimaryWalletType(data.primaryWalletType || null)
+                } else {
+                    console.error('[VotePage] Wallet API error:', res.status)
                 }
             } catch (error) {
                 console.error('Failed to fetch primary wallet:', error)
@@ -449,37 +516,38 @@ export default function VotePage() {
     }, [walletFetched, walletLoading, primaryWallet, user?.id])
 
     const handleVote = useCallback(async (xp: number, _direction: 'left' | 'right'): Promise<boolean> => {
-        if (!primaryWallet || !currentCase) {
-            toast.error('Wallet not linked')
+        if (!currentCase) {
+            toast.error('No case to vote on')
+            return false
+        }
+
+        if (!primaryWallet || !primaryWalletType) {
+            toast.error('Please link a wallet to vote')
             return false
         }
 
         setVoting(true)
 
         try {
-            // Generate a simple signature (timestamp-based for now)
-            // In production, this would use Privy's signMessage or Shinami sponsored tx
-            const signature = `vote_${currentCase.submissionId}_${xp}_${Date.now()}`
+            // Submit vote via Shinami-sponsored transaction
+            // This will: build tx → wallet signs → backend sponsors gas → submits on-chain → saves to DB
+            const result = await sponsoredVote(currentCase.submissionId, xp, primaryWallet, primaryWalletType)
 
-            // Submit vote to API with wallet address and userId
-            const response = await fetch('/api/vote', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    submissionId: currentCase.submissionId,
-                    walletAddress: primaryWallet,
-                    voteXp: xp,
-                    signature,
-                    userId: user?.id,
-                })
-            })
-
-            if (!response.ok) {
-                const errorData = await response.json()
-                throw new Error(errorData.error || 'Failed to submit vote')
+            if (result.success) {
+                toast.success(
+                    <div>
+                        <p>Vote recorded: {xp} XP</p>
+                        <a 
+                            href={`https://explorer.movementnetwork.xyz/txn/${result.transactionHash}?network=bardock+testnet`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs underline opacity-70"
+                        >
+                            View on Explorer →
+                        </a>
+                    </div>
+                )
             }
-
-            toast.success(`Vote recorded: ${xp} XP`)
 
             // Move to next case after animation completes
             setCurrentIndex(prev => prev + 1)
@@ -496,7 +564,7 @@ export default function VotePage() {
             setVoting(false)
             return false
         }
-    }, [primaryWallet, currentCase, user?.id])
+    }, [currentCase, primaryWallet, primaryWalletType, sponsoredVote])
 
     // Show loading while initializing (wallet context, user, primary wallet fetch)
     if (isInitializing || loading) {
@@ -504,8 +572,31 @@ export default function VotePage() {
     }
 
     // Wallet not linked to profile - show link prompt
-    if (needsWalletLink || !primaryWallet) {
+    // Only check primaryWallet (from UserWallet table), not needsWalletLink (legacy check)
+    if (!primaryWallet) {
         return <WalletRequiredScreen />
+    }
+
+    // External wallet is primary but not connected - prompt to connect
+    if (primaryWalletType === 'EXTERNAL' && !externalWalletConnected) {
+        const handleConnectWallet = async () => {
+            setIsConnectingWallet(true)
+            try {
+                // Find first installed wallet (usually Nightly)
+                const installedWallet = wallets?.find(w => w.readyState === 'Installed')
+                if (installedWallet) {
+                    await connectWallet(installedWallet.name)
+                } else {
+                    toast.error('No wallet extension found. Please install Nightly wallet.')
+                }
+            } catch (err) {
+                console.error('Failed to connect wallet:', err)
+                toast.error('Failed to connect wallet')
+            } finally {
+                setIsConnectingWallet(false)
+            }
+        }
+        return <ConnectExternalWalletScreen onConnect={handleConnectWallet} isConnecting={isConnectingWallet} />
     }
 
     // No cases available

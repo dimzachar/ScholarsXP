@@ -35,9 +35,12 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
       SELECT "movementWalletAddress" FROM "User" WHERE id = ${userId}::uuid
     `
 
+    const primaryWalletRecord = wallets?.find(w => w.isPrimary)
+    
     return NextResponse.json({
       wallets: wallets || [],
-      primaryWallet: wallets?.find(w => w.isPrimary)?.address || user?.[0]?.movementWalletAddress || null
+      primaryWallet: primaryWalletRecord?.address || user?.[0]?.movementWalletAddress || null,
+      primaryWalletType: primaryWalletRecord?.type || null,
     })
   } catch (error) {
     console.error('Failed to get wallets:', error)

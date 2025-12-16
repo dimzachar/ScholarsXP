@@ -35,10 +35,10 @@ function getGasClient(): GasStationClient {
   return gasClientInstance;
 }
 
-// Movement Mainnet client
+// Movement Testnet client (for Shinami Gas Station testing)
 const movementConfig = new AptosConfig({
   network: Network.CUSTOM,
-  fullnode: "https://full.mainnet.movementinfra.xyz/v1",
+  fullnode: "https://testnet.movementnetwork.xyz/v1",
 });
 
 export const movementClient = new Aptos(movementConfig);
