@@ -351,13 +351,36 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
           )
         }
 
+        // Require reason when rejecting
+        if (normalized === 'REJECTED' && (!data.reason || data.reason.trim().length < 5)) {
+          return NextResponse.json(
+            { message: 'Rejection reason is required (minimum 5 characters)' },
+            { status: 400 }
+          )
+        }
+
         result = await prisma.submission.update({
           where: { id: submissionId },
           data: {
-            status: normalized,
+            status: normalized as any,
             updatedAt: new Date()
           }
         })
+
+        // When rejecting, clean up pending review assignments
+        let deletedAssignmentsCount = 0
+        if (normalized === 'REJECTED') {
+          const deletedAssignments = await prisma.reviewAssignment.deleteMany({
+            where: {
+              submissionId,
+              status: { in: ['PENDING', 'IN_PROGRESS'] }
+            }
+          })
+          deletedAssignmentsCount = deletedAssignments.count
+          if (deletedAssignmentsCount > 0) {
+            console.log(`🗑️ Cleaned up ${deletedAssignmentsCount} pending review assignments for rejected submission ${submissionId}`)
+          }
+        }
 
         // Create admin action audit
         await prisma.adminAction.create({
@@ -369,7 +392,10 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
             details: {
               subAction: 'STATUS_CHANGE',
               newStatus: normalized,
-              reason: data.reason
+              reason: data.reason,
+              ...(normalized === 'REJECTED' && { 
+                pendingAssignmentsCleaned: deletedAssignmentsCount 
+              })
             }
           }
         })

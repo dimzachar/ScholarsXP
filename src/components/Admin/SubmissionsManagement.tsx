@@ -163,6 +163,13 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
   })
   const [quickEditLoading, setQuickEditLoading] = useState(false)
 
+  // Bulk Rejection Modal State
+  const [bulkRejectModal, setBulkRejectModal] = useState({
+    open: false,
+    reason: ''
+  })
+  const [bulkRejectLoading, setBulkRejectLoading] = useState(false)
+
   const fetchSubmissions = useCallback(async (forceRefresh = false) => {
     try {
       setLoadingSubmissions(true)
@@ -281,7 +288,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
     }
   }
 
-  const handleBulkAction = async (action: string, data?: any) => {
+  const handleBulkAction = async (action: string, data?: unknown) => {
     if (selectedSubmissions.length === 0) return null
 
     setBulkLoading(true)
@@ -877,7 +884,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleBulkAction('updateStatus', { status: 'REJECTED' })}
+                  onClick={() => setBulkRejectModal({ open: true, reason: '' })}
                   disabled={bulkLoading}
                 >
                   Reject
@@ -1404,14 +1411,26 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
 
               {/* Reason */}
               <div className="space-y-2">
-                <Label htmlFor="reason">Reason (Optional)</Label>
+                <Label htmlFor="reason">
+                  Reason {quickEditForm.status === 'REJECTED' ? <span className="text-destructive">* (required)</span> : '(optional)'}
+                </Label>
                 <Textarea
                   id="reason"
-                  placeholder="Enter reason for status change..."
+                  placeholder={quickEditForm.status === 'REJECTED' 
+                    ? "Enter rejection reason (required, min 5 characters)..." 
+                    : "Enter reason for status change (optional)..."}
                   value={quickEditForm.reason}
                   onChange={(e) => setQuickEditForm(prev => ({ ...prev, reason: e.target.value }))}
                   rows={3}
                 />
+                {quickEditForm.status === 'REJECTED' && (
+                  <p className={`text-xs ${quickEditForm.reason.trim().length >= 5 ? 'text-muted-foreground' : 'text-destructive'}`}>
+                    {quickEditForm.reason.trim().length < 5 
+                      ? `Rejection reason is required (${quickEditForm.reason.trim().length}/5 characters minimum)`
+                      : `✓ Reason provided (${quickEditForm.reason.trim().length} characters)`
+                    }
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -1422,10 +1441,77 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
             </Button>
             <Button
               onClick={handleQuickEditSubmit}
-              disabled={quickEditLoading || !quickEditForm.status}
+              disabled={
+                quickEditLoading || 
+                !quickEditForm.status ||
+                (quickEditForm.status === 'REJECTED' && quickEditForm.reason.trim().length < 5)
+              }
             >
               {quickEditLoading && <RefreshCw className="h-4 w-4 mr-2 animate-spin" />}
               Update Status
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Rejection Modal */}
+      <Dialog open={bulkRejectModal.open} onOpenChange={(open) => !open && setBulkRejectModal({ open: false, reason: '' })}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              Reject {selectedSubmissions.length} Submission{selectedSubmissions.length > 1 ? 's' : ''}
+            </DialogTitle>
+            <DialogDescription>
+              This will mark the selected submission{selectedSubmissions.length > 1 ? 's' : ''} as rejected. Please provide a reason.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="bulkRejectReason">
+                Rejection Reason <span className="text-destructive">* (required)</span>
+              </Label>
+              <Textarea
+                id="bulkRejectReason"
+                placeholder="Enter rejection reason (required, min 5 characters)..."
+                value={bulkRejectModal.reason}
+                onChange={(e) => setBulkRejectModal(prev => ({ ...prev, reason: e.target.value }))}
+                rows={4}
+              />
+              <p className={`text-xs ${bulkRejectModal.reason.trim().length >= 5 ? 'text-muted-foreground' : 'text-destructive'}`}>
+                {bulkRejectModal.reason.trim().length < 5 
+                  ? `Rejection reason is required (${bulkRejectModal.reason.trim().length}/5 characters minimum)`
+                  : `✓ Reason provided (${bulkRejectModal.reason.trim().length} characters)`
+                }
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setBulkRejectModal({ open: false, reason: '' })} 
+              disabled={bulkRejectLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (bulkRejectModal.reason.trim().length < 5) return
+                setBulkRejectLoading(true)
+                try {
+                  await handleBulkAction('updateStatus', { status: 'REJECTED', reason: bulkRejectModal.reason.trim() })
+                  setBulkRejectModal({ open: false, reason: '' })
+                } finally {
+                  setBulkRejectLoading(false)
+                }
+              }}
+              disabled={bulkRejectLoading || bulkRejectModal.reason.trim().length < 5}
+            >
+              {bulkRejectLoading && <RefreshCw className="h-4 w-4 mr-2 animate-spin" />}
+              Reject Submission{selectedSubmissions.length > 1 ? 's' : ''}
             </Button>
           </DialogFooter>
         </DialogContent>

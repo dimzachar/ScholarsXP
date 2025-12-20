@@ -925,6 +925,19 @@ export async function bulkUpdateSubmissions(
               }
             })
             regularUpdated = update.count
+
+            // When rejecting submissions, clean up pending review assignments
+            if (normalized === 'REJECTED') {
+              const deletedAssignments = await tx.reviewAssignment.deleteMany({
+                where: {
+                  submissionId: { in: regularIds },
+                  status: { in: ['PENDING', 'IN_PROGRESS'] }
+                }
+              })
+              if (deletedAssignments.count > 0) {
+                console.log(`🗑️ Cleaned up ${deletedAssignments.count} pending review assignments for rejected submissions`)
+              }
+            }
           }
 
           if (legacyIds.length > 0) {
@@ -957,6 +970,19 @@ export async function bulkUpdateSubmissions(
 
           if (adminId) {
             if (regularIds.length > 0) {
+              // Get count of deleted assignments for audit log (if rejection)
+              let deletedAssignmentsCount = 0
+              if (normalized === 'REJECTED') {
+                const assignmentCount = await tx.reviewAssignment.count({
+                  where: {
+                    submissionId: { in: regularIds },
+                    status: 'COMPLETED'
+                  }
+                })
+                // We already deleted pending ones above, so log how many were kept
+                deletedAssignmentsCount = assignmentCount
+              }
+
               for (const id of regularIds) {
                 await tx.adminAction.create({
                   data: {
@@ -968,6 +994,7 @@ export async function bulkUpdateSubmissions(
                       subAction: 'SUBMISSION_STATUS_CHANGE',
                       newStatus: normalized,
                       reason: trimmedReason || null,
+                      ...(normalized === 'REJECTED' && { pendingAssignmentsCleaned: true })
                     }
                   }
                 })
