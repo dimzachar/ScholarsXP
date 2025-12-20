@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { logAdminAction } from '@/lib/audit-log'
+import { getWeekNumber } from '@/lib/utils'
 
 interface UpdateXpRequest {
   userId: string
@@ -55,7 +56,7 @@ async function updateXpHandler(request: AuthenticatedRequest) {
           amount: xpDifference,
           type: 'ADMIN_ADJUSTMENT',
           description: `${reason} (${oldXp} -> ${xpAmount})`,
-          weekNumber: Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000)),
+          weekNumber: getWeekNumber(new Date()),
           adminId: request.user.id,
         }
       })

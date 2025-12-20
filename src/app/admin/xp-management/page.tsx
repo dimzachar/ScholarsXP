@@ -44,6 +44,7 @@ export default function XpManagementPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [editingUser, setEditingUser] = useState<string | null>(null)
   const [newXp, setNewXp] = useState<number>(0)
+  const [reason, setReason] = useState<string>('')
   const [result, setResult] = useState<XpUpdateResult | null>(null)
   const [updating, setUpdating] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
@@ -139,7 +140,7 @@ export default function XpManagementPage() {
         body: JSON.stringify({
           userId,
           xpAmount,
-          reason: 'Admin manual adjustment'
+          reason: reason.trim() || 'Admin manual adjustment'
         })
       })
 
@@ -182,12 +183,14 @@ export default function XpManagementPage() {
   const startEditing = (user: User) => {
     setEditingUser(user.id)
     setNewXp(user.totalXp)
+    setReason('')
     setResult(null)
   }
 
   const cancelEditing = () => {
     setEditingUser(null)
     setNewXp(0)
+    setReason('')
     setResult(null)
   }
 
@@ -250,6 +253,20 @@ export default function XpManagementPage() {
                   )}
                 </div>
               </div>
+              {isEditing && (
+                <div className="mt-2 w-full">
+                  <Input
+                    type="text"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder="Reason for change..."
+                    className={cn(
+                      "text-sm w-full",
+                      isMobile ? `h-[${TOUCH_TARGET_SIZE.comfortable}px]` : "h-8"
+                    )}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Actions */}
@@ -409,11 +426,12 @@ export default function XpManagementPage() {
                 <div className="border rounded-lg overflow-hidden">
                   <div className="bg-muted/50 px-4 py-3 border-b">
                     <div className="grid grid-cols-12 gap-4 font-medium text-sm">
-                      <div className="col-span-3">User</div>
+                      <div className="col-span-2">User</div>
                       <div className="col-span-2">Discord</div>
-                      <div className="col-span-2">Role</div>
+                      <div className="col-span-1">Role</div>
                       <div className="col-span-2">Current XP</div>
-                      <div className="col-span-3">Actions</div>
+                      <div className="col-span-3">Reason</div>
+                      <div className="col-span-2">Actions</div>
                     </div>
                   </div>
 
@@ -426,7 +444,7 @@ export default function XpManagementPage() {
                       users.map((user) => (
                     <div key={user.id} className="px-4 py-3 border-b hover:bg-muted/25 transition-colors">
                       <div className="grid grid-cols-12 gap-4 items-center">
-                        <div className="col-span-3">
+                        <div className="col-span-2">
                           <div className="font-medium">{user.username}</div>
                           <div className="text-xs text-muted-foreground truncate">{user.email}</div>
                         </div>
@@ -437,7 +455,7 @@ export default function XpManagementPage() {
                           </Badge>
                         </div>
 
-                        <div className="col-span-2">
+                        <div className="col-span-1">
                           <Badge variant="secondary" className="text-xs">
                             {user.role}
                           </Badge>
@@ -449,7 +467,7 @@ export default function XpManagementPage() {
                               type="number"
                               value={newXp}
                               onChange={(e) => setNewXp(Number(e.target.value))}
-                              className="w-20 h-8 text-sm"
+                              className="w-24 h-8 text-sm"
                               min="0"
                             />
                           ) : (
@@ -458,6 +476,20 @@ export default function XpManagementPage() {
                         </div>
 
                         <div className="col-span-3">
+                          {editingUser === user.id ? (
+                            <Input
+                              type="text"
+                              value={reason}
+                              onChange={(e) => setReason(e.target.value)}
+                              placeholder="Reason for change..."
+                              className="h-8 text-sm"
+                            />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </div>
+
+                        <div className="col-span-2">
                           {editingUser === user.id ? (
                             <div className="flex gap-2">
                               <Button
