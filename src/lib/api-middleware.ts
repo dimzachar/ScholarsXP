@@ -153,10 +153,29 @@ export function validateRequiredFields(
 
 /**
  * URL validation helper
+ * 
+ * A valid submission URL must:
+ * 1. Be syntactically valid (parseable by URL constructor)
+ * 2. Have a clean path structure (no garbage at the end)
+ * 3. Not contain extra text/sentences
+ * 4. Not be from a blocked account
  */
 export function validateUrl(url: string): void {
+  // Trim the input
+  const trimmedUrl = url.trim()
+  
+  // Check for whitespace in the URL (spaces, tabs, newlines)
+  if (trimmedUrl !== url || /\s/.test(trimmedUrl)) {
+    throw new ValidationError(
+      'URL must not contain spaces or extra text. Please submit only the URL.',
+      { url }
+    )
+  }
+
+  // Parse the URL to validate basic format
+  let parsedUrl: URL
   try {
-    new URL(url)
+    parsedUrl = new URL(trimmedUrl)
   } catch {
     throw new ValidationError(
       'Invalid URL format',
@@ -164,9 +183,62 @@ export function validateUrl(url: string): void {
     )
   }
 
+  // Try to decode the full URL - malformed percent-encoding will fail here
+  try {
+    decodeURIComponent(trimmedUrl)
+  } catch {
+    throw new ValidationError(
+      'Invalid URL format. The URL contains malformed characters.',
+      { url }
+    )
+  }
+
+  // Platform-specific URL validation
+  const hostname = parsedUrl.hostname.toLowerCase()
+  const pathname = parsedUrl.pathname
+
+  // Twitter/X URL validation
+  if (hostname === 'x.com' || hostname === 'twitter.com' || hostname.endsWith('.x.com') || hostname.endsWith('.twitter.com')) {
+    // Valid Twitter URL patterns:
+    // /username/status/1234567890 (tweet)
+    // /i/status/1234567890 (tweet via /i/)
+    // /username (profile)
+    const twitterTweetPattern = /^\/[a-zA-Z0-9_]+\/status\/\d+$/
+    const twitterProfilePattern = /^\/[a-zA-Z0-9_]+\/?$/
+    
+    // Remove query string and hash for pattern matching
+    const cleanPath = pathname.split('?')[0].split('#')[0]
+    
+    if (!twitterTweetPattern.test(cleanPath) && !twitterProfilePattern.test(cleanPath)) {
+      throw new ValidationError(
+        'Invalid Twitter/X URL format. Please submit a valid tweet or profile URL.',
+        { url }
+      )
+    }
+  }
+
+  // Check for extra text in the decoded path (catches URL-encoded spaces + text)
+  try {
+    const decodedPath = decodeURIComponent(pathname + parsedUrl.search + parsedUrl.hash)
+    
+    // Pattern: space + word + (space or comma) + word = sentence/phrase appended
+    if (/\s+[a-zA-Z]+[\s,]+[a-zA-Z]+/.test(decodedPath)) {
+      throw new ValidationError(
+        'URL must not contain spaces or extra text. Please submit only the URL.',
+        { url }
+      )
+    }
+  } catch (e) {
+    if (e instanceof ValidationError) throw e
+    throw new ValidationError(
+      'Invalid URL format. The URL contains malformed characters.',
+      { url }
+    )
+  }
+
   // Check for blocked Twitter accounts
   const { isBlockedTwitterAccount } = require('./security')
-  const blockedCheck = isBlockedTwitterAccount(url)
+  const blockedCheck = isBlockedTwitterAccount(trimmedUrl)
   if (blockedCheck.blocked) {
     throw new ValidationError(
       `Submissions from @${blockedCheck.account} are not allowed. Please submit your own content.`,
