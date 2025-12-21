@@ -110,7 +110,7 @@ export async function middleware(request: NextRequest) {
     response.headers.set(
       'Content-Security-Policy',
       "default-src 'self' data: blob: https:; " +
-      "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://platform.twitter.com https://www.googletagmanager.com; " +
+      "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://platform.twitter.com https://www.googletagmanager.com https://vercel.live; " +
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
       "font-src 'self' https://fonts.gstatic.com data:; " +
       "img-src 'self' data: https: blob:; " +
