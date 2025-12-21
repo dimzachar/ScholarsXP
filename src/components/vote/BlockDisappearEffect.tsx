@@ -20,7 +20,7 @@ export function BlockDisappearEffect({
   children,
   trigger,
   onComplete,
-  duration = 20.2,
+  duration = 2.0,
 }: BlockDisappearEffectProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
