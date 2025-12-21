@@ -84,15 +84,15 @@ export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) 
 
   // Sync user data to Supabase with retry logic
   const syncUserToSupabase = useCallback(async (walletAddress?: string) => {
-    console.log('syncUserToSupabase called:', { hasPrivyUser: !!privyUser, syncInProgress: syncInProgressRef.current })
+    // console.log('syncUserToSupabase called:', { hasPrivyUser: !!privyUser, syncInProgress: syncInProgressRef.current })
     
     if (!privyUser) {
-      console.log('No privy user, skipping sync')
+      // console.log('No privy user, skipping sync')
       return
     }
     
     if (syncInProgressRef.current) {
-      console.log('Sync already in progress, skipping')
+      // console.log('Sync already in progress, skipping')
       return
     }
     
@@ -110,7 +110,7 @@ export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) 
         )
         
         // Debug: Log the full Discord account object to see available fields
-        console.log('Discord account from Privy:', JSON.stringify(discordAccount, null, 2))
+        // console.log('Discord account from Privy:', JSON.stringify(discordAccount, null, 2))
         
         // Extract wallet address from Privy if not provided
         const aptosWallet = privyUser.linkedAccounts?.find(
@@ -139,11 +139,11 @@ export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) 
           }
         }
         
-        console.log('Calling /api/auth/sync with:', { 
-          privyUserId: privyUser.id,
-          discordAvatar: avatarUrl,
-          discordUsername: discordAccount && 'username' in discordAccount ? discordAccount.username : null
-        })
+        // console.log('Calling /api/auth/sync with:', { 
+        //   privyUserId: privyUser.id,
+        //   discordAvatar: avatarUrl,
+        //   discordUsername: discordAccount && 'username' in discordAccount ? discordAccount.username : null
+        // })
         
         const response = await fetch('/api/auth/sync', {
           method: 'POST',
@@ -158,7 +158,7 @@ export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) 
           }),
         })
         
-        console.log('Sync response status:', response.status)
+        // console.log('Sync response status:', response.status)
         
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}))
@@ -166,8 +166,8 @@ export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) 
         }
         
         const data = await response.json()
-        console.log('Sync response data:', data)
-        console.log('Setting user to:', data.user)
+        // console.log('Sync response data:', data)
+        // console.log('Setting user to:', data.user)
         
         setUser(data.user)
         setLastSyncedAt(new Date())
@@ -210,7 +210,7 @@ export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) 
       if (response.ok) {
         const data = await response.json()
         if (data.user) {
-          console.log('refreshUser: updated user data:', data.user.movementWalletAddress)
+          // console.log('refreshUser: updated user data:', data.user.movementWalletAddress)
           setUser(data.user)
         }
       }

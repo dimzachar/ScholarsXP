@@ -130,7 +130,7 @@ export default function DetailedLeaderboardPage() {
       setError(null)
 
       // Debug: Check if we have auth
-      console.log('Fetching detailed leaderboard, user:', user?.id, 'privyUserId:', user?.privyUserId)
+      // console.log('Fetching detailed leaderboard, user:', user?.id, 'privyUserId:', user?.privyUserId)
 
       const params = new URLSearchParams()
       Object.entries(filters).forEach(([key, value]) => {

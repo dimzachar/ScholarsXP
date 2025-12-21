@@ -96,7 +96,7 @@ export default function LeaderboardPage() {
   // Fetch current user position (defined first to avoid TDZ in deps)
   const fetchCurrentUserPosition = useCallback(async () => {
     if (!user) {
-      console.log('No user available for position fetch')
+      // console.log('No user available for position fetch')
       return null
     }
 

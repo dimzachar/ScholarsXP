@@ -17,18 +17,18 @@ export function PrivyAuthProvider({ children }: PrivyAuthProviderProps) {
     return <>{children}</>
   }
 
+  const isDark = resolvedTheme === 'dark'
+
   return (
     <PrivyProvider
       appId={appId}
       config={{
         loginMethods: ['discord'],
         appearance: {
-          theme: resolvedTheme === 'dark' ? 'dark' : 'light',
-          accentColor: '#7C3AED',
+          theme: isDark ? 'dark' : 'light',
+          accentColor: '#E53935',
           showWalletLoginFirst: false,
         },
-        // We handle wallet creation manually in onComplete callback
-        // to ensure sync with Supabase happens atomically
       }}
     >
       {children}

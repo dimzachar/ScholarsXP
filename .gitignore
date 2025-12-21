@@ -91,8 +91,10 @@ cline_mcp_settings.json
 # OS
 Thumbs.db
 
-__tests__
+__tests__/*
+!__tests__/vote-contract.integration.test.ts
 test*
+!move/tests/
 
 
 check-env.js

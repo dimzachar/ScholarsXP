@@ -14,6 +14,7 @@ import {
   Ed25519PublicKey,
   Ed25519Signature,
 } from "@aptos-labs/ts-sdk";
+import { VOTE_CONTRACT_ADDRESS, isVoteContractEnabled } from "@/lib/movement";
 
 // Movement Testnet client (for Shinami Gas Station testing)
 const movementClient = new Aptos(new AptosConfig({
@@ -86,16 +87,30 @@ export function useSponsoredVote(): UseSponsoredVoteReturn {
         console.log('[useSponsoredVote] Account not found on-chain, using sequence 0 for new account');
       }
 
-      // Build transaction with feePayer placeholder
+      // Build transaction - use contract if deployed, otherwise fallback to self-transfer
+      let transactionData;
+      if (isVoteContractEnabled()) {
+        // Use vote contract
+        transactionData = {
+          function: `${VOTE_CONTRACT_ADDRESS}::vote::cast_vote` as `${string}::${string}::${string}`,
+          functionArguments: [
+            Array.from(new TextEncoder().encode(submissionId)),
+            voteXp,
+          ],
+        };
+      } else {
+        // Fallback: self-transfer of 0 MOVE (proof-of-participation only)
+        console.warn('[useSponsoredVote] No VOTE_CONTRACT_ADDRESS set, using self-transfer fallback');
+        transactionData = {
+          function: "0x1::aptos_account::transfer" as `${string}::${string}::${string}`,
+          functionArguments: [walletAddress, 0],
+        };
+      }
+
       const transaction = await movementClient.transaction.build.simple({
         sender: walletAddress,
         withFeePayer: true,
-        data: {
-          // Placeholder: self-transfer of 0 MOVE (no-op for testing)
-          // TODO: Replace with actual contract call when deployed
-          function: "0x1::aptos_account::transfer",
-          functionArguments: [walletAddress, 0],
-        },
+        data: transactionData,
         options: {
           expireTimestamp: expirationTime,
           accountSequenceNumber,

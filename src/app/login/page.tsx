@@ -14,11 +14,11 @@ export default function LoginPage() {
   const hasRedirected = useRef(false)
 
   useEffect(() => {
-    console.log('Login page state:', { isAuthenticated, privyLoading, syncLoading, hasUser: !!user, hasRedirected: hasRedirected.current })
+    // console.log('Login page state:', { isAuthenticated, privyLoading, syncLoading, hasUser: !!user, hasRedirected: hasRedirected.current })
     
     // Redirect to dashboard once authenticated AND synced (only once)
     if (isAuthenticated && !privyLoading && !syncLoading && user && !hasRedirected.current) {
-      console.log('Redirecting to dashboard...')
+      // console.log('Redirecting to dashboard...')
       hasRedirected.current = true
       // Use window.location.assign for guaranteed navigation
       window.location.assign('/dashboard')

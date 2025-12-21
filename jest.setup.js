@@ -1,4 +1,10 @@
 import '@testing-library/jest-dom'
+import { TextEncoder, TextDecoder } from 'util'
+import 'cross-fetch/polyfill'
+
+// Polyfill TextEncoder/TextDecoder for Node.js test environment
+global.TextEncoder = TextEncoder
+global.TextDecoder = TextDecoder
 
 // Mock Web APIs for Next.js server components
 global.Request = global.Request || class Request {}

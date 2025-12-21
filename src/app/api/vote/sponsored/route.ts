@@ -3,6 +3,8 @@
  * 
  * Accepts a signed transaction from the frontend, sponsors gas via Shinami,
  * and submits to the Movement Network.
+ * 
+ * With Option 2 contract: checks on-chain duplicate before sponsoring to avoid wasted gas.
  */
 
 import { NextResponse } from "next/server";
@@ -12,6 +14,8 @@ import {
 } from "@/lib/services/shinami-gas";
 import { prisma } from "@/lib/prisma";
 import { withAuth, AuthenticatedRequest } from "@/lib/auth-middleware";
+import { checkHasVotedOnChain } from "@/lib/vote-transactions";
+import { isVoteContractEnabled } from "@/lib/movement";
 
 async function handleSponsoredVote(request: AuthenticatedRequest) {
   try {
@@ -63,7 +67,18 @@ async function handleSponsoredVote(request: AuthenticatedRequest) {
       );
     }
 
-    // Check if user has already voted (via any of their wallets)
+    // Check on-chain first if contract is deployed (avoids wasting Shinami gas)
+    if (isVoteContractEnabled()) {
+      const alreadyVotedOnChain = await checkHasVotedOnChain(walletAddress, submissionId);
+      if (alreadyVotedOnChain) {
+        return NextResponse.json(
+          { error: "Already voted on this submission (on-chain)" },
+          { status: 409 }
+        );
+      }
+    }
+
+    // Check if user has already voted (via any of their wallets) - DB backup check
     const allUserWallets = await prisma.$queryRaw<Array<{ address: string }>>`
       SELECT address FROM "UserWallet" WHERE "userId" = ${userId}::uuid
     `;

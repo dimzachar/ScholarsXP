@@ -17,6 +17,8 @@ import { PrivyAuthSyncProvider } from '@/contexts/PrivyAuthSyncContext'
 const oxanium = Oxanium({
   subsets: ['latin'],
   variable: '--font-oxanium',
+  display: 'swap',
+  preload: false,
 })
 
 export const metadata: Metadata = {
