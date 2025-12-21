@@ -106,7 +106,7 @@ export async function middleware(request: NextRequest) {
 
   // Content Security Policy for enhanced security
   if (process.env.NODE_ENV === 'production') {
-    // Balanced CSP: allow inline but no eval, and restrict to known origins
+    // Balanced CSP: allow inline but no eval, and restrict to known origins, vote
     response.headers.set(
       'Content-Security-Policy',
       "default-src 'self' data: blob: https:; " +
