@@ -177,6 +177,7 @@ export default function VotePage() {
     const [loading, setLoading] = useState(true)
     const [voting, setVoting] = useState(false)
     const [animating, setAnimating] = useState(false)
+    const [wasConnecting, setWasConnecting] = useState(false)
 
     const currentCase = cases[currentIndex] || null
     const remaining = cases.length - currentIndex
@@ -184,6 +185,14 @@ export default function VotePage() {
     
     // Combined loading state - wait for all data to be ready
     const isInitializing = walletLoading || userLoading || (!walletFetched && !!user)
+
+    // Show toast when external wallet connects after user initiated connection
+    useEffect(() => {
+        if (wasConnecting && externalWalletConnected) {
+            toast.success('Wallet connected! Click the vote button again to submit your vote.')
+            setWasConnecting(false)
+        }
+    }, [wasConnecting, externalWalletConnected])
 
     // Fetch primary wallet from UserWallet table
     useEffect(() => {
@@ -261,6 +270,7 @@ export default function VotePage() {
             const installedWallet = nightlyWallet || wallets?.find(w => w.readyState === 'Installed')
             if (installedWallet) {
                 toast.info('Connecting wallet...')
+                setWasConnecting(true)
                 connectWallet(installedWallet.name)
                 return false
             } else {
