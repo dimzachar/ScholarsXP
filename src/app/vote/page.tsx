@@ -189,6 +189,7 @@ export default function VotePage() {
     // Show toast when external wallet connects after user initiated connection
     useEffect(() => {
         if (wasConnecting && externalWalletConnected) {
+            toast.dismiss('wallet-connecting')
             toast.success('Wallet connected! Click the vote button again to submit your vote.')
             setWasConnecting(false)
         }
@@ -269,7 +270,7 @@ export default function VotePage() {
             const nightlyWallet = wallets?.find(w => w.name.toLowerCase().includes('nightly') && w.readyState === 'Installed')
             const installedWallet = nightlyWallet || wallets?.find(w => w.readyState === 'Installed')
             if (installedWallet) {
-                toast.info('Connecting wallet...')
+                toast.info('Connecting wallet...', { id: 'wallet-connecting' })
                 setWasConnecting(true)
                 connectWallet(installedWallet.name)
                 return false
