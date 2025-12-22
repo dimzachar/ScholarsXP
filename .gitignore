@@ -151,4 +151,9 @@ backup/*
 debug-*
 _drafts/*
 
-fucks-or-sucks-main/*
+# Move framework
+move/build/
+move/.movement/
+
+# production
+/build

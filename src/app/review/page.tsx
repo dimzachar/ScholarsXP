@@ -409,7 +409,7 @@ export default function ReviewPage() {
                 <div>
                   <p className="font-medium">Task A — Twitter</p>
                   <p className="text-muted-foreground">
-                    Review Twitter threads only. Look for a cohesive thread with 5+ tweets.
+                    Review Twitter threads (5+ tweets) OR Twitter Articles.
                   </p>
                 </div>
               </div>

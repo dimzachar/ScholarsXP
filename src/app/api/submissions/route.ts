@@ -180,6 +180,15 @@ export const POST = withAPIOptimization(
 
     if (insertError || !submission) {
       console.error('❌ Error creating submission:', insertError)
+      
+      // Check if it's a unique constraint violation (duplicate URL)
+      if (insertError?.code === '23505' || insertError?.message?.includes('duplicate key') || insertError?.message?.includes('unique constraint')) {
+        throw new ConflictError('This URL has already been submitted', {
+          duplicateType: 'URL_DUPLICATE',
+          error: insertError?.message
+        })
+      }
+      
       throw new BusinessLogicError('Failed to create submission', {
         error: insertError?.message,
         code: insertError?.code
