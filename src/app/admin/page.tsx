@@ -773,7 +773,7 @@ export default function AdminDashboardPage() {
                         <div className="space-y-2">
                           <div className="flex justify-between">
                             <span className="text-sm text-muted-foreground">XP Awarded This Week</span>
-                            <span className="font-medium">{stats?.totalXpAwarded || 0}</span>
+                            <span className="font-medium">{(stats?.totalXpAwarded || 0).toLocaleString()}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-sm text-muted-foreground">Active Participants</span>

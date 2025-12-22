@@ -556,7 +556,7 @@ export default function NotificationCenter() {
 
                                 {(notification.metadata ?? notification.data)?.xpAmount && (
                                   <Badge variant="outline" className={`${isMobile ? 'text-xs px-1.5 py-0.5' : 'text-xs'}`}>
-                                    +{(notification.metadata ?? notification.data)?.xpAmount} XP
+                                    +{(notification.metadata ?? notification.data)?.xpAmount?.toLocaleString()} XP
                                   </Badge>
                                 )}
                               </div>

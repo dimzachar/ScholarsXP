@@ -144,7 +144,7 @@ export default function GoalsPage() {
             <CardContent className="p-4 text-center">
               <Zap className="h-8 w-8 text-green-600 mx-auto mb-2" />
               <div className="text-2xl font-bold text-green-700">
-                {goalsData?.currentWeekXp || 0}
+                {(goalsData?.currentWeekXp || 0).toLocaleString()}
               </div>
               <div className="text-sm text-green-600">Week XP</div>
             </CardContent>
@@ -154,7 +154,7 @@ export default function GoalsPage() {
             <CardContent className="p-4 text-center">
               <TrendingUp className="h-8 w-8 text-purple-600 mx-auto mb-2" />
               <div className="text-2xl font-bold text-purple-700">
-                {goalsData?.projectedWeeklyXp || 0}
+                {(goalsData?.projectedWeeklyXp || 0).toLocaleString()}
               </div>
               <div className="text-sm text-purple-600">Projected XP</div>
             </CardContent>
@@ -353,7 +353,7 @@ export default function GoalsPage() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-primary">{week.xpEarned} XP</p>
+                      <p className="font-bold text-primary">{week.xpEarned.toLocaleString()} XP</p>
                       <p className="text-xs text-muted-foreground">
                         {week.submissions} submissions, {week.reviews} reviews
                       </p>

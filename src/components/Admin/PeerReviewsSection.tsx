@@ -253,7 +253,7 @@ export default function PeerReviewsSection({
                     {/* XP Score */}
                     <div className="text-center p-3 bg-muted/50 rounded">
                       <div className={`text-2xl font-bold ${getScoreColor(review.xpScore, review.qualityTier)}`}>
-                        {review.xpScore}
+                        {review.xpScore?.toLocaleString()}
                       </div>
                       <div className="text-sm text-muted-foreground">XP Score</div>
                       {getScoreBadge(review.xpScore, review.qualityTier)}

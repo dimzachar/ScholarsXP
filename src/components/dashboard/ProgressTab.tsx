@@ -49,7 +49,7 @@ export function ProgressTab({
 
   const timeframeCounts = React.useMemo(() => {
     const aggregateMetric = (metric: 'submissions' | 'reviews' | 'streaks') =>
-      weeklyTrends.reduce((sum: number, week: any) => sum + (week?.[metric] || 0), 0)
+      weeklyTrends.reduce((sum: number, week: unknown) => sum + (week?.[metric] || 0), 0)
 
     const latestWeek = weeklyTrends[weeklyTrends.length - 1] || {}
 
@@ -139,16 +139,16 @@ export function ProgressTab({
                         // check if we have current week data from analytics
                         const currentWeekXp = profileData?.profile?.currentWeekXp
                         if (currentWeekXp !== undefined && currentWeekXp > 0) {
-                          return currentWeekXp
+                          return currentWeekXp.toLocaleString()
                         }
                         // If currentWeekXp is not available or 0, use analytics breakdown total
                         // but only if we have current week analytics data
-                        return analyticsData?.breakdown?.total || 0
+                        return (analyticsData?.breakdown?.total || 0).toLocaleString()
                       } else if (selectedTimeframe === 'last_12_weeks') {
-                        return analyticsData?.breakdown?.total || 0
+                        return (analyticsData?.breakdown?.total || 0).toLocaleString()
                       } else {
                         // all_time - use authoritative User.totalXp
-                        return profileData?.profile?.totalXp || analyticsData?.breakdown?.total || 0
+                        return (profileData?.profile?.totalXp || analyticsData?.breakdown?.total || 0).toLocaleString()
                       }
                     })()}
                   </p>

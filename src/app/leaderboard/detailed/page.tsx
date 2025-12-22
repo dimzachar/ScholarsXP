@@ -698,7 +698,7 @@ export default function DetailedLeaderboardPage() {
                         </TableCell>
                         <TableCell className="text-center">
                           <div className={`font-bold ${getXpColor(submission.aiXp)}`}>
-                            {submission.aiXp}
+                            {submission.aiXp?.toLocaleString()}
                           </div>
                           {submission.originalityScore && (
                             <div className="text-xs text-muted-foreground">
@@ -708,7 +708,7 @@ export default function DetailedLeaderboardPage() {
                         </TableCell>
                         <TableCell className="text-center">
                           <div className={`font-bold ${getXpColor(submission.peerXp)}`}>
-                            {submission.peerXp || 'N/A'}
+                            {submission.peerXp?.toLocaleString() || 'N/A'}
                           </div>
                           {submission.consensusScore && (
                             <div className="text-xs text-muted-foreground">
@@ -718,7 +718,7 @@ export default function DetailedLeaderboardPage() {
                         </TableCell>
                         <TableCell className="text-center">
                           <div className={`font-bold text-lg ${getXpColor(submission.finalXp)}`}>
-                            {submission.finalXp || 'Pending'}
+                            {submission.finalXp?.toLocaleString() || 'Pending'}
                           </div>
                         </TableCell>
                         <TableCell>

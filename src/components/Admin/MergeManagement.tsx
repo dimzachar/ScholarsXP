@@ -281,7 +281,7 @@ export default function MergeManagement() {
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-medium">
-                          {merge.xpTransferred > 0 ? `${merge.xpTransferred} XP` : 'No XP'}
+                          {merge.xpTransferred > 0 ? `${merge.xpTransferred.toLocaleString()} XP` : 'No XP'}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {formatDate(merge.startedAt)}
@@ -343,7 +343,7 @@ export default function MergeManagement() {
                       </div>
                       <div>
                         <span className="text-muted-foreground">XP Transferred:</span>
-                        <p className="font-medium">{merge.xpTransferred}</p>
+                        <p className="font-medium">{merge.xpTransferred?.toLocaleString()}</p>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Processing Time:</span>

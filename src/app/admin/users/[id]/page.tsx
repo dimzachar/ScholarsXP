@@ -552,7 +552,7 @@ export default function UserProfilePage() {
                         </Badge>
                         <div className="text-right">
                           <p className={isMobile ? "font-medium text-sm" : "font-medium"}>
-                            {submission.finalXp} XP
+                            {submission.finalXp.toLocaleString()} XP
                           </p>
                         </div>
                       </div>
@@ -597,7 +597,7 @@ export default function UserProfilePage() {
                       </div>
                       <div className={isMobile ? "flex justify-between items-center" : "text-right"}>
                         <p className={isMobile ? "font-medium text-sm" : "font-medium"}>
-                          {review.xpScore} XP
+                          {review.xpScore.toLocaleString()} XP
                         </p>
                         <p className="text-xs text-muted-foreground">Review Score</p>
                       </div>
@@ -644,7 +644,7 @@ export default function UserProfilePage() {
                     Weekly XP
                   </span>
                   <span className={isMobile ? "font-medium text-sm" : "font-medium"}>
-                    {user.metrics.weeklyXp}
+                    {user.metrics.weeklyXp.toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between">

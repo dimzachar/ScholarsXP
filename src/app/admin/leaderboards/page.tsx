@@ -232,7 +232,7 @@ export default function AdminLeaderboardsPage() {
                       )}
                       <span className="text-sm font-medium">{w.user?.username || w.userId}</span>
                       {typeof w.xpAwarded === 'number' && (
-                        <span className="text-xs text-muted-foreground">#{w.rank} · {w.xpAwarded} XP</span>
+                        <span className="text-xs text-muted-foreground">#{w.rank} · {w.xpAwarded.toLocaleString()} XP</span>
                       )}
                     </div>
                   ))}
@@ -508,7 +508,7 @@ export default function AdminLeaderboardsPage() {
                       history.map((w) => (
                         <TableRow key={w.id}>
                           <TableCell>{w.month}</TableCell>
-                          <TableCell>{w.user?.username || w.userId} {w.rank ? `( #${w.rank}${typeof w.xpAwarded === 'number' ? ` · ${w.xpAwarded} XP` : ''} )` : ''}</TableCell>
+                          <TableCell>{w.user?.username || w.userId} {w.rank ? `( #${w.rank}${typeof w.xpAwarded === 'number' ? ` · ${w.xpAwarded.toLocaleString()} XP` : ''} )` : ''}</TableCell>
                           <TableCell>{new Date(w.awardedAt).toLocaleString()}</TableCell>
                           <TableCell className="text-right">
                             <DropdownMenu>

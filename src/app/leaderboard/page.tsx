@@ -677,7 +677,7 @@ export default function LeaderboardPage() {
                           <TrendingUp className="h-6 w-6 text-accent-foreground" />
                         </div>
                         <div>
-                          <p className="text-2xl font-bold text-foreground">{Math.round(weeklyStats.averageXp)}</p>
+                          <p className="text-2xl font-bold text-foreground">{Math.round(weeklyStats.averageXp).toLocaleString()}</p>
                           <p className="text-muted-foreground">Average XP</p>
                         </div>
                       </div>
@@ -707,7 +707,7 @@ export default function LeaderboardPage() {
                           <Badge className="absolute -top-2 -right-2 bg-secondary">2nd</Badge>
                         </div>
                         <p className="font-semibold truncate max-w-[8rem] sm:max-w-none mx-auto">{weeklyStats.topPerformers[1]?.username}</p>
-                        <p className="text-sm text-muted-foreground">{weeklyStats.topPerformers[1]?.weeklyXp} XP</p>
+                        <p className="text-sm text-muted-foreground">{weeklyStats.topPerformers[1]?.weeklyXp.toLocaleString()} XP</p>
                       </div>
 
                       {/* 1st Place */}
@@ -722,7 +722,7 @@ export default function LeaderboardPage() {
                           <Crown className="absolute -top-4 left-1/2 transform -translate-x-1/2 h-6 w-6 text-primary" />
                         </div>
                         <p className="font-bold text-lg truncate max-w-[10rem] sm:max-w-none mx-auto">{weeklyStats.topPerformers[0]?.username}</p>
-                        <p className="text-primary font-semibold">{weeklyStats.topPerformers[0]?.weeklyXp} XP</p>
+                        <p className="text-primary font-semibold">{weeklyStats.topPerformers[0]?.weeklyXp.toLocaleString()} XP</p>
                       </div>
 
                       {/* 3rd Place */}
@@ -736,7 +736,7 @@ export default function LeaderboardPage() {
                           <Badge className="absolute -top-2 -right-2 bg-accent">3rd</Badge>
                         </div>
                         <p className="font-semibold truncate max-w-[8rem] sm:max-w-none mx-auto">{weeklyStats.topPerformers[2]?.username}</p>
-                        <p className="text-sm text-muted-foreground">{weeklyStats.topPerformers[2]?.weeklyXp} XP</p>
+                        <p className="text-sm text-muted-foreground">{weeklyStats.topPerformers[2]?.weeklyXp.toLocaleString()} XP</p>
                       </div>
                     </div>
                   </CardContent>
@@ -786,7 +786,7 @@ export default function LeaderboardPage() {
                           </div>
 
                           <div className="w-full sm:w-auto sm:text-right">
-                            <p className="text-base sm:text-lg font-bold text-primary">{entry.weeklyXp} XP</p>
+                            <p className="text-base sm:text-lg font-bold text-primary">{entry.weeklyXp.toLocaleString()} XP</p>
                             <p className="text-xs text-muted-foreground">this week</p>
                           </div>
                         </div>
@@ -854,7 +854,7 @@ export default function LeaderboardPage() {
                           <TrendingUp className="h-6 w-6 text-accent-foreground" />
                         </div>
                         <div>
-                          <p className="text-2xl font-bold text-foreground">{Math.round(allTimeStats.averageXp)}</p>
+                          <p className="text-2xl font-bold text-foreground">{Math.round(allTimeStats.averageXp).toLocaleString()}</p>
                           <p className="text-muted-foreground">Average XP</p>
                         </div>
                       </div>

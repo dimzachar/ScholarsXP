@@ -179,7 +179,7 @@ export default function XpModificationDialog({
             <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
               <div className="text-center">
                 <div className="text-sm text-muted-foreground">Current XP</div>
-                <div className="text-2xl font-bold">{currentXp}</div>
+                <div className="text-2xl font-bold">{currentXp.toLocaleString()}</div>
               </div>
               <div className="text-center">
                 <div className="text-sm text-muted-foreground">New XP</div>
@@ -188,7 +188,7 @@ export default function XpModificationDialog({
                   isIncrease ? 'text-green-600' : 
                   xpDifference < 0 ? 'text-red-600' : 'text-blue-600'
                 }`}>
-                  {isNaN(parseInt(newXp)) ? '—' : parseInt(newXp)}
+                  {isNaN(parseInt(newXp)) ? '—' : parseInt(newXp).toLocaleString()}
                 </div>
               </div>
             </div>
@@ -199,7 +199,7 @@ export default function XpModificationDialog({
                 isIncrease ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
               }`}>
                 <div className="font-medium">
-                  {isIncrease ? '+' : ''}{xpDifference} XP change
+                  {isIncrease ? '+' : ''}{xpDifference.toLocaleString()} XP change
                 </div>
                 {isSignificantChange && (
                   <div className="text-sm">

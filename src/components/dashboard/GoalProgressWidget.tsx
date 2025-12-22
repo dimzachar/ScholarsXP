@@ -117,7 +117,7 @@ export function GoalProgressWidget({
                     </span>
                     {showDetails && goal.xpEarned && (
                       <Badge variant="outline" className="text-xs">
-                        {goal.xpEarned} XP
+                        {goal.xpEarned.toLocaleString()} XP
                       </Badge>
                     )}
                   </div>

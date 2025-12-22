@@ -344,7 +344,7 @@ export default function AnalyticsPage() {
                           </div>
                           <div className="flex justify-between text-sm">
                             <span>Average Transaction</span>
-                            <span>{analyticsData.xpBreakdown.summary.averageTransactionValue} XP</span>
+                            <span>{analyticsData.xpBreakdown.summary.averageTransactionValue.toLocaleString()} XP</span>
                           </div>
                         </div>
                       </div>

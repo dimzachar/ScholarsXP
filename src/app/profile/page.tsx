@@ -266,7 +266,7 @@ export default function ProfilePage() {
                 <Zap className="h-6 w-6" />
               </div>
               <div>
-                <span className="text-3xl font-bold tracking-tight">{profile.totalXp}</span>
+                <span className="text-3xl font-bold tracking-tight">{profile.totalXp.toLocaleString()}</span>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1">Total XP</p>
               </div>
             </CardContent>
@@ -302,7 +302,7 @@ export default function ProfilePage() {
                 <TrendingUp className="h-6 w-6" />
               </div>
               <div>
-                <span className="text-3xl font-bold tracking-tight">{profile.currentWeekXp}</span>
+                <span className="text-3xl font-bold tracking-tight">{profile.currentWeekXp.toLocaleString()}</span>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1">Week XP</p>
               </div>
             </CardContent>

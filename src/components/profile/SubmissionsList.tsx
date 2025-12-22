@@ -236,7 +236,7 @@ export function SubmissionsList({ submissions }: SubmissionsListProps) {
                                             {(sub.xpAwarded || sub.finalXp) && (
                                                 <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/20 border-0 px-2 py-0.5 text-xs font-medium flex items-center gap-1">
                                                     <Award className="h-3 w-3" />
-                                                    {sub.xpAwarded ?? sub.finalXp} XP
+                                            {(sub.xpAwarded ?? sub.finalXp)?.toLocaleString()} XP
                                                 </Badge>
                                             )}
                                         </div>

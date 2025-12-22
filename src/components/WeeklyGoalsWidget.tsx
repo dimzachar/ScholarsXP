@@ -43,7 +43,7 @@ export default function WeeklyGoalsWidget({
   showDetails = true
 }: WeeklyGoalsWidgetProps) {
   const [selectedTab, setSelectedTab] = useState('overview')
-  const [weeklyData, setWeeklyData] = useState<any>(null)
+  const [weeklyData, setWeeklyData] = useState<unknown>(null)
 
   // Calculate week progress
   const currentWeek = Math.ceil(new Date().getDate() / 7)
@@ -149,13 +149,13 @@ export default function WeeklyGoalsWidget({
               <div className="grid grid-cols-2 gap-4">
                 <div className="text-center p-4 bg-primary/10 rounded-lg">
                   <div className="text-2xl font-bold text-primary">
-                    {currentWeekXp}
+                    {currentWeekXp.toLocaleString()}
                   </div>
                   <div className="text-sm text-primary/80">Current XP</div>
                 </div>
                 <div className="text-center p-4 bg-green-50 rounded-lg">
                   <div className="text-2xl font-bold text-green-600">
-                    {maxPossibleXp}
+                    {maxPossibleXp.toLocaleString()}
                   </div>
                   <div className="text-sm text-green-600">Max Possible</div>
                 </div>
@@ -213,7 +213,7 @@ export default function WeeklyGoalsWidget({
                           <div>
                             <h4 className="font-medium">{details.name}</h4>
                             <p className="text-xs text-muted-foreground">
-                              {earnedFromThisTask}/{potentialFromThisTask} XP
+                              {earnedFromThisTask.toLocaleString()}/{potentialFromThisTask.toLocaleString()} XP
                             </p>
                           </div>
                         </div>
@@ -275,7 +275,7 @@ export default function WeeklyGoalsWidget({
                     {projectedWeeklyXp > currentWeekXp && (
                       <div className="flex items-center gap-2">
                         <Zap className="h-4 w-4" />
-                        <span>Projected to earn {projectedWeeklyXp} XP this week based on your pace.</span>
+                        <span>Projected to earn {projectedWeeklyXp.toLocaleString()} XP this week based on your pace.</span>
                       </div>
                     )}
                   </div>
@@ -300,7 +300,7 @@ export default function WeeklyGoalsWidget({
                     {currentWeekXp < maxPossibleXp * 0.5 && (
                       <div className="flex items-center gap-2">
                         <ChevronRight className="h-4 w-4" />
-                        <span>You have {Math.round((maxPossibleXp - earnedXp) / 2)} XP potential remaining.</span>
+                        <span>You have {Math.round((maxPossibleXp - earnedXp) / 2).toLocaleString()} XP potential remaining.</span>
                       </div>
                     )}
                   </div>
@@ -316,7 +316,7 @@ export default function WeeklyGoalsWidget({
                   </div>
                   <div className="text-center p-3 bg-orange-50 rounded-lg">
                     <div className="text-lg font-bold text-orange-600">
-                      {Math.round(currentWeekXp / Math.max(currentDayOfWeek, 1))}
+                      {Math.round(currentWeekXp / Math.max(currentDayOfWeek, 1)).toLocaleString()}
                     </div>
                     <div className="text-xs text-orange-600">Daily Avg XP</div>
                   </div>

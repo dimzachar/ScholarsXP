@@ -1225,7 +1225,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
                           </div>
                           <div className="flex items-center justify-between border-t pt-1">
                             <span className="text-purple-600 font-medium">Final:</span>
-                            <span className="font-bold">{submission.finalXp || 'Pending'}</span>
+                            <span className="font-bold">{submission.finalXp?.toLocaleString() || 'Pending'}</span>
                           </div>
                         </div>
                       </TableCell>

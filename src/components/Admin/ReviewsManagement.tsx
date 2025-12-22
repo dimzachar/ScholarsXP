@@ -247,7 +247,7 @@ export default function ReviewsManagement() {
                                                             <div className="flex flex-col gap-1.5">
                                                                 <div className="flex items-center gap-2">
                                                                     <span className={getScoreColor(review.xpScore)}>
-                                                                        {review.xpScore} XP
+                                                                        {review.xpScore.toLocaleString()} XP
                                                                     </span>
                                                                     {review.qualityRating && (
                                                                         <div className="flex items-center gap-0.5">

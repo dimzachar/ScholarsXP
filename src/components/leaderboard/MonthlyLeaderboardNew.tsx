@@ -103,7 +103,7 @@ export default function MonthlyLeaderboard() {
                         <TrendingUp className="h-6 w-6 text-accent-foreground" />
                       </div>
                       <div>
-                        <p className="text-2xl font-bold text-foreground">{standings.length ? Math.round(standings.reduce((s, r) => s + (r.total || 0), 0) / standings.length) : 0}</p>
+                        <p className="text-2xl font-bold text-foreground">{standings.length ? Math.round(standings.reduce((s, r) => s + (r.total || 0), 0) / standings.length).toLocaleString() : 0}</p>
                         <p className="text-muted-foreground">Average XP</p>
                       </div>
                     </div>
@@ -118,7 +118,7 @@ export default function MonthlyLeaderboard() {
                   {winners.sort((a,b) => (a.rank||0) - (b.rank||0)).map((w) => {
                     const entry = standings.find(s => s.userId === w.userId)
                     const username = entry?.user?.username || w.userId
-                    const label = `#${w.rank} · ${w.xpAwarded || (w.rank===1?2000:w.rank===2?1500:1000)} XP`
+                    const label = `#${w.rank} · ${(w.xpAwarded || (w.rank===1?2000:w.rank===2?1500:1000)).toLocaleString()} XP`
                     return (
                       <div key={w.id} className="flex items-center gap-2 px-3 py-1 rounded-full bg-muted/60">
                         {w.rank === 1 ? (
@@ -174,7 +174,7 @@ export default function MonthlyLeaderboard() {
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="text-lg font-bold text-primary">{s.total} XP</p>
+                              <p className="text-lg font-bold text-primary">{s.total.toLocaleString()} XP</p>
                               <p className="text-xs text-muted-foreground">this month</p>
                             </div>
                           </div>

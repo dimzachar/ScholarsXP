@@ -261,7 +261,7 @@ export default function ReviewerContributions({
                               <AlertTriangle className="h-3 w-3 text-red-600" />
                             )}
                             <div className={`font-medium ${getScoreColor(review.xpScore)}`}>
-                              {review.xpScore}
+                              {review.xpScore?.toLocaleString()}
                             </div>
                           </div>
                         </div>

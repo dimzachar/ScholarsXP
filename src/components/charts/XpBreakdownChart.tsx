@@ -251,7 +251,7 @@ export default function XpBreakdownChart({
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
-        <CardDescription>{timeframe} • {data.total} Total XP</CardDescription>
+        <CardDescription>{timeframe} • {data.total.toLocaleString()} Total XP</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
@@ -274,7 +274,7 @@ export default function XpBreakdownChart({
                     strokeWidth="3"
                     className="hover:opacity-80 transition-opacity cursor-pointer"
                   >
-                    <title>{slice.name}: {slice.value} XP ({slice.percentage.toFixed(1)}%)</title>
+                    <title>{slice.name}: {slice.value.toLocaleString()} XP ({slice.percentage.toFixed(1)}%)</title>
                   </path>
                 ))}
 
@@ -319,7 +319,7 @@ export default function XpBreakdownChart({
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center">
                   <div className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-gray-900">
-                    {data.total}
+                    {data.total.toLocaleString()}
                   </div>
                   <div className="text-sm text-gray-600 dark:text-gray-700">
                     Total XP
@@ -345,7 +345,7 @@ export default function XpBreakdownChart({
                     {slice.percentage.toFixed(1)}%
                   </span>
                   <Badge variant="outline" className={`${slice.textColor} text-xs`}>
-                    {slice.rawValue >= 0 ? '+' : '-'}{slice.value} XP
+                    {slice.rawValue >= 0 ? '+' : '-'}{slice.value.toLocaleString()} XP
                   </Badge>
                 </div>
               </div>
@@ -360,7 +360,7 @@ export default function XpBreakdownChart({
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium">{category.name}</span>
                   <span className={`text-sm font-bold ${category.textColor}`}>
-                    {category.rawValue >= 0 ? '+' : '-'}{category.value} XP
+                    {category.rawValue >= 0 ? '+' : '-'}{category.value.toLocaleString()} XP
                   </span>
                 </div>
                 <Progress 

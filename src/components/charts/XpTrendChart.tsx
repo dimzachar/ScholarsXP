@@ -187,7 +187,7 @@ export default function XpTrendChart({
           </div>
           <div className="text-right">
             <div className="text-2xl font-bold">
-              {Math.round(recentAvg)}
+              {Math.round(recentAvg).toLocaleString()}
             </div>
             <div className={`text-sm flex items-center gap-1 ${
               isPositiveTrend ? 'text-success' : isNegativeTrend ? 'text-destructive' : 'text-muted-foreground'
@@ -316,25 +316,25 @@ export default function XpTrendChart({
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="text-center p-3 bg-blue-50 rounded-lg">
                   <div className="text-lg font-bold text-blue-600">
-                    {totalXp}
+                    {totalXp.toLocaleString()}
                   </div>
                   <div className="text-xs text-blue-600">Total XP</div>
                 </div>
                 <div className="text-center p-3 bg-green-50 rounded-lg">
                   <div className="text-lg font-bold text-green-600">
-                    {submissionsValue}
+                    {submissionsValue.toLocaleString()}
                   </div>
                   <div className="text-xs text-green-600">Submissions</div>
                 </div>
                 <div className="text-center p-3 bg-purple-50 rounded-lg">
                   <div className="text-lg font-bold text-purple-600">
-                    {reviewsValue}
+                    {reviewsValue.toLocaleString()}
                   </div>
                   <div className="text-xs text-purple-600">Reviews</div>
                 </div>
                 <div className="text-center p-3 bg-orange-50 rounded-lg">
                   <div className="text-lg font-bold text-orange-600">
-                    {averageXp}
+                    {averageXp.toLocaleString()}
                   </div>
                   <div className="text-xs text-orange-600">Avg/Week</div>
                 </div>
@@ -346,11 +346,11 @@ export default function XpTrendChart({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 text-xs sm:text-sm">
                   <div className="flex justify-between sm:block">
                     <span className="text-muted-foreground">Recent 4 weeks:</span>
-                    <span className="font-medium sm:ml-2">{Math.round(recentAvg)} XP</span>
+                    <span className="font-medium sm:ml-2">{Math.round(recentAvg).toLocaleString()} XP</span>
                   </div>
                   <div className="flex justify-between sm:block">
                     <span className="text-muted-foreground">Previous avg:</span>
-                    <span className="font-medium sm:ml-2">{Math.round(olderAvg)} XP</span>
+                    <span className="font-medium sm:ml-2">{Math.round(olderAvg).toLocaleString()} XP</span>
                   </div>
                   <div className="flex justify-between sm:block items-center">
                     <span className="text-muted-foreground">Trend:</span>

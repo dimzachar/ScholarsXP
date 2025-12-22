@@ -490,7 +490,7 @@ export default function AdminAnalyticsPage() {
                             </div>
                           </div>
                           <Badge variant="outline">
-                            {user.totalXp} XP
+                            {user.totalXp.toLocaleString()} XP
                           </Badge>
                         </div>
                       ))}
@@ -518,7 +518,7 @@ export default function AdminAnalyticsPage() {
                             </div>
                           </div>
                           <Badge variant="outline">
-                            {user.totalXp} XP
+                            {user.totalXp.toLocaleString()} XP
                           </Badge>
                         </div>
                       ))}

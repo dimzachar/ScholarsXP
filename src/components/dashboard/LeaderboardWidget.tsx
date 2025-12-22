@@ -111,7 +111,7 @@ function LeaderboardUserRow({ user, position }: { user: LeaderboardUser; positio
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span>{user.totalXp.toLocaleString()} XP</span>
           <span>•</span>
-          <span>+{user.weeklyXp} this week</span>
+          <span>+{user.weeklyXp.toLocaleString()} this week</span>
         </div>
       </div>
 

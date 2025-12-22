@@ -249,7 +249,7 @@ export default function XpManagementPage() {
                       min="0"
                     />
                   ) : (
-                    <span className="font-bold text-primary text-lg">{user.totalXp}</span>
+                    <span className="font-bold text-primary text-lg">{user.totalXp.toLocaleString()}</span>
                   )}
                 </div>
               </div>
@@ -471,7 +471,7 @@ export default function XpManagementPage() {
                               min="0"
                             />
                           ) : (
-                            <div className="font-bold text-primary">{user.totalXp}</div>
+                            <div className="font-bold text-primary">{user.totalXp.toLocaleString()}</div>
                           )}
                         </div>
 

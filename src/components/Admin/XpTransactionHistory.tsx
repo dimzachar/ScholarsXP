@@ -189,7 +189,7 @@ export default function XpTransactionHistory({ submissionId }: XpTransactionHist
                   <div className={`text-lg font-bold ${
                     totalXpChange >= 0 ? 'text-green-600' : 'text-red-600'
                   }`}>
-                    {totalXpChange >= 0 ? '+' : ''}{totalXpChange}
+                    {totalXpChange >= 0 ? '+' : ''}{totalXpChange.toLocaleString()}
                   </div>
                   <div className="text-sm text-muted-foreground">Net XP Change</div>
                 </div>

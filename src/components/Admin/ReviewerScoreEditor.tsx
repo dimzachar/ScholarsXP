@@ -241,7 +241,7 @@ export default function ReviewerScoreEditor({
           <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
             <div className="text-center">
               <div className="text-sm text-muted-foreground">Current Score</div>
-              <div className="text-2xl font-bold">{review.xpScore}</div>
+              <div className="text-2xl font-bold">{review.xpScore?.toLocaleString()}</div>
             </div>
             <div className="text-center">
               <div className="text-sm text-muted-foreground">New Score</div>
@@ -250,7 +250,7 @@ export default function ReviewerScoreEditor({
                 isScoreIncrease ? 'text-green-600' : 
                 scoreDifference < 0 ? 'text-red-600' : 'text-blue-600'
               }`}>
-                {isNaN(parseInt(newScore)) ? '—' : parseInt(newScore)}
+                {isNaN(parseInt(newScore)) ? '—' : parseInt(newScore).toLocaleString()}
               </div>
             </div>
           </div>

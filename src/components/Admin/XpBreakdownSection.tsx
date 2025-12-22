@@ -289,7 +289,7 @@ export default function XpBreakdownSection({ submission, onUpdate }: XpBreakdown
                     )}
                   </div>
                   <div className="text-right">
-                    <div className="text-lg font-bold text-blue-600 dark:text-blue-300">{suggestedFinalXp}</div>
+                    <div className="text-lg font-bold text-blue-600 dark:text-blue-300">{suggestedFinalXp?.toLocaleString()}</div>
                     {submission.finalXp !== null && xpDifference !== null && (
                       <div className={`text-xs ${
                         hasDiscrepancy ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-300'
@@ -328,7 +328,7 @@ export default function XpBreakdownSection({ submission, onUpdate }: XpBreakdown
                     <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-2">
                       <Bot className="h-6 w-6 text-blue-600 dark:text-blue-300" />
                     </div>
-                    <div className="font-medium">{submission.aiXp}</div>
+                    <div className="font-medium">{submission.aiXp?.toLocaleString()}</div>
                     <div className="text-xs text-muted-foreground">AI Score</div>
                   </div>
                   <div className="flex-1 h-px bg-border mx-4 relative">
@@ -341,7 +341,7 @@ export default function XpBreakdownSection({ submission, onUpdate }: XpBreakdown
                 <div className="w-12 h-12 bg-green-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center mb-2">
                   <Users className="h-6 w-6 text-green-600 dark:text-green-300" />
                 </div>
-                <div className="font-medium">{submission.peerXp ?? '?'}</div>
+                <div className="font-medium">{submission.peerXp?.toLocaleString() ?? '?'}</div>
                 <div className="text-xs text-muted-foreground">Peer Avg</div>
               </div>
               

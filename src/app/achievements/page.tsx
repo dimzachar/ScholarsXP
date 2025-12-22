@@ -209,7 +209,7 @@ export default function AchievementsPage() {
               <CardContent className="p-4 text-center">
                 <Zap className="h-8 w-8 text-green-600 mx-auto mb-2" />
                 <div className="text-2xl font-bold text-green-700">
-                  {achievementsData.stats.totalXpFromAchievements}
+                  {achievementsData.stats.totalXpFromAchievements.toLocaleString()}
                 </div>
                 <div className="text-sm text-green-600">XP from Achievements</div>
               </CardContent>
@@ -344,7 +344,7 @@ export default function AchievementsPage() {
                                 {achievementProgress.achievement.category}
                               </Badge>
                               <Badge variant="outline" className="text-green-600">
-                                +{achievementProgress.achievement.xpReward} XP
+                                +{achievementProgress.achievement.xpReward.toLocaleString()} XP
                               </Badge>
                             </div>
                             
@@ -407,7 +407,7 @@ export default function AchievementsPage() {
                             <Progress value={achievement.percentage} className="h-3" />
                             <div className="flex justify-between text-xs text-muted-foreground mt-2">
                               <span>{achievement.progress} / {achievement.target}</span>
-                              <span>+{achievement.achievement.xpReward} XP when earned</span>
+                              <span>+{achievement.achievement.xpReward.toLocaleString()} XP when earned</span>
                             </div>
                           </div>
                         ))}
@@ -484,7 +484,7 @@ export default function AchievementsPage() {
                             </p>
                           </div>
                           <Badge className="bg-yellow-100 text-yellow-800">
-                            +{achievement.achievement.xpReward} XP
+                            +{achievement.achievement.xpReward.toLocaleString()} XP
                           </Badge>
                         </div>
                       ))}
@@ -520,7 +520,7 @@ export default function AchievementsPage() {
                           </div>
                           <div className="text-center p-3 bg-green-50 rounded-lg">
                             <div className="text-lg font-bold text-green-600">
-                              {achievementsData.insights.averageXpPerAchievement}
+                              {achievementsData.insights.averageXpPerAchievement.toLocaleString()}
                             </div>
                             <div className="text-xs text-green-600">Avg XP</div>
                           </div>
@@ -568,7 +568,7 @@ export default function AchievementsPage() {
                               {achievementsData.milestones.mostValuableAchievement.achievement.name}
                             </p>
                             <p className="text-xs text-yellow-600">
-                              +{achievementsData.milestones.mostValuableAchievement.achievement.xpReward} XP
+                              +{achievementsData.milestones.mostValuableAchievement.achievement.xpReward.toLocaleString()} XP
                             </p>
                           </div>
                         )}

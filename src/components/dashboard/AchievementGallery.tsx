@@ -261,7 +261,7 @@ export function AchievementGallery({
                   </p>
                 </div>
                 <Badge className="bg-success/10 text-success border-success/20">
-                  +{userAchievement.achievement.xpReward} XP
+                  +{userAchievement.achievement.xpReward.toLocaleString()} XP
                 </Badge>
               </div>
             ))}

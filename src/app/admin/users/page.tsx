@@ -1022,7 +1022,7 @@ export default function AdminUsersPage() {
                       <TableCell>
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium">{userData.metrics.weeklyXp}</span>
+                            <span className="font-medium">{userData.metrics.weeklyXp.toLocaleString()}</span>
                             <TooltipProvider delayDuration={100}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -1080,7 +1080,7 @@ export default function AdminUsersPage() {
                                     })}
                                     
                                     <div className="border-t pt-1 text-xs text-muted-foreground mt-2">
-                                      Total this week: {userData.metrics.weeklyXp}
+                                      Total this week: {userData.metrics.weeklyXp.toLocaleString()}
                                     </div>
                                     
                                   </div>

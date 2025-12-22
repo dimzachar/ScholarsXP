@@ -489,7 +489,7 @@ export default function PeerReviewCard({
                 <TierSelector />
                 <div className="mt-3 space-y-3">
                   <div className="text-sm text-muted-foreground">
-                    Awarded XP: <span className="font-medium text-foreground">{xpScore}</span>
+                    Awarded XP: <span className="font-medium text-foreground">{xpScore?.toLocaleString()}</span>
                     {isRejected && (
                       <span className="ml-2 inline-flex items-center gap-1 text-destructive font-medium">
                         <CircleSlash className="h-4 w-4" aria-hidden="true" /> Not eligible

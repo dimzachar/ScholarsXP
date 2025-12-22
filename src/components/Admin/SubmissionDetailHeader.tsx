@@ -108,7 +108,7 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
     ? `and peer review (${submission.reviewCount} reviews)`
     : 'but is pending peer review'
   const finalSummary = submission.finalXp !== null
-    ? `Final XP of ${submission.finalXp} has been awarded.`
+    ? `Final XP of ${submission.finalXp?.toLocaleString()} has been awarded.`
     : 'Final XP calculation is pending.'
   const legacySummary = `This legacy submission reflects imported peer XP that already matches the final award. ${finalSummary}`
   const nonLegacySummary = aiGloballyEnabled
@@ -184,13 +184,13 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
           
           <div className="text-center p-4 rounded-lg border border-emerald-200/70 bg-gradient-to-br from-emerald-50 via-emerald-100/80 to-white dark:from-emerald-950 dark:via-emerald-900/70 dark:to-slate-950/80 dark:border-emerald-500/40 shadow-sm">
             <div className={`text-2xl font-bold ${getXpStatusColor(submission.finalXp)} dark:text-emerald-200`}>
-              {submission.finalXp ?? 'Pending'}
+              {submission.finalXp?.toLocaleString() ?? 'Pending'}
             </div>
             <div className="text-sm text-muted-foreground">Final XP</div>
             {aiEvaluationEnabled && submission.finalXp !== null && submission.aiXp !== null && (
               <div className="text-xs text-emerald-600 dark:text-emerald-300 mt-1">
                 {submission.finalXp > submission.aiXp ? '+' : ''}
-                {submission.finalXp - submission.aiXp} vs AI
+                {(submission.finalXp - submission.aiXp).toLocaleString()} vs AI
               </div>
             )}
           </div>
@@ -258,7 +258,7 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
             <Award className="h-4 w-4 text-muted-foreground" />
             <div>
               <div className="font-medium">Week {submission.weekNumber}</div>
-              <div className="text-muted-foreground">User Total: {submission.user.totalXp} XP</div>
+              <div className="text-muted-foreground">User Total: {submission.user.totalXp.toLocaleString()} XP</div>
             </div>
           </div>
           
