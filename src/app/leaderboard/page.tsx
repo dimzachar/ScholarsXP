@@ -94,41 +94,31 @@ export default function LeaderboardPage() {
   const [activeTab, setActiveTab] = useState('weekly')
 
   // Fetch current user position (defined first to avoid TDZ in deps)
+  const userId = user?.id
+  const userEmail = user?.email
   const fetchCurrentUserPosition = useCallback(async () => {
-    if (!user) {
+    if (!userId) {
       console.log('No user available for position fetch')
       return null
     }
 
     try {
-      // console.log('Fetching user position for user:', user.id)
       const data = await apiGet('/api/leaderboard/user-position?type=both')
-      // console.log('User position data received:', data)
       return data
     } catch {
-      // Return a default structure so the UI doesn't break
-      // Return a default structure so the UI doesn't break
       return {
         user: {
-          id: user.id,
-          username: user.email?.split('@')[0] || 'User',
-          email: user.email,
+          id: userId,
+          username: userEmail?.split('@')[0] || 'User',
+          email: userEmail,
           totalXp: 0,
           profileImageUrl: null
         },
-        weekly: {
-          rank: 0,
-          xp: 0,
-          totalParticipants: 0
-        },
-        allTime: {
-          rank: 0,
-          xp: 0,
-          totalUsers: 0
-        }
+        weekly: { rank: 0, xp: 0, totalParticipants: 0 },
+        allTime: { rank: 0, xp: 0, totalUsers: 0 }
       }
     }
-  }, [user])
+  }, [userId, userEmail])
 
   const fetchLeaderboardData = useCallback(async () => {
     try {
