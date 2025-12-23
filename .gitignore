@@ -51,6 +51,9 @@ test-*
 *.sqlite
 *.sqlite3
 /prisma/migrations/
+/database/
+/migrations/
+/sql/
 
 # =============================================================================
 # Logs & Debug
