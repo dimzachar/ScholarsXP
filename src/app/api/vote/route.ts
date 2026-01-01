@@ -33,17 +33,17 @@ interface ReviewData {
 // Detect conflict type based on score patterns
 function detectConflictType(reviews: ReviewData[]): { type: string; description: string } {
     if (reviews.length < 2) return { type: 'insufficient', description: 'Not enough reviews' }
-    
+
     const scores = reviews.map(r => r.xpScore).sort((a, b) => a - b)
     const hasZero = scores.some(s => s === 0)
     const hasHigh = scores.some(s => s >= 150)
     const categories = [...new Set(reviews.map(r => r.contentCategory).filter(Boolean))]
     const tiers = [...new Set(reviews.map(r => r.qualityTier).filter(Boolean))]
-    
+
     // Check for outlier (one score far from others)
     const avg = scores.reduce((a, b) => a + b, 0) / scores.length
     const outliers = scores.filter(s => Math.abs(s - avg) > avg * 0.5)
-    
+
     if (hasZero && hasHigh) {
         return { type: 'spam_dispute', description: 'Possible spam/quality dispute - one reviewer gave 0 XP while others rated highly' }
     }
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
 
         // Fetch reviews for all divergent submissions
         const submissionIds = results.map(r => r.id)
-        const reviews = submissionIds.length > 0 
+        const reviews = submissionIds.length > 0
             ? await prisma.peerReview.findMany({
                 where: { submissionId: { in: submissionIds } },
                 select: {
@@ -142,7 +142,7 @@ export async function GET(req: NextRequest) {
         let cases = results.map((r, idx) => {
             const submissionReviews = reviewsBySubmission[r.id] || []
             const conflict = detectConflictType(submissionReviews)
-            
+
             // Enrich reviews with reviewer stats
             const enrichedReviews = submissionReviews.map((review, reviewIdx) => ({
                 ...review,
@@ -194,7 +194,7 @@ export async function GET(req: NextRequest) {
                 SELECT address FROM "UserWallet" WHERE "userId" = ${userId}::uuid
             `
             const walletAddresses = userWallets.map(w => w.address)
-            
+
             if (walletAddresses.length > 0) {
                 // Get all votes from any of the user's wallets
                 const existingVotes = await prisma.judgmentVote.findMany({
@@ -214,96 +214,6 @@ export async function GET(req: NextRequest) {
         console.error('Failed to fetch judgment cases:', error)
         return NextResponse.json(
             { error: 'Failed to fetch judgment cases', details: error instanceof Error ? error.message : 'Unknown error' },
-            { status: 500 }
-        )
-    }
-}
-
-// POST: Submit a vote
-export async function POST(req: NextRequest) {
-    try {
-        const body = await req.json()
-        const { submissionId, walletAddress, voteXp, signature, userId } = body
-
-        if (!submissionId || !walletAddress || voteXp === undefined || !signature) {
-            return NextResponse.json(
-                { error: 'Missing required fields' },
-                { status: 400 }
-            )
-        }
-
-        if (typeof signature !== 'string' || signature.length === 0) {
-            return NextResponse.json(
-                { error: 'Invalid signature format' },
-                { status: 400 }
-            )
-        }
-
-        // Check if user has already voted (via any of their wallets)
-        if (userId) {
-            const userWallets = await prisma.$queryRaw<Array<{ address: string }>>`
-                SELECT address FROM "UserWallet" WHERE "userId" = ${userId}::uuid
-            `
-            const walletAddresses = userWallets.map(w => w.address)
-            
-            if (walletAddresses.length > 0) {
-                const existingVote = await prisma.judgmentVote.findFirst({
-                    where: {
-                        submissionId,
-                        walletAddress: { in: walletAddresses }
-                    }
-                })
-                
-                if (existingVote) {
-                    return NextResponse.json(
-                        { error: 'You have already voted on this submission' },
-                        { status: 400 }
-                    )
-                }
-            }
-        } else {
-            // Fallback: check by wallet address only
-            const existingVote = await prisma.judgmentVote.findUnique({
-                where: {
-                    submissionId_walletAddress: {
-                        submissionId,
-                        walletAddress,
-                    },
-                },
-            })
-
-            if (existingVote) {
-                return NextResponse.json(
-                    { error: 'You have already voted on this submission' },
-                    { status: 400 }
-                )
-            }
-        }
-
-        // Create vote
-        const vote = await prisma.judgmentVote.create({
-            data: {
-                submissionId,
-                walletAddress,
-                voteXp,
-                signature,
-            },
-        })
-
-        return NextResponse.json({ success: true, vote }, { status: 201 })
-    } catch (error: unknown) {
-        console.error('Failed to submit vote:', error)
-
-        // Handle unique constraint violation
-        if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
-            return NextResponse.json(
-                { error: 'You have already voted on this submission' },
-                { status: 400 }
-            )
-        }
-
-        return NextResponse.json(
-            { error: 'Failed to submit vote' },
             { status: 500 }
         )
     }

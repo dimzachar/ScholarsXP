@@ -8,14 +8,15 @@
  */
 
 import { NextResponse } from "next/server";
-import { 
-  sponsorAndSubmitTransaction, 
-  isGasStationEnabled 
+import {
+  sponsorAndSubmitTransaction,
+  isGasStationEnabled
 } from "@/lib/services/shinami-gas";
 import { prisma } from "@/lib/prisma";
 import { withAuth, AuthenticatedRequest } from "@/lib/auth-middleware";
 import { checkHasVotedOnChain } from "@/lib/vote-transactions";
 import { isVoteContractEnabled } from "@/lib/movement";
+import { checkVoteConsensus, processVoteConsensus } from "@/lib/vote-consensus";
 
 async function handleSponsoredVote(request: AuthenticatedRequest) {
   try {
@@ -28,11 +29,11 @@ async function handleSponsoredVote(request: AuthenticatedRequest) {
     }
 
     const body = await request.json();
-    const { 
-      submissionId, 
-      voteXp, 
-      serializedTransaction, 
-      serializedSignature 
+    const {
+      submissionId,
+      voteXp,
+      serializedTransaction,
+      serializedSignature
     } = body;
 
     // Validate inputs
@@ -57,9 +58,9 @@ async function handleSponsoredVote(request: AuthenticatedRequest) {
       WHERE "userId" = ${userId}::uuid AND "isPrimary" = true
       LIMIT 1
     `;
-    
+
     const walletAddress = userWallets[0]?.address;
-    
+
     if (!walletAddress) {
       return NextResponse.json(
         { error: "No primary wallet linked to account" },
@@ -83,11 +84,11 @@ async function handleSponsoredVote(request: AuthenticatedRequest) {
       SELECT address FROM "UserWallet" WHERE "userId" = ${userId}::uuid
     `;
     const walletAddresses = allUserWallets.map(w => w.address);
-    
+
     const existingVote = await prisma.judgmentVote.findFirst({
-      where: { 
-        submissionId, 
-        walletAddress: { in: walletAddresses } 
+      where: {
+        submissionId,
+        walletAddress: { in: walletAddresses }
       }
     });
 
@@ -114,15 +115,30 @@ async function handleSponsoredVote(request: AuthenticatedRequest) {
       }
     });
 
-    return NextResponse.json({ 
-      success: true, 
-      transactionHash: hash 
+    // Check if consensus reached after this vote
+    try {
+      const consensusResult = await checkVoteConsensus(submissionId);
+      if (consensusResult.hasConsensus && consensusResult.winningXp !== null) {
+        await processVoteConsensus(
+          submissionId,
+          consensusResult.winningXp,
+          consensusResult.losingXp
+        );
+      }
+    } catch (consensusError) {
+      console.error('[Vote Processor] Error checking consensus (sponsored):', consensusError);
+      // Don't fail the response if consensus processing fails
+    }
+
+    return NextResponse.json({
+      success: true,
+      transactionHash: hash
     });
   } catch (error) {
     console.error("Sponsored vote error:", error);
-    
+
     const message = error instanceof Error ? error.message : "Unknown error";
-    
+
     // Handle specific Shinami errors
     if (message.includes("insufficient funds")) {
       return NextResponse.json(

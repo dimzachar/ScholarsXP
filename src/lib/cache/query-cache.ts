@@ -42,19 +42,19 @@ export class QueryCache {
   /**
    * Enhanced cache with performance monitoring and metrics
    */
-  static async getWithMetrics<T>(key: string): Promise<{ 
+  static async getWithMetrics<T>(key: string): Promise<{
     data: T | null
     hit: boolean
-    duration: number 
+    duration: number
   }> {
     const startTime = Date.now()
     const data = await this.get<T>(key)
     const duration = Date.now() - startTime
     const hit = data !== null
-    
-    // Log cache performance for monitoring
-    console.log(`Cache ${hit ? 'HIT' : 'MISS'}: ${key} (${duration}ms)`)
-    
+
+    // Log cache performance for monitoring (commented out to reduce noise)
+    // console.log(`Cache ${hit ? 'HIT' : 'MISS'}: ${key} (${duration}ms)`)
+
     return { data, hit, duration }
   }
 
@@ -68,7 +68,7 @@ export class QueryCache {
     staleThreshold: number = 0.8
   ): Promise<T> {
     const cached = await this.get<T>(key)
-    
+
     if (cached) {
       // TODO: Implement stale-while-revalidate logic
       // For now, return cached data
@@ -86,14 +86,14 @@ export class QueryCache {
    */
   static async getMultiple<T>(keys: string[]): Promise<Map<string, T | null>> {
     const results = new Map<string, T | null>()
-    
+
     await Promise.all(
       keys.map(async (key) => {
         const data = await this.get<T>(key)
         results.set(key, data)
       })
     )
-    
+
     return results
   }
 
@@ -115,7 +115,7 @@ export class QueryCache {
    */
   static async warm(key: string, data: any, ttlSeconds: number = 300): Promise<void> {
     await this.set(key, data, ttlSeconds)
-    console.log(`🔥 Cache warmed: ${key}`)
+    // console.log(`🔥 Cache warmed: ${key}`)
   }
 
   /**
@@ -133,22 +133,22 @@ export const CacheTTL = {
   // Analytics data (changes frequently)
   ANALYTICS: 300,           // 5 minutes
   ANALYTICS_OVERVIEW: 600,  // 10 minutes for overview data
-  
+
   // User data
   USER_PROFILE: 120,        // 2 minutes
   USER_METRICS: 180,        // 3 minutes
   USER_LEADERBOARD: 300,    // 5 minutes
-  
+
   // Submission data
   SUBMISSIONS_LIST: 60,    // 5 minutes for admin lists (improved caching)
   ADMIN_SUBMISSIONS: 180,   // 3 minutes specifically for admin submissions
   SUBMISSION_DETAILS: 300,  // 5 minutes for individual submissions
-  
+
   // Static-ish data
   TASK_STATS: 1800,        // 30 minutes
   PLATFORM_STATS: 3600,   // 1 hour
   ROLE_COUNTS: 900,        // 15 minutes
-  
+
   // Long-term cache
   SYSTEM_CONFIG: 7200,     // 2 hours
   ACHIEVEMENT_DEFINITIONS: 3600, // 1 hour
@@ -169,31 +169,31 @@ export async function withQueryCache<T>(
   } = {}
 ): Promise<T> {
   const { skipCache = false, refreshCache = false, logPerformance = true } = options
-  
+
   const startTime = Date.now()
-  
+
   // Skip cache if requested
   if (skipCache || refreshCache) {
     const data = await fetchFn()
     if (!skipCache) {
       await QueryCache.set(key, data, ttlSeconds)
     }
-    
-    if (logPerformance) {
-      const duration = Date.now() - startTime
-      console.log(`🔄 Cache ${refreshCache ? 'REFRESH' : 'SKIP'}: ${key} (${duration}ms)`)
-    }
-    
+
+    // if (logPerformance) {
+    //   const duration = Date.now() - startTime
+    //   console.log(`🔄 Cache ${refreshCache ? 'REFRESH' : 'SKIP'}: ${key} (${duration}ms)`)
+    // }
+
     return data
   }
 
   // Try to get from cache first
   const { data: cached, hit, duration: cacheDuration } = await QueryCache.getWithMetrics<T>(key)
-  
+
   if (cached !== null) {
-    if (logPerformance) {
-      console.log(`⚡ Cache HIT: ${key} (${cacheDuration}ms)`)
-    }
+    // if (logPerformance) {
+    //   console.log(`⚡ Cache HIT: ${key} (${cacheDuration}ms)`)
+    // }
     return cached
   }
 
@@ -201,12 +201,12 @@ export async function withQueryCache<T>(
   try {
     const data = await fetchFn()
     await QueryCache.set(key, data, ttlSeconds)
-    
-    if (logPerformance) {
-      const totalDuration = Date.now() - startTime
-      console.log(`💾 Cache MISS: ${key} (${totalDuration}ms total, ${totalDuration - cacheDuration}ms fetch)`)
-    }
-    
+
+    // if (logPerformance) {
+    //   const totalDuration = Date.now() - startTime
+    //   console.log(`💾 Cache MISS: ${key} (${totalDuration}ms total, ${totalDuration - cacheDuration}ms fetch)`)
+    // }
+
     return data
   } catch (error) {
     // Don't cache errors
@@ -223,10 +223,10 @@ export class CacheWarmer {
    */
   static async warmAnalytics(): Promise<void> {
     console.log('🔥 Warming analytics cache...')
-    
+
     // Warm common analytics queries
     const timeframes = ['last_7_days', 'last_30_days', 'last_90_days']
-    
+
     for (const timeframe of timeframes) {
       const key = QueryCache.createKey('analytics', { timeframe })
       // Note: This would need to import and call the actual analytics function
@@ -239,11 +239,11 @@ export class CacheWarmer {
    */
   static async warmLeaderboard(): Promise<void> {
     console.log('🔥 Warming leaderboard cache...')
-    
+
     // Warm common leaderboard queries
     const pages = [1, 2, 3]
     const limits = [20, 50]
-    
+
     for (const page of pages) {
       for (const limit of limits) {
         const key = QueryCache.createKey('leaderboard', { page, limit })
