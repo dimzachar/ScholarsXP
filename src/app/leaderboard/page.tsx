@@ -607,8 +607,8 @@ export default function LeaderboardPage() {
               Compete with fellow scholars and earn your place on the leaderboard
             </p>
 
-            {/* Detailed View Button for Authorized Users */}
-            {(user?.role === 'ADMIN' || user?.role === 'REVIEWER') && (
+            {/* Detailed View Button for Authorized Users - temporarily disabled */}
+            {/* {(user?.role === 'ADMIN') && (
               <div className="flex justify-center">
                 <Link href="/leaderboard/detailed">
                   <Button variant="outline" className="flex items-center gap-2">
@@ -617,7 +617,7 @@ export default function LeaderboardPage() {
                   </Button>
                 </Link>
               </div>
-            )}
+            )} */}
           </div>
 
           {/* Stats now render inside each tab for contextual accuracy */}
