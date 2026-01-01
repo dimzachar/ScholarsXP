@@ -22,7 +22,7 @@ const DEFAULT_REVIEWERS_REQUIRED = REVIEWER_COUNT_ENV_VALUES
 // Optimized admin submissions handler with compression
 const optimizedSubmissionsHandler = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
-    console.log('🔍 Admin submissions API called by user:', request.userProfile?.email, 'role:', request.userProfile?.role)
+    // console.log('🔍 Admin submissions API called by user:', request.userProfile?.email, 'role:', request.userProfile?.role)
 
     const { searchParams } = new URL(request.url)
 
@@ -30,7 +30,7 @@ const optimizedSubmissionsHandler = withPermission('admin_access')(async (reques
     const useOptimizedSubmissions = process.env.USE_OPTIMIZED_SUBMISSIONS !== 'false' // Default to true
 
     if (useOptimizedSubmissions) {
-      console.log('🚀 Using optimized admin submissions implementation')
+      // console.log('🚀 Using optimized admin submissions implementation')
       const startTime = Date.now()
 
       // Parse pagination parameters
@@ -61,9 +61,9 @@ const optimizedSubmissionsHandler = withPermission('admin_access')(async (reques
         userId: searchParams.get('userId') || undefined
       }
 
-      console.log('Admin submissions API - Received filters:', filters)
-      console.log('Admin submissions API - URL search params:', Object.fromEntries(searchParams.entries()))
-      console.log('Admin submissions API - lowReviews filter:', filters.lowReviews)
+      // console.log('Admin submissions API - Received filters:', filters)
+      // console.log('Admin submissions API - URL search params:', Object.fromEntries(searchParams.entries()))
+      // console.log('Admin submissions API - lowReviews filter:', filters.lowReviews)
 
       // Bypass cache on explicit request or no-cache header
       const bypassCache = searchParams.get('bypassCache') === '1' ||
@@ -72,7 +72,7 @@ const optimizedSubmissionsHandler = withPermission('admin_access')(async (reques
       const submissionsData = await getOptimizedAdminSubmissions(filters, pagination, { skipCache: bypassCache })
 
       const executionTime = Date.now() - startTime
-      console.log(`⚡ Optimized admin submissions completed in ${executionTime}ms`)
+      // console.log(`⚡ Optimized admin submissions completed in ${executionTime}ms`)
 
       return NextResponse.json({
         success: true,
@@ -91,7 +91,7 @@ const optimizedSubmissionsHandler = withPermission('admin_access')(async (reques
     }
 
     // Fall back to existing implementation
-    console.log('🔄 Using legacy admin submissions implementation')
+    // console.log('🔄 Using legacy admin submissions implementation')
     // Continue with existing logic...
   } catch (error) {
     console.error('Admin submissions API error:', error)
@@ -157,7 +157,7 @@ export const POST = withAdminOptimization(optimizedPostHandler)
 // Keep original handlers as fallback
 const originalGetHandler = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
-    console.log('🔍 Admin submissions API called by user:', request.userProfile?.email, 'role:', request.userProfile?.role)
+    // console.log('🔍 Admin submissions API called by user:', request.userProfile?.email, 'role:', request.userProfile?.role)
 
     const { searchParams } = new URL(request.url)
 

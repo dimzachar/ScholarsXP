@@ -33,7 +33,7 @@ import {
 export default function DashboardPage() {
   const { user, isLoading: loading, isAdmin, isReviewer } = usePrivyAuthSync()
   const router = useRouter()
-  
+
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!loading && !user) {
@@ -84,7 +84,7 @@ export default function DashboardPage() {
     )
   }
 
-  
+
 
   // Pull to refresh handler
   const handleRefresh = async () => {
@@ -110,7 +110,7 @@ export default function DashboardPage() {
           icon={BarChart3}
           spacing="normal"
         >
-          <StatCardsSection profileData={profileData} analyticsData={analyticsData} />
+          <StatCardsSection profileData={profileData} analyticsData={analyticsData} privyUserId={user?.privyUserId} />
         </MobileSection>
 
         {/* Mobile-Optimized Tabbed Interface */}
@@ -183,11 +183,11 @@ export default function DashboardPage() {
 }
 
 // Stat cards section - 3 cards: Total XP, This Week (XP + rank), This Month (XP + rank)
-function StatCardsSection({ profileData, analyticsData }: { profileData: any; analyticsData: any }) {
+function StatCardsSection({ profileData, analyticsData, privyUserId }: { profileData: any; analyticsData: any; privyUserId?: string | null }) {
   const userProfile = profileData?.profile || {}
   const statistics = profileData?.statistics || {}
-  const { data: monthlyStats } = useMonthlyStats()
-  
+  const { data: monthlyStats } = useMonthlyStats(privyUserId)
+
   const totalXp = userProfile?.totalXp || 0
   const weeklyXp = userProfile?.currentWeekXp || 0
   const weeklyRank = statistics?.rank?.weekly || 0
@@ -202,11 +202,11 @@ function StatCardsSection({ profileData, analyticsData }: { profileData: any; an
   // Get weekly trends for sparkline and change
   const weeklyTrends: Array<{ week: number; xpEarned: number }> = analyticsData?.weeklyTrends || []
   const currentWeekNumber = getWeekNumber(new Date())
-  
-  const sparklineData = weeklyTrends.length > 1 
+
+  const sparklineData = weeklyTrends.length > 1
     ? weeklyTrends.slice(-6).map(w => w.xpEarned || 0)
     : undefined
-  
+
   const previousWeekData = weeklyTrends.find(w => w.week === currentWeekNumber - 1)
   const previousWeekXp = previousWeekData?.xpEarned || 0
   const xpChange = previousWeekXp > 0 ? weeklyXp - previousWeekXp : 0

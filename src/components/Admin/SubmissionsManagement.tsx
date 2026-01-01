@@ -226,7 +226,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
           statusCounts: {},
           totalSubmissions: 0
         })
-        
+
         // Update dynamic filter options from response
         console.log('📋 API response filterOptions:', data.filterOptions)
         if (data.filterOptions) {
@@ -240,7 +240,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
     } finally {
       setLoadingSubmissions(false)
     }
-  }, [pagination.page, pagination.limit, sortBy, sortOrder, filters, session.access_token])
+  }, [pagination.page, pagination.limit, sortBy, sortOrder, filters, getAuthHeaders])
 
   useEffect(() => {
     // Only fetch when user is loaded with privyUserId and is admin, and pagination is initialized
@@ -914,8 +914,8 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
             </div>
             {bulkMessage && (
               <div className={`mt-2 p-2 rounded-md ${bulkMessage.type === 'success'
-                  ? 'bg-green-100 border border-green-200 text-green-800'
-                  : 'bg-red-100 border border-red-200 text-red-800'
+                ? 'bg-green-100 border border-green-200 text-green-800'
+                : 'bg-red-100 border border-red-200 text-red-800'
                 } text-sm`}
               >
                 {bulkMessage.text}

@@ -59,9 +59,9 @@ interface FetchState<T> {
 
 // Generic fetcher function with caching
 async function fetchWithCache<T>(
-  url: string, 
-  cacheKey: string, 
-  ttl: number, 
+  url: string,
+  cacheKey: string,
+  ttl: number,
   forceRefresh = false,
   privyUserId?: string | null
 ): Promise<T> {
@@ -121,7 +121,7 @@ export function useProfileData(userId?: string, privyUserId?: string | null) {
         forceRefresh,
         privyUserId
       )
-      
+
       // Ensure XP consistency across all data sources
       // Use the authoritative User.totalXp as the source of truth
       if (data && typeof data === 'object' && 'profile' in data && 'statistics' in data) {
@@ -130,7 +130,7 @@ export function useProfileData(userId?: string, privyUserId?: string | null) {
           profileData.statistics.xpBreakdown.total = profileData.profile.totalXp
         }
       }
-      
+
       setState({ data, loading: false, error: null })
     } catch (error) {
       setState({
@@ -199,15 +199,15 @@ export function useAnalyticsData(timeframe = 'current_week', enabled = true, pri
 
     try {
       setState(prev => ({ ...prev, loading: true, error: null }))
-      
+
       const achievementsPromise = ENABLE_ACHIEVEMENTS
         ? fetchWithCache(
-            '/api/user/achievements',
-            'achievements',
-            CACHE_TTL.achievements,
-            false,
-            privyUserId
-          )
+          '/api/user/achievements',
+          'achievements',
+          CACHE_TTL.achievements,
+          false,
+          privyUserId
+        )
         : Promise.resolve(EMPTY_ACHIEVEMENTS_SUMMARY)
 
       const [xpBreakdownResponse, achievementsResponse] = await Promise.all([
@@ -254,7 +254,7 @@ export function useDashboardData(userId?: string, activeTab = 'overview', timefr
   const analyticsData = useAnalyticsData(timeframe, activeTab === 'progress', privyUserId)
 
   const isLoading = profileData.loading ||
-                   (activeTab === 'progress' && analyticsData.loading)
+    (activeTab === 'progress' && analyticsData.loading)
 
   const hasError = profileData.error || analyticsData.error
 
@@ -284,7 +284,7 @@ export function useDashboardData(userId?: string, activeTab = 'overview', timefr
 }
 
 // Hook for monthly stats
-export function useMonthlyStats() {
+export function useMonthlyStats(privyUserId?: string | null) {
   const [state, setState] = useState<FetchState<{ month: string; xp: number; rank: number; totalUsers: number }>>({
     data: null,
     loading: true,
@@ -292,14 +292,21 @@ export function useMonthlyStats() {
   })
 
   const fetchData = useCallback(async () => {
+    if (!privyUserId) {
+      setState({ data: null, loading: false, error: null })
+      return
+    }
+
     try {
       setState(prev => ({ ...prev, loading: true, error: null }))
       const data = await fetchWithCache(
         '/api/user/monthly-stats',
         'monthly-stats',
-        CACHE_TTL.monthlyStats
+        CACHE_TTL.monthlyStats,
+        false,
+        privyUserId
       )
-      setState({ data: data as unknown, loading: false, error: null })
+      setState({ data: data as { month: string; xp: number; rank: number; totalUsers: number }, loading: false, error: null })
     } catch (error) {
       setState({
         data: null,
@@ -307,7 +314,7 @@ export function useMonthlyStats() {
         error: error instanceof Error ? error.message : 'Failed to fetch monthly stats'
       })
     }
-  }, [])
+  }, [privyUserId])
 
   useEffect(() => {
     fetchData()
