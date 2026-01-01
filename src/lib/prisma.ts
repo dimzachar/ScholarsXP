@@ -37,14 +37,16 @@ if (!databaseUrl) {
 }
 
 // Enforce lower connection limit in development to prevent pool exhaustion
+// Also increase connect_timeout for cold-start scenarios
 let finalDatabaseUrl = databaseUrl
 if (process.env.NODE_ENV !== 'production' && finalDatabaseUrl.includes('pooler.supabase.com')) {
   try {
     const url = new URL(finalDatabaseUrl)
     url.searchParams.set('connection_limit', '10')
     url.searchParams.set('pool_timeout', '30')
+    url.searchParams.set('connect_timeout', '30')
     finalDatabaseUrl = url.toString()
-    console.info('[prisma] Enforced connection limit: 10, pool timeout: 30s')
+    console.info('[prisma] Enforced connection limit: 10, pool timeout: 30s, connect timeout: 30s')
   } catch (e) {
     console.warn('[prisma] Failed to parse database URL for connection limit adjustment')
   }
@@ -71,6 +73,39 @@ export const prisma =
   })
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+
+// Warm up the connection pool on first load to avoid cold-start timeouts
+let connectionWarmedUp = false
+export async function warmupConnection(): Promise<boolean> {
+  if (connectionWarmedUp) return true
+  
+  const maxRetries = 3
+  const retryDelay = 1000
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await prisma.$queryRaw`SELECT 1`
+      connectionWarmedUp = true
+      if (process.env.SUPPRESS_LOGS !== 'true') {
+        console.info(`[prisma] Connection warmed up (attempt ${attempt})`)
+      }
+      return true
+    } catch (err) {
+      if (attempt < maxRetries) {
+        console.warn(`[prisma] Connection warmup attempt ${attempt} failed, retrying...`)
+        await new Promise(resolve => setTimeout(resolve, retryDelay * attempt))
+      } else {
+        console.error('[prisma] Connection warmup failed after all retries:', err)
+      }
+    }
+  }
+  return false
+}
+
+// Auto-warmup in development (non-blocking)
+if (process.env.NODE_ENV !== 'production' && !globalForPrisma.prisma) {
+  warmupConnection().catch(() => {})
+}
 
 // Graceful shutdown to close connections properly (only in Node.js environment)
 // Check for process.exit to ensure we're not in Edge Runtime where it's unavailable
