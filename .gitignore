@@ -57,7 +57,7 @@ docs/*
 *.csv
 *.tsv
 # prisma migrations (schema managed by supabase)
-/prisma/migrations/
+# /prisma/migrations/
 
 # augment
 .augment/
@@ -112,7 +112,7 @@ test-reddit-direct-api.js
 test-reddit-direct.js
 test-specific-post.js
 test-submission-flow.js
-# clean_legacy_data.py
+clean_legacy_data.py
 
 # Unused public assets (not referenced in components)
 public/file.svg
@@ -147,6 +147,7 @@ supabase/.temp/
 *.txt
 *.roo/*
 scripts/*
+sql/*
 tmp_*
 backup/*
 *.png

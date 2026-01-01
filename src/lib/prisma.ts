@@ -1,3 +1,11 @@
+// Suppress prisma:query debug logs
+if (process.env.DEBUG?.includes('prisma')) {
+  process.env.DEBUG = process.env.DEBUG
+    .split(',')
+    .filter((d) => !d.trim().startsWith('prisma:'))
+    .join(',')
+}
+
 import { PrismaClient } from '@prisma/client'
 
 const globalForPrisma = globalThis as unknown as {
@@ -28,6 +36,20 @@ if (!databaseUrl) {
   )
 }
 
+// Enforce lower connection limit in development to prevent pool exhaustion
+let finalDatabaseUrl = databaseUrl
+if (process.env.NODE_ENV !== 'production' && finalDatabaseUrl.includes('pooler.supabase.com')) {
+  try {
+    const url = new URL(finalDatabaseUrl)
+    url.searchParams.set('connection_limit', '10')
+    url.searchParams.set('pool_timeout', '30')
+    finalDatabaseUrl = url.toString()
+    console.info('[prisma] Enforced connection limit: 10, pool timeout: 30s')
+  } catch (e) {
+    console.warn('[prisma] Failed to parse database URL for connection limit adjustment')
+  }
+}
+
 if (
   preferDirectDatabase &&
   process.env.NODE_ENV !== 'production' &&
@@ -39,9 +61,9 @@ if (
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? [] : [],
+    log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
     datasources: {
-      db: { url: databaseUrl }
+      db: { url: finalDatabaseUrl }
     }
     // Configure connection pooling via DATABASE_URL parameters
     // The connection limit should be set in the DATABASE_URL itself
@@ -74,7 +96,12 @@ if (
 
 // Lightweight, idempotent schema patcher for local/dev environments
 // Adds XP v2 audit columns to PeerReview if missing to prevent runtime P2022 errors
+let patchApplied = false
 export async function patchPeerReviewV2Columns(): Promise<void> {
+  // Only run once per process to avoid repeated slow ALTER TABLE calls
+  if (patchApplied) return
+  patchApplied = true
+
   try {
     await prisma.$executeRawUnsafe(
       'ALTER TABLE "PeerReview" ADD COLUMN IF NOT EXISTS "contentCategory" TEXT'
@@ -83,7 +110,7 @@ export async function patchPeerReviewV2Columns(): Promise<void> {
       'ALTER TABLE "PeerReview" ADD COLUMN IF NOT EXISTS "qualityTier" TEXT'
     )
   } catch (err) {
-    // Non-fatal: if lacks privileges or already exists, continue
+    // Non-fatal: if lacks privileges, timeout, or already exists, continue
     console.warn('[prisma] PeerReview v2 column patch skipped:', err)
   }
 }
