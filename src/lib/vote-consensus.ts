@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 
-const MIN_VOTES_FOR_CONSENSUS = 5
+const MIN_VOTES_FOR_CONSENSUS = 50
 const CONSENSUS_THRESHOLD = 0.50  // >50%
 
 interface VoteConsensusResult {
