@@ -2,9 +2,14 @@ export interface ActiveVote {
     id: string
     title: string
     url: string
+    platform: string
     voteCount: number
     voteDistribution: Record<number, number>
     createdAt: string
+    minXp: number
+    maxXp: number
+    reviewCount: number
+    conflictSummary: string
 }
 
 export interface ConsensusEvent {
@@ -25,7 +30,7 @@ export interface WatchlistReviewer {
     activeScore: number
     shadowScoreV1: number | null
     shadowScoreV2: number | null
-    metrics: any
+    metrics: unknown
     timestamp: string
     status: 'Excellent' | 'Good' | 'At Risk'
 }

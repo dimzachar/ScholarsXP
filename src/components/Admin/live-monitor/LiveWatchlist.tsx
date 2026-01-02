@@ -7,13 +7,10 @@ import {
     Filter,
     MoreHorizontal,
     Shield,
-    Wallet,
     Download,
-    Settings,
     LayoutDashboard,
     Vote,
     Activity,
-    ArrowUpDown,
     CheckCircle2,
     AlertTriangle
 } from 'lucide-react'
@@ -82,10 +79,6 @@ export function LiveWatchlist({ data, onViewChange }: LiveWatchlistProps) {
                             <Button variant="outline" className="gap-2 border-border text-foreground hover:bg-muted">
                                 <Download className="h-4 w-4" />
                                 Export Data
-                            </Button>
-                            <Button className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20">
-                                <Wallet className="h-4 w-4" />
-                                Connect Wallet
                             </Button>
                         </div>
                     </div>

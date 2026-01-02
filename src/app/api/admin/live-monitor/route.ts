@@ -29,18 +29,31 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
         // 1. Fetch Active Divergent Cases (Raw query needed for STDDEV)
         // Find submissions with high disagreement (STDDEV > 50) in the last 30 days
         // PRIORITIZE cases with votes by ordering by vote count DESC
-        const divergentSubmissions = await withRetry(() => prisma.$queryRaw<{ id: string, title: string, url: string, createdAt: Date }[]>`
+        const divergentSubmissions = await withRetry(() => prisma.$queryRaw<{ 
+            id: string
+            title: string
+            url: string
+            platform: string
+            createdAt: Date
+            minXp: number
+            maxXp: number
+            reviewCount: bigint
+        }[]>`
             SELECT 
                 s.id,
                 s.title,
                 s.url,
-                s."createdAt"
+                s.platform,
+                s."createdAt",
+                MIN(pr."xpScore") as "minXp",
+                MAX(pr."xpScore") as "maxXp",
+                COUNT(pr.id) as "reviewCount"
             FROM "Submission" s
             JOIN "PeerReview" pr ON s.id = pr."submissionId"
             LEFT JOIN "JudgmentVote" jv ON s.id = jv."submissionId"
             WHERE s.status = 'FINALIZED'
             AND s."createdAt" >= NOW() - INTERVAL '30 days'
-            GROUP BY s.id, s.title, s.url, s."createdAt"
+            GROUP BY s.id, s.title, s.url, s.platform, s."createdAt"
             HAVING STDDEV(pr."xpScore") > 50
             ORDER BY COUNT(jv.id) DESC, s."createdAt" DESC
             LIMIT 10
@@ -58,16 +71,37 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
         // Map votes to submissions
         const activeVotes = divergentSubmissions.map(s => {
             const caseVotes = votes.filter(v => v.submissionId === s.id)
+            
+            // Generate full summary like case-analysis does
+            const spread = s.maxXp - s.minXp
+            const hasZero = s.minXp === 0
+            const hasHigh = s.maxXp >= 150
+            
+            let conflictType = 'Significant score variance between reviewers'
+            if (hasZero && hasHigh) {
+                conflictType = 'Possible spam/quality dispute - one reviewer gave 0 XP while others rated highly'
+            } else if (spread > 100) {
+                conflictType = 'Large score gap between reviewers'
+            }
+            
+            // Full summary format matching case-analysis.ts
+            const conflictSummary = `This ${s.platform} submission received scores ranging from ${s.minXp} to ${s.maxXp} XP (${spread} XP spread). ${conflictType}.`
+            
             return {
                 id: s.id,
                 title: s.title,
                 url: s.url,
+                platform: s.platform,
                 createdAt: s.createdAt,
                 voteCount: caseVotes.length,
                 voteDistribution: caseVotes.reduce((acc: Record<number, number>, v) => {
                     acc[v.voteXp] = (acc[v.voteXp] || 0) + 1
                     return acc
-                }, {} as Record<number, number>)
+                }, {} as Record<number, number>),
+                minXp: s.minXp,
+                maxXp: s.maxXp,
+                reviewCount: Number(s.reviewCount),
+                conflictSummary
             }
         })
 
@@ -150,6 +184,118 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
             }
         }).filter(Boolean)
 
+        // 6. Calculate Vote Stats for bias detection
+        const allVotes = await withRetry(() => prisma.$queryRaw<Array<{
+            walletAddress: string
+            voteXp: number
+            createdAt: Date
+            submissionId: string
+            minXp: number
+            maxXp: number
+        }>>`
+            SELECT 
+                jv."walletAddress",
+                jv."voteXp",
+                jv."createdAt",
+                jv."submissionId",
+                sub."minXp",
+                sub."maxXp"
+            FROM "JudgmentVote" jv
+            JOIN (
+                SELECT s.id, MIN(pr."xpScore") as "minXp", MAX(pr."xpScore") as "maxXp"
+                FROM "Submission" s
+                JOIN "PeerReview" pr ON s.id = pr."submissionId"
+                GROUP BY s.id
+            ) sub ON jv."submissionId" = sub.id
+            ORDER BY jv."createdAt" DESC
+        `)
+
+        // Calculate global vote stats
+        const totalVotesCount = allVotes.length
+        const totalHighVotes = allVotes.filter(v => v.voteXp === v.maxXp).length
+        const totalLowVotes = allVotes.filter(v => v.voteXp === v.minXp).length
+        const uniqueVoters = new Set(allVotes.map(v => v.walletAddress)).size
+
+        // Group by wallet for per-voter stats
+        const votesByWallet = allVotes.reduce((acc, vote) => {
+            if (!acc[vote.walletAddress]) acc[vote.walletAddress] = []
+            acc[vote.walletAddress].push(vote)
+            return acc
+        }, {} as Record<string, typeof allVotes>)
+
+        // Calculate flagged voters
+        const voterStats = Object.entries(votesByWallet).map(([wallet, walletVotes]) => {
+            const total = walletVotes.length
+            const high = walletVotes.filter(v => v.voteXp === v.maxXp).length
+            const highPct = (high / total) * 100
+            
+            // Calculate avg time between votes
+            let avgTime: number | null = null
+            if (walletVotes.length >= 2) {
+                const times = walletVotes.map(v => new Date(v.createdAt).getTime()).sort((a, b) => a - b)
+                const diffs = times.slice(1).map((t, i) => t - times[i])
+                avgTime = diffs.reduce((a, b) => a + b, 0) / diffs.length
+            }
+
+            const flags: string[] = []
+            if (total >= 10 && (highPct > 85 || highPct < 15)) {
+                flags.push(`Extreme bias: ${highPct > 85 ? 'always high' : 'always low'}`)
+            }
+            if (avgTime !== null && avgTime < 5000 && total >= 5) {
+                flags.push(`Rapid voting: ${(avgTime / 1000).toFixed(1)}s avg`)
+            }
+
+            return {
+                wallet: wallet.slice(0, 6) + '...' + wallet.slice(-4),
+                totalVotes: total,
+                highVotes: high,
+                lowVotes: total - high,
+                highPct,
+                avgTime,
+                flagged: flags.length > 0,
+                flags
+            }
+        }).sort((a, b) => {
+            if (a.flagged !== b.flagged) return a.flagged ? -1 : 1
+            return b.totalVotes - a.totalVotes
+        })
+
+        // Calculate hourly velocity (votes per hour over last 24h)
+        const now = new Date()
+        const hourlyVelocity = Array(24).fill(0).map((_, i) => {
+            const hourStart = new Date(now.getTime() - (23 - i) * 60 * 60 * 1000)
+            const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000)
+            const hourVotes = allVotes.filter(v => {
+                const vTime = new Date(v.createdAt)
+                return vTime >= hourStart && vTime < hourEnd
+            })
+            return {
+                hour: hourStart.getHours(),
+                label: `${hourStart.getHours().toString().padStart(2, '0')}:00`,
+                count: hourVotes.length
+            }
+        })
+        
+        const peakVPH = Math.max(...hourlyVelocity.map(h => h.count), 0)
+        const peakHourIndex = hourlyVelocity.findIndex(h => h.count === peakVPH)
+        const peakHourLabel = peakHourIndex >= 0 ? hourlyVelocity[peakHourIndex].label : null
+
+        const voteStats = {
+            global: {
+                totalVotes: totalVotesCount,
+                totalHighVotes,
+                totalLowVotes,
+                highVotePct: totalVotesCount > 0 ? (totalHighVotes / totalVotesCount) * 100 : 0,
+                uniqueVoters,
+                flaggedVoters: voterStats.filter(v => v.flagged).length,
+                avgVotesPerUser: uniqueVoters > 0 ? totalVotesCount / uniqueVoters : 0
+            },
+            voters: voterStats.slice(0, 20),
+            hourlyVelocity,
+            peakVPH,
+            peakHourLabel
+        }
+
         return NextResponse.json({
             activeVotes,
             recentConsensus: recentConsensus.map((l: any) => ({
@@ -164,6 +310,7 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
                 }))
             })),
             watchlist: reviewersWithScores,
+            voteStats,
             config: {
                 activeFormula: RELIABILITY_CONFIG.ACTIVE_FORMULA,
                 shadowFormulaV1: 'CUSTOM_V1',
