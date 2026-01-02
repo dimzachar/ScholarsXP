@@ -217,7 +217,8 @@ async function fetchUserMetricsData(
             sourceId: true,
             createdAt: true,
             description: true
-          }
+          },
+          take: 1000  // Limit transactions to prevent unbounded queries
         }
       }
     }),
