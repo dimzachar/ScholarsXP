@@ -270,17 +270,16 @@ export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) 
     
     const createAptosWallet = async () => {
       try {
-        console.log('Creating Movement wallet for user...')
+        console.log('Creating Movement wallet for user...', { userId: privyUser.id })
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const wallet = await (privyCreateWallet as any)({ chainType: 'aptos' })
-        console.log('Movement wallet created:', (wallet as { address?: string })?.address)
+        console.log('Movement wallet created successfully:', wallet)
         // Re-sync to pick up the new wallet
         syncUserToSupabase()
-      } catch (error) {
+      } catch (error: unknown) {
+        console.error('Movement wallet creation error:', error)
         const msg = error instanceof Error ? error.message : String(error)
-        if (!msg.includes('already has an embedded wallet')) {
-          console.error('Failed to create Movement wallet:', error)
-        }
+        console.error('Error message:', msg)
       }
     }
     
