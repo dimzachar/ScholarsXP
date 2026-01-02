@@ -1,7 +1,9 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
-import { usePrivy, useCreateWallet } from '@privy-io/react-auth'
+import { usePrivy } from '@privy-io/react-auth'
+// IMPORTANT: useCreateWallet must be imported from extended-chains for chainType support
+import { useCreateWallet } from '@privy-io/react-auth/extended-chains'
 import { setPrivyUserId } from '@/lib/api-client'
 
 export type UserRole = 'USER' | 'REVIEWER' | 'ADMIN'
