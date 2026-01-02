@@ -114,7 +114,7 @@ export async function middleware(request: NextRequest) {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
       "font-src 'self' https://fonts.gstatic.com data:; " +
       "img-src 'self' data: https: blob:; " +
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://vitals.vercel-insights.com https://testnet.movementnetwork.xyz https://*.movementnetwork.xyz https://*.aptoslabs.com https://*.shinami.com https://*.privy.io https://*.walletconnect.com wss://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.org; " +
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://vitals.vercel-insights.com https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://testnet.movementnetwork.xyz https://*.movementnetwork.xyz https://*.aptoslabs.com https://*.shinami.com https://*.privy.io https://*.walletconnect.com wss://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.org; " +
       "frame-src 'self' https://platform.twitter.com https://syndication.twitter.com https://www.redditmedia.com https://embed.reddit.com https://www.notion.so https://notion.so https://notion.site https://www.notion.com https://notion.com https://www.linkedin.com https://www.youtube.com https://vercel.live https://*.privy.io; " +
       "frame-ancestors 'none';"
     )
