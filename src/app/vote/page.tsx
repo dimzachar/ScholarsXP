@@ -12,6 +12,7 @@ import { MobileLayout, MobileHeader, MobileSection } from '@/components/layout/M
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { CaseFileCard, VerdictButtons, BlockDisappearEffect } from '@/components/vote'
+import { trackVoteSuccess } from '@/components/vote/VerdictButtons'
 import type { CaseDetails, ReviewerFeedback, ConflictInfo, PlatformBenchmark } from '@/components/vote'
 import Link from 'next/link'
 
@@ -249,7 +250,7 @@ export default function VotePage() {
         }
     }, [walletFetched, walletLoading, primaryWallet, user?.id])
 
-    const handleVote = useCallback(async (xp: number, _direction: 'left' | 'right'): Promise<boolean> => {
+    const handleVote = useCallback(async (xp: number, direction: 'left' | 'right'): Promise<boolean> => {
         if (!currentCase) {
             toast.error('No case to vote on')
             return false
@@ -280,6 +281,9 @@ export default function VotePage() {
             const result = await sponsoredVote(currentCase.submissionId, xp, primaryWallet, primaryWalletType)
 
             if (result.success) {
+                // Track successful vote analytics
+                trackVoteSuccess(xp, direction)
+                
                 toast.success(
                     <div>
                         <p>Vote recorded: {xp} XP</p>

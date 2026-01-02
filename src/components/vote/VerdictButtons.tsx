@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useEffect } from 'react'
+import { useMemo, useEffect, useRef } from 'react'
 import { ThumbsDown, ThumbsUp, Loader2, SkipForward } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -13,6 +13,7 @@ interface VerdictButtonsProps {
   voting: boolean
   disabled?: boolean
   submissionId?: string
+  onVoteSuccess?: (xp: number, buttonPosition: 'left' | 'right', highXpPosition: 'left' | 'right', timeSpentMs: number) => void
 }
 
 export function VerdictButtons({ 
@@ -21,9 +22,11 @@ export function VerdictButtons({
   onSkip,
   voting, 
   disabled,
-  submissionId 
+  submissionId,
+  onVoteSuccess
 }: VerdictButtonsProps) {
   const [lowXp, highXp] = divergentScores
+  const pendingVoteRef = useRef<{ xp: number; buttonPosition: 'left' | 'right' } | null>(null)
 
   // Randomize button order based on submissionId (consistent per case)
   const swapped = useMemo(() => {
@@ -32,8 +35,7 @@ export function VerdictButtons({
     return hash % 2 === 1
   }, [submissionId])
 
-  // High XP position for analytics
-  const highXpPosition = swapped ? 'left' : 'right'
+  const highXpPosition: 'left' | 'right' = swapped ? 'left' : 'right'
 
   // Track case view on mount
   useEffect(() => {
@@ -47,17 +49,16 @@ export function VerdictButtons({
     }
   }, [submissionId])
 
-  const handleVote = (xp: number, buttonPosition: 'left' | 'right') => {
-    if (submissionId) {
-      trackVoteEvent({
-        submissionId,
-        eventType: 'vote',
-        votedXp: xp,
-        buttonPosition,
-        highXpPosition,
-        timeSpentMs: getTimeSpent(submissionId)
-      })
+  // Export tracking function for parent to call on success
+  useEffect(() => {
+    if (onVoteSuccess && submissionId) {
+      // Expose the tracking data via callback registration
     }
+  }, [onVoteSuccess, submissionId])
+
+  const handleVote = (xp: number, buttonPosition: 'left' | 'right') => {
+    // Store pending vote info for tracking after success
+    pendingVoteRef.current = { xp, buttonPosition }
     onVote(xp, buttonPosition)
   }
 
@@ -72,6 +73,28 @@ export function VerdictButtons({
     }
     onSkip?.()
   }
+
+  // Expose method to track successful vote (called by parent after tx confirms)
+  // Using a ref-based approach to avoid prop drilling
+  useEffect(() => {
+    if (submissionId && typeof window !== 'undefined') {
+      (window as any).__trackVoteSuccess = (xp: number, buttonPosition: 'left' | 'right') => {
+        trackVoteEvent({
+          submissionId,
+          eventType: 'vote',
+          votedXp: xp,
+          buttonPosition,
+          highXpPosition,
+          timeSpentMs: getTimeSpent(submissionId)
+        })
+      }
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        delete (window as any).__trackVoteSuccess
+      }
+    }
+  }, [submissionId, highXpPosition])
 
   const lowButton = (
     <Button
@@ -157,4 +180,11 @@ export function VerdictButtons({
       )}
     </div>
   )
+}
+
+// Helper to track vote success from parent component
+export function trackVoteSuccess(xp: number, buttonPosition: 'left' | 'right') {
+  if (typeof window !== 'undefined' && (window as any).__trackVoteSuccess) {
+    (window as any).__trackVoteSuccess(xp, buttonPosition)
+  }
 }
