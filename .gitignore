@@ -1,7 +1,7 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
+# =============================================================================
+# Dependencies
+# =============================================================================
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -10,148 +10,146 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
-
-# next.js
+# =============================================================================
+# Build & Output
+# =============================================================================
 /.next/
 /out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
-.vercel
-
-# typescript
+/build/
+/dist/
 *.tsbuildinfo
+/src/generated/
 next-env.d.ts
 
-/src/generated/prisma
+# =============================================================================
+# Environment & Secrets
+# =============================================================================
+.env*
+!.env.example
+*.pem
 
-# database
+# =============================================================================
+# Testing & Coverage
+# =============================================================================
+/coverage/
+.jest/
+test-reports/
+__tests__/
+
+# Test files in src (local development tests)
+src/**/*.test.ts
+src/**/*.test.tsx
+
+# Root level test scripts
+test-*
+
+# =============================================================================
+# Database
+# =============================================================================
 *.db
 *.db-journal
 *.sqlite
 *.sqlite3
-*.md
-!README.md
-!ARCHITECTURE.md
-!changelog.md
-docs/*
-*.py
+/prisma/migrations/
+/database/
+/migrations/
+/sql/
 
-*.csv
-*.tsv
-# prisma migrations (schema managed by supabase)
-# /prisma/migrations/
+# =============================================================================
+# Logs & Debug
+# =============================================================================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+debug-*
 
-# augment
-.augment/
-supabase/migrations/*
-# IDE
+# =============================================================================
+# IDE & Editor
+# =============================================================================
 .vscode/
 .idea/
 *.swp
 *.swo
-cline_mcp_settings.json
-
-# SWC compiler cache
-.swc/
-
-# Additional logs
-*.log
-# Jest cache
-.jest/
-
-# Temporary files
-*.tmp
-*.temp
-.tmp/
-.temp/
-
-# Editor backups
 *~
 *.bak
 *.orig
 
-# OS
+# =============================================================================
+# OS Files
+# =============================================================================
+.DS_Store
 Thumbs.db
 
-__tests__/*
-!__tests__/vote-contract.integration.test.ts
-test*
-!move/tests/
+# =============================================================================
+# Temporary & Cache
+# =============================================================================
+*.tmp
+*.temp
+.tmp/
+.temp/
+.swc/
+.augment/
+.vercel/
 
+# =============================================================================
+# Data Files (keep out of repo)
+# =============================================================================
+*.csv
+*.tsv
+*.json
+!package.json
+!tsconfig.json
+!components.json
+!vercel.json
 
-check-env.js
-check-env-debug.js
-debug-reddit-simple.js
-get-reddit-token.js
-get-reddit-token-alternative.js
-test-api.js
-test-api-endpoint.js
-test-api-integration.js
-test-content-display.js
-test-content-fetching.js
-test-reddit-api.js
-test-reddit-direct-api.js
-test-reddit-direct.js
-test-specific-post.js
-test-submission-flow.js
-clean_legacy_data.py
+# =============================================================================
+# Documentation (selective)
+# =============================================================================
+docs/
+*.md
+!README.md
+!ARCHITECTURE.md
+!changelog.md
 
-# Unused public assets (not referenced in components)
-public/file.svg
-public/globe.svg
-public/next.svg
-public/vercel.svg
-public/window.svg
-public/test-api.html
-public/avatars/example_user.svg
-public/avatars/another_user.svg
+# =============================================================================
+# Scripts & Utilities (local only)
+# =============================================================================
+scripts/
+*.py
+*.ps1
+*.sh
+!.husky/*.sh
 
-# Temporary and backup files
-src/app/globals.css.backup
+# =============================================================================
+# Backup & Draft Files
+# =============================================================================
+backup/
+_drafts/
+tmp_*
+*.backup
+
+# =============================================================================
+# Supabase
+# =============================================================================
+supabase/migrations/
+supabase/.temp/
+
+# =============================================================================
+# Move Framework
+# =============================================================================
+move/build/
+move/.movement/
+
+# =============================================================================
+# Misc Generated/Unused
+# =============================================================================
+*.html
+*.txt
+*.png
+*.roo/
+cline_mcp_settings.json
 validation-report.json
-tsx
-
-# Generated test reports and documentation
-test-reports/
-tests/memory-leak-test.md
-
-# Generated validation and analysis files
-*.validation.json
 *-report.json
 *-analysis.json
-
-*.ps1
-*.html
-
-# Supabase Temporary Files (only files that actually exist)
-supabase/.temp/
-.vercel
-*.txt
-*.roo/*
-scripts/*
-sql/*
-tmp_*
-backup/*
-*.png
-debug-*
-_drafts/*
-fucks-or-sucks-main/*
-Movement-Network-ConnectWallet-Template/*

@@ -41,6 +41,14 @@ interface LiveDashboardProps {
             hourlyVelocity: Array<{ hour: number; label: string; count: number }>
             peakVPH: number
             peakHourLabel: string | null
+            clickAnalytics?: {
+                totalEvents: number
+                positionBias: { leftClicks: number; rightClicks: number; leftPct: number }
+                xpBias: { clickedHighXp: number; clickedLowXp: number; highXpPct: number }
+                timeSpentBuckets: { under5: number; '5to15': number; '15to30': number; '30to60': number; over60: number }
+                skipCount: number
+                avgTimeSpentMs: number
+            }
         }
     } | null
     onRefresh: () => void
@@ -220,6 +228,110 @@ export function LiveDashboard({ data, onRefresh, loading, onViewChange }: LiveDa
                                         <span>12:00</span>
                                         <span>18:00</span>
                                         <span>24:00</span>
+                                    </div>
+                                </Card>
+                            </div>
+                        )}
+
+                        {/* Click Analytics - Position Heatmap & Time Spent */}
+                        {voteStats?.clickAnalytics && voteStats.clickAnalytics.totalEvents > 0 && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                {/* Position Bias Heatmap */}
+                                <Card className="p-6">
+                                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Position Bias</h3>
+                                    <div className="flex gap-4 mb-4">
+                                        <div className="flex-1 text-center">
+                                            <div 
+                                                className="h-20 rounded-lg flex items-center justify-center text-2xl font-bold transition-all"
+                                                style={{ 
+                                                    backgroundColor: `rgba(var(--primary-rgb, 59, 130, 246), ${Math.min(voteStats.clickAnalytics.positionBias.leftPct / 100, 1)})`,
+                                                    color: voteStats.clickAnalytics.positionBias.leftPct > 50 ? 'white' : 'inherit'
+                                                }}
+                                            >
+                                                {voteStats.clickAnalytics.positionBias.leftPct.toFixed(0)}%
+                                            </div>
+                                            <p className="text-xs text-muted-foreground mt-2">Left clicks</p>
+                                            <p className="text-sm font-medium">{voteStats.clickAnalytics.positionBias.leftClicks}</p>
+                                        </div>
+                                        <div className="flex-1 text-center">
+                                            <div 
+                                                className="h-20 rounded-lg flex items-center justify-center text-2xl font-bold transition-all"
+                                                style={{ 
+                                                    backgroundColor: `rgba(168, 85, 247, ${Math.min((100 - voteStats.clickAnalytics.positionBias.leftPct) / 100, 1)})`,
+                                                    color: voteStats.clickAnalytics.positionBias.leftPct < 50 ? 'white' : 'inherit'
+                                                }}
+                                            >
+                                                {(100 - voteStats.clickAnalytics.positionBias.leftPct).toFixed(0)}%
+                                            </div>
+                                            <p className="text-xs text-muted-foreground mt-2">Right clicks</p>
+                                            <p className="text-sm font-medium">{voteStats.clickAnalytics.positionBias.rightClicks}</p>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground text-center">
+                                        {Math.abs(voteStats.clickAnalytics.positionBias.leftPct - 50) > 10 
+                                            ? `⚠️ Users prefer ${voteStats.clickAnalytics.positionBias.leftPct > 50 ? 'left' : 'right'} side`
+                                            : '✓ No significant position bias'
+                                        }
+                                    </p>
+                                </Card>
+
+                                {/* Time Spent Distribution */}
+                                <Card className="p-6">
+                                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Time to Vote</h3>
+                                    <div className="space-y-2">
+                                        {[
+                                            { label: '<5s', value: voteStats.clickAnalytics.timeSpentBuckets.under5, color: 'bg-red-500' },
+                                            { label: '5-15s', value: voteStats.clickAnalytics.timeSpentBuckets['5to15'], color: 'bg-yellow-500' },
+                                            { label: '15-30s', value: voteStats.clickAnalytics.timeSpentBuckets['15to30'], color: 'bg-green-500' },
+                                            { label: '30-60s', value: voteStats.clickAnalytics.timeSpentBuckets['30to60'], color: 'bg-blue-500' },
+                                            { label: '>60s', value: voteStats.clickAnalytics.timeSpentBuckets.over60, color: 'bg-purple-500' },
+                                        ].map((bucket) => {
+                                            const total = Object.values(voteStats.clickAnalytics!.timeSpentBuckets).reduce((a, b) => a + b, 0)
+                                            const pct = total > 0 ? (bucket.value / total) * 100 : 0
+                                            return (
+                                                <div key={bucket.label} className="flex items-center gap-2 text-xs">
+                                                    <span className="w-12 text-muted-foreground">{bucket.label}</span>
+                                                    <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden">
+                                                        <div className={`h-full ${bucket.color}`} style={{ width: `${pct}%` }} />
+                                                    </div>
+                                                    <span className="w-8 text-right text-muted-foreground">{bucket.value}</span>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground text-center mt-3">
+                                        Avg: {(voteStats.clickAnalytics.avgTimeSpentMs / 1000).toFixed(1)}s
+                                    </p>
+                                </Card>
+
+                                {/* Skip & XP Bias Stats */}
+                                <Card className="p-6">
+                                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Behavior Stats</h3>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <div className="flex justify-between text-sm mb-1">
+                                                <span className="text-muted-foreground">Chose High XP</span>
+                                                <span className="font-medium">{voteStats.clickAnalytics.xpBias.highXpPct.toFixed(0)}%</span>
+                                            </div>
+                                            <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                                <div className="h-full bg-green-500" style={{ width: `${voteStats.clickAnalytics.xpBias.highXpPct}%` }} />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div className="flex justify-between text-sm mb-1">
+                                                <span className="text-muted-foreground">Chose Low XP</span>
+                                                <span className="font-medium">{(100 - voteStats.clickAnalytics.xpBias.highXpPct).toFixed(0)}%</span>
+                                            </div>
+                                            <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                                <div className="h-full bg-red-500" style={{ width: `${100 - voteStats.clickAnalytics.xpBias.highXpPct}%` }} />
+                                            </div>
+                                        </div>
+                                        <div className="pt-2 border-t border-border">
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-muted-foreground">Skipped cases</span>
+                                                <span className="font-medium">{voteStats.clickAnalytics.skipCount}</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </Card>
                             </div>

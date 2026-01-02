@@ -280,6 +280,61 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
         const peakHourIndex = hourlyVelocity.findIndex(h => h.count === peakVPH)
         const peakHourLabel = peakHourIndex >= 0 ? hourlyVelocity[peakHourIndex].label : null
 
+        // 7. Fetch click analytics for position bias heatmap
+        const clickEvents = await withRetry(() => prisma.$queryRaw<Array<{
+            buttonPosition: string | null
+            highXpPosition: string | null
+            eventType: string
+            timeSpentMs: number | null
+        }>>`
+            SELECT "buttonPosition", "highXpPosition", "eventType", "timeSpentMs"
+            FROM "VoteAnalyticsEvent"
+            WHERE timestamp >= NOW() - INTERVAL '7 days'
+            AND "eventType" IN ('vote', 'skip')
+        `).catch(() => [] as Array<{ buttonPosition: string | null; highXpPosition: string | null; eventType: string; timeSpentMs: number | null }>)
+
+        // Calculate position bias
+        const voteEvents = clickEvents.filter(e => e.eventType === 'vote' && e.buttonPosition)
+        const leftClicks = voteEvents.filter(e => e.buttonPosition === 'left').length
+        const rightClicks = voteEvents.filter(e => e.buttonPosition === 'right').length
+        const totalClicks = leftClicks + rightClicks
+
+        // Did they click where high XP was shown?
+        const clickedHighXp = voteEvents.filter(e => e.buttonPosition === e.highXpPosition).length
+        const clickedLowXp = voteEvents.filter(e => e.buttonPosition !== e.highXpPosition).length
+
+        // Time spent distribution (buckets: <5s, 5-15s, 15-30s, 30-60s, >60s)
+        const timeSpentBuckets = { under5: 0, '5to15': 0, '15to30': 0, '30to60': 0, over60: 0 }
+        clickEvents.filter(e => e.timeSpentMs).forEach(e => {
+            const seconds = (e.timeSpentMs || 0) / 1000
+            if (seconds < 5) timeSpentBuckets.under5++
+            else if (seconds < 15) timeSpentBuckets['5to15']++
+            else if (seconds < 30) timeSpentBuckets['15to30']++
+            else if (seconds < 60) timeSpentBuckets['30to60']++
+            else timeSpentBuckets.over60++
+        })
+
+        const skipEvents = clickEvents.filter(e => e.eventType === 'skip').length
+
+        const clickAnalytics = {
+            totalEvents: clickEvents.length,
+            positionBias: {
+                leftClicks,
+                rightClicks,
+                leftPct: totalClicks > 0 ? (leftClicks / totalClicks) * 100 : 50
+            },
+            xpBias: {
+                clickedHighXp,
+                clickedLowXp,
+                highXpPct: (clickedHighXp + clickedLowXp) > 0 ? (clickedHighXp / (clickedHighXp + clickedLowXp)) * 100 : 50
+            },
+            timeSpentBuckets,
+            skipCount: skipEvents,
+            avgTimeSpentMs: voteEvents.length > 0 
+                ? voteEvents.filter(e => e.timeSpentMs).reduce((sum, e) => sum + (e.timeSpentMs || 0), 0) / voteEvents.filter(e => e.timeSpentMs).length
+                : 0
+        }
+
         const voteStats = {
             global: {
                 totalVotes: totalVotesCount,
@@ -293,7 +348,8 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
             voters: voterStats.slice(0, 20),
             hourlyVelocity,
             peakVPH,
-            peakHourLabel
+            peakHourLabel,
+            clickAnalytics
         }
 
         return NextResponse.json({

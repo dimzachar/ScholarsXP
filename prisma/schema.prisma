@@ -552,6 +552,25 @@ model JudgmentVote {
   @@index([walletAddress]) // Look up votes by wallet
 }
 
+// Lightweight analytics for vote interactions (PostHog-style tracking)
+model VoteAnalyticsEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  sessionId      String   // Session identifier
+  visitorId      String   // Anonymous visitor ID
+  submissionId   String   // Which case
+  eventType      String   // 'view' | 'vote' | 'skip'
+  votedXp        Int?     // XP value voted for (if vote event)
+  buttonPosition String?  // 'left' | 'right' - which side clicked
+  highXpPosition String?  // 'left' | 'right' - where high XP was shown
+  timeSpentMs    Int?     // Time spent viewing before action
+  timestamp      DateTime @default(now())
+
+  @@index([submissionId])
+  @@index([visitorId])
+  @@index([timestamp])
+  @@index([eventType, timestamp])
+}
+
 model UserWallet {
   id            String      @id @default(uuid()) @db.Uuid
   userId        String      @db.Uuid
