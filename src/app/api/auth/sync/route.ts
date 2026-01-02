@@ -222,11 +222,14 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // Extract clean username (without #0 discriminator)
+      const cleanUsername = body.discordUsername ? body.discordUsername.split('#')[0] : 'User'
+
       user = await prisma.user.create({
         data: {
           privyUserId: body.privyUserId,
           email: body.email || `${body.privyUserId}@privy.local`,
-          username: body.discordUsername || 'User',
+          username: cleanUsername,
           discordId: body.discordId || null,
           discordHandle: body.discordUsername || null,
           discordAvatarUrl: discordAvatar || null,
