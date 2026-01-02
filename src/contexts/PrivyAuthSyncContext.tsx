@@ -2,8 +2,6 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import { usePrivy } from '@privy-io/react-auth'
-// IMPORTANT: useCreateWallet must be imported from extended-chains for chainType support
-import { useCreateWallet } from '@privy-io/react-auth/extended-chains'
 import { setPrivyUserId } from '@/lib/api-client'
 
 export type UserRole = 'USER' | 'REVIEWER' | 'ADMIN'
@@ -74,7 +72,6 @@ async function sleep(ms: number): Promise<void> {
 
 export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) {
   const { ready, authenticated, user: privyUser } = usePrivy()
-  const { createWallet: privyCreateWallet } = useCreateWallet()
   
   const [user, setUser] = useState<SyncedUser | null>(null)
   const [isSyncing, setIsSyncing] = useState(false)
@@ -84,7 +81,6 @@ export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) 
   
   const syncInProgressRef = useRef(false)
   const lastSyncedUserIdRef = useRef<string | null>(null)
-  const walletCreationAttemptedRef = useRef<string | null>(null)
 
   // Sync user data to Supabase with retry logic
   const syncUserToSupabase = useCallback(async (walletAddress?: string) => {
@@ -253,40 +249,6 @@ export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) 
     }
     // If sync is in progress, don't change isLoading - let the sync complete
   }, [ready, authenticated, privyUser, syncUserToSupabase])
-
-  // Auto-create Aptos wallet if user doesn't have one
-  useEffect(() => {
-    if (!ready || !authenticated || !privyUser) return
-    if (walletCreationAttemptedRef.current === privyUser.id) return
-    
-    const hasAptosWallet = privyUser.linkedAccounts?.some(
-      (account) => account.type === 'wallet' && 
-        'chainType' in account && 
-        (account as { chainType?: string }).chainType === 'aptos'
-    )
-    
-    if (hasAptosWallet) return
-    
-    // Mark as attempted for this user
-    walletCreationAttemptedRef.current = privyUser.id
-    
-    const createAptosWallet = async () => {
-      try {
-        console.log('Creating Movement wallet for user...', { userId: privyUser.id })
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const wallet = await (privyCreateWallet as any)({ chainType: 'aptos' })
-        console.log('Movement wallet created successfully:', wallet)
-        // Re-sync to pick up the new wallet
-        syncUserToSupabase()
-      } catch (error: unknown) {
-        console.error('Movement wallet creation error:', error)
-        const msg = error instanceof Error ? error.message : String(error)
-        console.error('Error message:', msg)
-      }
-    }
-    
-    createAptosWallet()
-  }, [ready, authenticated, privyUser, privyCreateWallet, syncUserToSupabase])
 
   // Role helper functions
   const hasRole = useCallback((role: UserRole): boolean => {
