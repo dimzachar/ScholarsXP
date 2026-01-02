@@ -145,6 +145,10 @@ export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) 
         //   discordUsername: discordAccount && 'username' in discordAccount ? discordAccount.username : null
         // })
         
+        // Extract email - prefer Privy email, then Discord email from linked account
+        const discordEmail = discordAccount && 'email' in discordAccount ? (discordAccount.email as string | null) : null
+        const userEmail = privyUser.email?.address || discordEmail || null
+        
         const response = await fetch('/api/auth/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -154,7 +158,7 @@ export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) 
             discordId: discordAccount && 'subject' in discordAccount ? discordAccount.subject : null,
             discordAvatar: avatarUrl,
             movementWalletAddress: finalWalletAddress,
-            email: privyUser.email?.address || null,
+            email: userEmail,
           }),
         })
         
