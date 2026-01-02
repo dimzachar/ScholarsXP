@@ -66,10 +66,12 @@ export const prisma =
     log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
     datasources: {
       db: { url: finalDatabaseUrl }
+    },
+    // Transaction timeout to prevent stuck connections
+    transactionOptions: {
+      maxWait: 10000,  // 10s max wait to acquire connection
+      timeout: 30000   // 30s max transaction duration
     }
-    // Configure connection pooling via DATABASE_URL parameters
-    // The connection limit should be set in the DATABASE_URL itself
-    // e.g., DATABASE_URL="postgresql://...?connection_limit=10&pool_timeout=10"
   })
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
