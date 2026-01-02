@@ -80,60 +80,11 @@ export function usePrivyAuth(): UsePrivyAuthReturn {
   const hasWallet = !!walletAddress
 
   // Login handler - the actual login is triggered by calling this
-  // The onComplete callback handles wallet creation
+  // Wallet creation is handled by PrivyAuthSyncContext
   const { login } = usePrivyLogin({
-    onComplete: async ({ user, isNewUser }) => {
-      // console.log('Privy login complete:', { userId: user.id, isNewUser })
-      
-      // Check for existing Aptos/Movement wallet (MUST filter by chainType: 'aptos')
-      const existingWallet = user.linkedAccounts?.find(
-        (account) => account.type === 'wallet' && 
-          'chainType' in account && 
-          (account as { chainType?: string }).chainType === 'aptos'
-      )
-      
-      if (existingWallet) {
-        // console.log('Existing Movement wallet found:', existingWallet)
-        return
-      }
-      
-      // Check if user has Ethereum wallet but no Aptos wallet - log warning
-      const ethereumWallet = user.linkedAccounts?.find(
-        (account) => account.type === 'wallet' && 
-          'chainType' in account && 
-          (account as { chainType?: string }).chainType === 'ethereum'
-      )
-      if (ethereumWallet) {
-        console.warn('User has Ethereum wallet but no Movement wallet. Creating Movement wallet...')
-      }
-      
-      // Create new Movement wallet for users without one
-      // CRITICAL: Must specify chainType: 'aptos' for Movement Network
-      if (isNewUser || !existingWallet) {
-        try {
-          // console.log('Creating new Movement wallet with chainType: aptos...')
-          const wallet = await privyCreateWallet({ chainType: 'aptos' })
-          
-          // Cast to any to access address property (Privy types don't expose it directly)
-          const walletData = wallet as { address?: string; chainType?: string }
-          
-          // Verify wallet was created with correct chain type
-          if (walletData && walletData.chainType !== 'aptos') {
-            console.error('Wallet created with wrong chain type:', walletData.chainType)
-          } else {
-            // console.log('Movement wallet created:', walletData?.address)
-          }
-        } catch (error) {
-          // Check if error is "already has wallet" - this is fine, not an error
-          const errorMessage = error instanceof Error ? error.message : String(error)
-          if (errorMessage.includes('already has an embedded wallet')) {
-            // console.log('User already has an embedded wallet, skipping creation')
-          } else {
-            console.error('Failed to create Movement wallet:', error)
-          }
-          // Don't throw - user can retry from profile
-        }
-      }
+    onComplete: async ({ user: _user, isNewUser: _isNewUser }) => {
+      // Wallet creation moved to PrivyAuthSyncContext to handle both
+      // new logins and returning sessions consistently
     },
     onError: (error) => {
       // "exited_auth_flow" is expected when user closes the modal - not an error
