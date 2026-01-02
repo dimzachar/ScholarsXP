@@ -1,18 +1,90 @@
 'use client'
 
-import { ThumbsDown, ThumbsUp, Loader2 } from 'lucide-react'
+import { useMemo } from 'react'
+import { ThumbsDown, ThumbsUp, Loader2, SkipForward } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 interface VerdictButtonsProps {
   divergentScores: [number, number]
   onVote: (xp: number, direction: 'left' | 'right') => void
+  onSkip?: () => void
   voting: boolean
   disabled?: boolean
+  submissionId?: string // Used for consistent randomization per case
 }
 
-export function VerdictButtons({ divergentScores, onVote, voting, disabled }: VerdictButtonsProps) {
+export function VerdictButtons({ 
+  divergentScores, 
+  onVote, 
+  onSkip,
+  voting, 
+  disabled,
+  submissionId 
+}: VerdictButtonsProps) {
   const [lowXp, highXp] = divergentScores
+
+  // Randomize button order based on submissionId (consistent per case)
+  // Uses a simple hash of the submissionId to determine order
+  const swapped = useMemo(() => {
+    if (!submissionId) return false
+    // Simple hash: sum of char codes, check if odd
+    const hash = submissionId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+    return hash % 2 === 1
+  }, [submissionId])
+
+  // Define button configs, then swap if needed
+  const lowButton = (
+    <Button
+      variant="outline"
+      onClick={() => onVote(lowXp, swapped ? 'right' : 'left')}
+      disabled={voting || disabled}
+      className={cn(
+        "h-24 flex-col gap-2 border-2 transition-all duration-200",
+        "border-destructive/30 hover:border-destructive hover:bg-destructive/10",
+        "group"
+      )}
+    >
+      {voting ? (
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      ) : (
+        <>
+          <div className="p-2 rounded-full bg-destructive/10 group-hover:bg-destructive/20 transition-colors">
+            <ThumbsDown className="w-6 h-6 text-destructive" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-destructive">{lowXp} XP</div>
+          </div>
+        </>
+      )}
+    </Button>
+  )
+
+  const highButton = (
+    <Button
+      variant="outline"
+      onClick={() => onVote(highXp, swapped ? 'left' : 'right')}
+      disabled={voting || disabled}
+      className={cn(
+        "h-24 flex-col gap-2 border-2 transition-all duration-200",
+        "border-success/30 hover:border-success hover:bg-success/10",
+        "group"
+      )}
+    >
+      {voting ? (
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      ) : (
+        <>
+          <div className="p-2 rounded-full bg-success/10 group-hover:bg-success/20 transition-colors">
+            <ThumbsUp className="w-6 h-6 text-success" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-success">{highXp} XP</div>
+          </div>
+        </>
+      )}
+    </Button>
+  )
 
   return (
     <div className="space-y-4">
@@ -24,54 +96,30 @@ export function VerdictButtons({ divergentScores, onVote, voting, disabled }: Ve
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <Button
-          variant="outline"
-          onClick={() => onVote(lowXp, 'left')}
-          disabled={voting || disabled}
-          className={cn(
-            "h-24 flex-col gap-2 border-2 transition-all duration-200",
-            "border-destructive/30 hover:border-destructive hover:bg-destructive/10",
-            "group"
-          )}
-        >
-          {voting ? (
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-          ) : (
-            <>
-              <div className="p-2 rounded-full bg-destructive/10 group-hover:bg-destructive/20 transition-colors">
-                <ThumbsDown className="w-6 h-6 text-destructive" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-destructive">{lowXp} XP</div>
-              </div>
-            </>
-          )}
-        </Button>
-
-        <Button
-          variant="outline"
-          onClick={() => onVote(highXp, 'right')}
-          disabled={voting || disabled}
-          className={cn(
-            "h-24 flex-col gap-2 border-2 transition-all duration-200",
-            "border-success/30 hover:border-success hover:bg-success/10",
-            "group"
-          )}
-        >
-          {voting ? (
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-          ) : (
-            <>
-              <div className="p-2 rounded-full bg-success/10 group-hover:bg-success/20 transition-colors">
-                <ThumbsUp className="w-6 h-6 text-success" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-success">{highXp} XP</div>
-              </div>
-            </>
-          )}
-        </Button>
+        {swapped ? (
+          <>
+            {highButton}
+            {lowButton}
+          </>
+        ) : (
+          <>
+            {lowButton}
+            {highButton}
+          </>
+        )}
       </div>
+
+      {onSkip && (
+        <Button
+          variant="ghost"
+          onClick={onSkip}
+          disabled={voting || disabled}
+          className="w-full text-muted-foreground hover:text-foreground"
+        >
+          <SkipForward className="w-4 h-4 mr-2" />
+          Skip this case
+        </Button>
+      )}
     </div>
   )
 }

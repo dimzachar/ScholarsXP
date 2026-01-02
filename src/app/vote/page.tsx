@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Scale, Gavel, Loader2, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { useWallet } from '@aptos-labs/wallet-adapter-react'
@@ -15,7 +15,6 @@ import { CaseFileCard, VerdictButtons, BlockDisappearEffect } from '@/components
 import type { CaseDetails, ReviewerFeedback, ConflictInfo, PlatformBenchmark } from '@/components/vote'
 import Link from 'next/link'
 
-// Wallet Required Screen - shown when user needs to link wallet
 function WalletRequiredScreen() {
     return (
         <MobileLayout variant="centered">
@@ -66,10 +65,6 @@ function NoCasesScreen() {
     )
 }
 
-
-
-
-// Processing screen shown while transaction is being submitted
 function ProcessingScreen() {
     return (
         <MobileLayout variant="centered">
@@ -79,12 +74,8 @@ function ProcessingScreen() {
                         <Loader2 className="w-12 h-12 text-primary animate-spin" />
                     </div>
                     <h2 className="text-xl font-bold mb-2">Processing Vote</h2>
-                    <p className="text-muted-foreground">
-                        Submitting your vote on-chain...
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                        This may take a few seconds
-                    </p>
+                    <p className="text-muted-foreground">Submitting your vote on-chain...</p>
+                    <p className="text-xs text-muted-foreground mt-2">This may take a few seconds</p>
                 </CardContent>
             </Card>
         </MobileLayout>
@@ -100,6 +91,7 @@ interface JudgmentCase extends CaseDetails {
 function VoteContent({ 
     currentCase, 
     onVote, 
+    onSkip,
     voting,
     remaining,
     total,
@@ -108,6 +100,7 @@ function VoteContent({
 }: { 
     currentCase: JudgmentCase
     onVote: (xp: number, direction: 'left' | 'right') => Promise<boolean>
+    onSkip: () => void
     voting: boolean
     remaining: number
     total: number
@@ -118,7 +111,6 @@ function VoteContent({
         await onVote(xp, direction)
     }
 
-    // Show processing screen when vote is being submitted
     if (voting) {
         return <ProcessingScreen />
     }
@@ -131,11 +123,7 @@ function VoteContent({
                 variant="default"
             />
 
-            <MobileSection
-                title="Current Case"
-                icon={Scale}
-                spacing="normal"
-            >
+            <MobileSection title="Current Case" icon={Scale} spacing="normal">
                 <div className="space-y-6">
                     <BlockDisappearEffect
                         key={currentCase.submissionId}
@@ -153,14 +141,15 @@ function VoteContent({
                     <VerdictButtons
                         divergentScores={currentCase.divergentScores}
                         onVote={handleVote}
+                        onSkip={onSkip}
                         voting={voting || triggerAnimation}
+                        submissionId={currentCase.submissionId}
                     />
                 </div>
             </MobileSection>
         </MobileLayout>
     )
 }
-
 
 export default function VotePage() {
     const { isLoading: walletLoading } = useWalletSync()
@@ -173,20 +162,27 @@ export default function VotePage() {
     const [primaryWallet, setPrimaryWallet] = useState<string | null>(null)
     const [walletFetched, setWalletFetched] = useState(false)
     const [cases, setCases] = useState<JudgmentCase[]>([])
+    const [votedIds, setVotedIds] = useState<Set<string>>(new Set())
     const [currentIndex, setCurrentIndex] = useState(0)
     const [loading, setLoading] = useState(true)
     const [voting, setVoting] = useState(false)
     const [animating, setAnimating] = useState(false)
     const [wasConnecting, setWasConnecting] = useState(false)
 
-    const currentCase = cases[currentIndex] || null
-    const remaining = cases.length - currentIndex
+    // Filter out voted cases, cycling through remaining
+    const availableCases = useMemo(() => 
+        cases.filter(c => !votedIds.has(c.submissionId)), 
+        [cases, votedIds]
+    )
+    
+    // Wrap index to cycle through available cases
+    const wrappedIndex = availableCases.length > 0 ? currentIndex % availableCases.length : 0
+    const currentCase = availableCases[wrappedIndex] || null
+    const remaining = availableCases.length
     const total = cases.length
     
-    // Combined loading state - wait for all data to be ready
     const isInitializing = walletLoading || userLoading || (!walletFetched && !!user)
 
-    // Show toast when external wallet connects after user initiated connection
     useEffect(() => {
         if (wasConnecting && externalWalletConnected) {
             toast.dismiss('wallet-connecting')
@@ -195,7 +191,6 @@ export default function VotePage() {
         }
     }, [wasConnecting, externalWalletConnected])
 
-    // Fetch primary wallet from UserWallet table
     useEffect(() => {
         const fetchPrimaryWallet = async () => {
             if (!user) {
@@ -218,7 +213,6 @@ export default function VotePage() {
         fetchPrimaryWallet()
     }, [user, authenticatedFetch])
 
-    // Fetch cases when wallet is available
     useEffect(() => {
         const fetchCases = async () => {
             try {
@@ -233,6 +227,7 @@ export default function VotePage() {
                 if (data.cases && data.cases.length > 0) {
                     setCases(data.cases)
                     setCurrentIndex(0)
+                    setVotedIds(new Set())
                 } else {
                     setCases([])
                 }
@@ -265,7 +260,6 @@ export default function VotePage() {
             return false
         }
 
-        // For external wallets, check connection and prompt if needed
         if (primaryWalletType === 'EXTERNAL' && !externalWalletConnected) {
             const nightlyWallet = wallets?.find(w => w.name.toLowerCase().includes('nightly') && w.readyState === 'Installed')
             const installedWallet = nightlyWallet || wallets?.find(w => w.readyState === 'Installed')
@@ -299,7 +293,8 @@ export default function VotePage() {
                         </a>
                     </div>
                 )
-                // Trigger animation after successful vote
+                // Mark as voted and trigger animation
+                setVotedIds(prev => new Set([...prev, currentCase.submissionId]))
                 setVoting(false)
                 setAnimating(true)
                 return true
@@ -322,21 +317,19 @@ export default function VotePage() {
         setCurrentIndex(prev => prev + 1)
     }, [])
 
-    // Show loading while initializing
+    // Skip just moves to next case (cycles back eventually)
+    const handleSkip = useCallback(() => {
+        setCurrentIndex(prev => prev + 1)
+    }, [])
+
     if (isInitializing || loading) {
         return <LoadingScreen />
     }
 
-    // Wallet not linked to profile
     if (!primaryWallet) {
         return <WalletRequiredScreen />
     }
 
-    // For external wallets, don't block the UI - let them browse cases
-    // The wallet connection will be checked when they try to vote
-    // This avoids the "connect wallet" screen flash on page load
-
-    // No cases available
     if (!currentCase) {
         return <NoCasesScreen />
     }
@@ -345,6 +338,7 @@ export default function VotePage() {
         <VoteContent
             currentCase={currentCase}
             onVote={handleVote}
+            onSkip={handleSkip}
             voting={voting}
             remaining={remaining}
             total={total}
