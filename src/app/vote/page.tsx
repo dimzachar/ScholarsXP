@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { Scale, Gavel, Loader2, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { useWallet } from '@aptos-labs/wallet-adapter-react'
@@ -153,6 +154,7 @@ function VoteContent({
 }
 
 export default function VotePage() {
+    const router = useRouter()
     const { isLoading: walletLoading } = useWalletSync()
     const { user, isLoading: userLoading } = usePrivyAuthSync()
     const { authenticatedFetch } = useAuthenticatedFetch()
@@ -257,7 +259,12 @@ export default function VotePage() {
         }
 
         if (!primaryWallet || !primaryWalletType) {
-            toast.error('Please link a wallet to vote')
+            toast.error('Please link a wallet in your Profile to vote', {
+                action: {
+                    label: 'Go to Profile',
+                    onClick: () => router.push('/profile'),
+                },
+            })
             return false
         }
 
@@ -314,7 +321,7 @@ export default function VotePage() {
             setVoting(false)
             return false
         }
-    }, [currentCase, primaryWallet, primaryWalletType, sponsoredVote, externalWalletConnected, wallets, connectWallet])
+    }, [currentCase, primaryWallet, primaryWalletType, sponsoredVote, externalWalletConnected, wallets, connectWallet, router])
 
     const handleAnimationComplete = useCallback(() => {
         setAnimating(false)
