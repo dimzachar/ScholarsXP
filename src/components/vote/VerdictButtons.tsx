@@ -19,7 +19,7 @@ export function VerdictButtons({ divergentScores, onVote, voting, disabled }: Ve
       <div className="text-center">
         <h3 className="text-lg font-semibold mb-1">YOUR VERDICT</h3>
         <p className="text-sm text-muted-foreground">
-          Based on the evidence, what XP should this submission have earned??
+          Based on the evidence, what XP should this submission have earned?
         </p>
       </div>
 

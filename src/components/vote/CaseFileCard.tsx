@@ -443,14 +443,14 @@ export function CaseFileCard({ caseData, onVote: _onVote, voting: _voting }: Cas
       <CardContent className="p-6 space-y-4">
         {/* Feature #2: Score Distribution with outliers */}
         {caseData.reviews && caseData.reviews.length > 0 && (
-          <ExhibitSection title="SCORE DISTRIBUTION" icon={BarChart3} defaultOpen={true}>
+          <ExhibitSection title="Exhibit A: Score Distribution" icon={BarChart3} defaultOpen={true}>
             <ScoreDistribution reviews={caseData.reviews} divergentScores={caseData.divergentScores} finalXp={caseData.finalXp} />
           </ExhibitSection>
         )}
 
         {/* Feature #4: Platform Benchmark */}
         {caseData.platformBenchmark && caseData.platformBenchmark.totalSubmissions > 1 && (
-          <ExhibitSection title="PLATFORM CONTEXT" icon={Activity} defaultOpen={true}>
+          <ExhibitSection title="Exhibit B: Platform Context" icon={Activity} defaultOpen={true}>
             <PlatformComparison 
               benchmark={caseData.platformBenchmark} 
               scores={caseData.divergentScores}
@@ -463,7 +463,7 @@ export function CaseFileCard({ caseData, onVote: _onVote, voting: _voting }: Cas
         {/* TODO: Re-enable when we have voted cases to show as precedent */}
 
         {/* Features #1, #6, #8, #9: Reviewer Feedback */}
-        <ExhibitSection title="REVIEWER FEEDBACK" icon={MessageSquare} defaultOpen={true}>
+        <ExhibitSection title="Exhibit C: Reviewer Feedback" icon={MessageSquare} defaultOpen={true}>
           {caseData.reviews && caseData.reviews.length > 0 ? (
             <div className="space-y-3">
               {caseData.reviews.map((review, idx) => (
