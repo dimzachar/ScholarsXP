@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { useWallet } from '@aptos-labs/wallet-adapter-react'
 import { useWalletSync } from '@/contexts/WalletSyncContext'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { LoginScreen } from '@/components/Auth/LoginScreen'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { useSponsoredVote } from '@/hooks/useSponsoredVote'
 import { MobileLayout, MobileHeader, MobileSection } from '@/components/layout/MobileLayout'
@@ -335,6 +336,16 @@ export default function VotePage() {
 
     if (isInitializing || loading) {
         return <LoadingScreen />
+    }
+
+    // Show login screen for unauthenticated users
+    if (!user) {
+        return (
+            <LoginScreen 
+                title="Sign In to Vote"
+                subtitle="Sign in with Discord to participate in voting"
+            />
+        )
     }
 
     if (!primaryWallet) {

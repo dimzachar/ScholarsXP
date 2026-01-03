@@ -151,6 +151,18 @@ export default function ProfilePage() {
     return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
   }
 
+  // Redirect to login if not authenticated - do this immediately when we know
+  useEffect(() => {
+    if (!authLoading && !user) {
+      _router.replace('/login')
+    }
+  }, [authLoading, user, _router])
+
+  // Show nothing while redirecting unauthenticated users (avoids flash)
+  if (!authLoading && !user) {
+    return null
+  }
+
   if (authLoading || (loading && isInitialLoad)) {
     return (
       <MobileLayout>

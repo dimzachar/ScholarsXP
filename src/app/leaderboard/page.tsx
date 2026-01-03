@@ -81,7 +81,7 @@ interface UserPosition {
 }
 
 export default function LeaderboardPage() {
-  const { user } = usePrivyAuthSync()
+  const { user, isLoading: authLoading } = usePrivyAuthSync()
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats | null>(null)
   const [allTimeLeaders, setAllTimeLeaders] = useState<LeaderboardEntry[]>([])
   const [allTimePagination, setAllTimePagination] = useState<PaginationInfo | null>(null)
@@ -174,7 +174,17 @@ export default function LeaderboardPage() {
 
   // Fetch on mount and when dependencies of fetchLeaderboardData change
   // (includes weeklyPage, allTimePage, pageSize, and user via fetchCurrentUserPosition)
-  useEffect(() => { fetchLeaderboardData() }, [fetchLeaderboardData])
+  // Only fetch when user is authenticated to avoid API errors
+  useEffect(() => {
+    if (user) {
+      fetchLeaderboardData()
+    }
+  }, [fetchLeaderboardData, user])
+
+  // Show AuthGuard loading/redirect for unauthenticated users
+  if (authLoading || !user) {
+    return <AuthGuard>{null}</AuthGuard>
+  }
 
   // fetchCurrentUserPosition defined above
 

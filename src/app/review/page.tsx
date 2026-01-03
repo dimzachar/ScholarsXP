@@ -144,7 +144,7 @@ interface UserReviewsResponse {
 }
 
 export default function ReviewPage() {
-  const { user, isAdmin } = usePrivyAuthSync()
+  const { user, isAdmin, isLoading: authLoading } = usePrivyAuthSync()
   const { authenticatedFetch } = useAuthenticatedFetch()
   const [pendingReviews, setPendingReviews] = useState<PendingReview[]>([])
   const [loading, setLoading] = useState(true)
@@ -171,11 +171,14 @@ export default function ReviewPage() {
   const [showBackToTop, setShowBackToTop] = useState(false)
 
   useEffect(() => {
-    fetchPendingReviews()
-  }, [authenticatedFetch])
+    if (user) {
+      fetchPendingReviews()
+    }
+  }, [authenticatedFetch, user])
 
   // Fetch user's own reviews (given)
   useEffect(() => {
+    if (!user) return
     const fetchMyReviews = async () => {
       try {
         setMyReviewsLoading(true)
@@ -195,7 +198,7 @@ export default function ReviewPage() {
       }
     }
     fetchMyReviews()
-  }, [authenticatedFetch])
+  }, [authenticatedFetch, user])
 
   // Back to Top behavior (copied style from changelog)
   useEffect(() => {
@@ -207,6 +210,7 @@ export default function ReviewPage() {
 
   // Admin: fetch all pending submissions (read-only list)
   useEffect(() => {
+    if (!user) return
     const fetchAdminPending = async () => {
       if (!isAdmin) return
       try {
@@ -363,6 +367,11 @@ export default function ReviewPage() {
     } catch {
       return rawUrl.length > 64 ? rawUrl.slice(0, 63) + '…' : rawUrl
     }
+  }
+
+  // Show AuthGuard loading/redirect for unauthenticated users
+  if (authLoading || !user) {
+    return <AuthGuard>{null}</AuthGuard>
   }
 
   if (loading) {
