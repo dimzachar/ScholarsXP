@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -38,8 +39,9 @@ type AnalyticsData = {
 }
 
 export default function AnalyticsPage() {
-  const { user, loading } = useAuth()
+  const { user, isLoading: loading } = usePrivyAuthSync()
   const router = useRouter()
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null)
   const [loadingAnalytics, setLoadingAnalytics] = useState(true)
   const [selectedTimeframe, setSelectedTimeframe] = useState('current_week')
@@ -49,8 +51,8 @@ export default function AnalyticsPage() {
       setLoadingAnalytics(true)
       
       const [xpBreakdownResponse, profileResponse] = await Promise.all([
-        fetch(`/api/user/xp-breakdown?timeframe=${selectedTimeframe}&_t=${Date.now()}`),
-        fetch(`/api/user/profile/complete?_t=${Date.now()}`)
+        authenticatedFetch(`/api/user/xp-breakdown?timeframe=${selectedTimeframe}&_t=${Date.now()}`),
+        authenticatedFetch(`/api/user/profile/complete?_t=${Date.now()}`)
       ])
 
       if (xpBreakdownResponse.ok && profileResponse.ok) {
@@ -71,7 +73,7 @@ export default function AnalyticsPage() {
     } finally {
       setLoadingAnalytics(false)
     }
-  }, [selectedTimeframe])
+  }, [authenticatedFetch, selectedTimeframe])
 
   useEffect(() => {
     if (user) {

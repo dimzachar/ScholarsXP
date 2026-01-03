@@ -26,6 +26,11 @@ model User {
   discordId          String?      @unique
   discordHandle      String?
   discordAvatarUrl   String?
+  // Privy identity linking fields
+  privyUserId              String?   @unique  // Privy's internal user ID for identity linking
+  // Movement Network wallet fields (Aptos-based, via Nightly etc.)
+  movementWalletAddress    String?   @unique  // Primary Movement wallet address (0x...)
+  walletLinkedAt           DateTime?          // When wallet was first linked
   submissions        Submission[]
   peerReviews        PeerReview[]
   weeklyStats        WeeklyStats[]
@@ -36,6 +41,7 @@ model User {
   xpTransactions     XpTransaction[]
   notifications      Notification[]
   rolePromotionNotifications RolePromotionNotification[]
+  wallets            UserWallet[]
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
 
@@ -46,6 +52,7 @@ model User {
   @@index([lastActiveAt, createdAt]) // Analytics queries optimization
   @@index([totalXp(sort: Desc)])   // Leaderboard queries optimization
   @@index([lastActiveAt, totalXp], map: "idx_user_active_recent") // Active users partial index
+  @@index([movementWalletAddress]) // Wallet address lookup
 }
 
 model Submission {
@@ -88,6 +95,8 @@ model Submission {
   @@index([createdAt])             // Time-based analytics (time series)
   @@index([platform, createdAt])   // Platform analytics
   @@index([status, createdAt, platform]) // Enhanced admin analytics
+  judgmentVotes      JudgmentVote[]
+  shadowConsensusLogs ShadowConsensusLog[]
 }
 
 model PeerReview {
@@ -101,6 +110,7 @@ model PeerReview {
   isLate         Boolean    @default(false)
   contentCategory String?
   qualityTier     String?
+  judgmentStatus  JudgmentStatus @default(NONE)
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
@@ -297,6 +307,15 @@ enum XpTransactionType {
   ACHIEVEMENT_BONUS
   ROLE_PROMOTION
   MONTHLY_WINNER_BONUS
+  MONTHLY_WINNER_BONUS_REVERSAL
+  SUBMISSION
+  LEGACY_SUBMISSION
+  SUBMISSION_IMPORT
+  PEER_REVIEW
+  REVIEW
+  ACHIEVEMENT_REWARD
+  ACHIEVEMENT
+  LEGACY_ADJUSTMENT
 }
 
 enum NotificationType {
@@ -517,4 +536,85 @@ model AutomationLog {
   @@index([jobName, startedAt(sort: Desc)])
   @@index([triggeredBy, startedAt(sort: Desc)])
   @@map("AutomationLog")
+}
+
+model JudgmentVote {
+  id            String   @id @default(uuid()) @db.Uuid
+  submissionId  String   @db.Uuid
+  walletAddress String   // Embedded wallet address (0x...)
+  voteXp        Int      // The XP score they voted for
+  signature     String   // Transaction signature proving the vote
+  createdAt     DateTime @default(now())
+
+  submission    Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, walletAddress]) // One vote per wallet per submission
+  @@index([walletAddress]) // Look up votes by wallet
+}
+
+// Lightweight analytics for vote interactions (PostHog-style tracking)
+model VoteAnalyticsEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  sessionId      String   // Session identifier
+  visitorId      String   // Anonymous visitor ID
+  submissionId   String   // Which case
+  eventType      String   // 'view' | 'vote' | 'skip'
+  votedXp        Int?     // XP value voted for (if vote event)
+  buttonPosition String?  // 'left' | 'right' - which side clicked
+  highXpPosition String?  // 'left' | 'right' - where high XP was shown
+  timeSpentMs    Int?     // Time spent viewing before action
+  timestamp      DateTime @default(now())
+
+  @@index([submissionId])
+  @@index([visitorId])
+  @@index([timestamp])
+  @@index([eventType, timestamp])
+}
+
+model UserWallet {
+  id            String      @id @default(uuid()) @db.Uuid
+  userId        String      @db.Uuid
+  address       String      // Wallet address (0x...)
+  label         String?     // User-defined label (e.g., "Main", "Trading")
+  type          WalletType  @default(EXTERNAL)
+  isPrimary     Boolean     @default(false) // Primary wallet for on-chain activities
+  linkedAt      DateTime    @default(now())
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([address]) // Each wallet can only be linked to one user
+  @@unique([userId, address]) // Prevent duplicate wallet per user
+  @@index([userId])
+  @@index([address])
+  @@index([userId, isPrimary])
+  @@map("UserWallet")
+}
+
+enum WalletType {
+  EMBEDDED  // Created via Privy
+  EXTERNAL  // Connected via browser extension (Nightly, etc.)
+}
+
+enum JudgmentStatus {
+  NONE
+  VALIDATED
+  INVALIDATED
+}
+
+model ShadowConsensusLog {
+  id                String   @id @default(uuid()) @db.Uuid
+  submissionId      String   @db.Uuid
+  activeFormulaId   String
+  activeScore       Float
+  shadowFormulaId   String
+  shadowScore       Float
+  delta             Float
+  timestamp         DateTime @default(now())
+  
+  submission        Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+  @@index([timestamp])
 }

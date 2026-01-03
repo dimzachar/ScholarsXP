@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
-import { createAuthenticatedClient } from '@/lib/supabase-server'
 import { getWeekNumber } from '@/lib/utils'
 
 export const GET = withPermission('authenticated')(async (request: AuthenticatedRequest) => {
@@ -14,15 +13,9 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
 
     const userId = request.user.id
 
-    // Create authenticated Supabase client that respects RLS policies
-    const accessToken = request.user.access_token ||
-                       request.headers.get('authorization')?.replace('Bearer ', '') ||
-                       request.cookies.get('sb-access-token')?.value || ''
-
-    const supabase = createAuthenticatedClient(
-      accessToken,
-      request.user.refresh_token || request.cookies.get('sb-refresh-token')?.value
-    )
+    // Create service client for database queries (auth handled by middleware)
+    const { createServiceClient } = await import('@/lib/supabase-server')
+    const supabase = createServiceClient()
 
     // Build query
     let query = supabase

@@ -1,8 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
+import * as fs from 'fs'
+import path from 'path'
 import { xpAnalyticsService } from './xp-analytics'
 import { prisma } from '@/lib/prisma'
 import { getWeekNumber, getWeekBoundaries, recalculateCurrentWeekXp } from '@/lib/utils'
 import { generateReviewSummary } from '@/lib/ai-summary'
+import { reliabilityService } from './reliability/reliability-service'
+import { RELIABILITY_CONFIG } from '@/config/reliability'
+import { getFormula, calculateScore } from './reliability/formulas'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -101,10 +106,22 @@ export class ConsensusCalculatorService {
       console.log(`🔍 Processing consensus for submission ${submissionId} with ${reviews.length} reviews`)
       console.log(`📊 Review scores:`, reviews.map(r => ({ id: r.id, score: r.xpScore, reviewer: r.reviewerId })))
 
-      // Calculate reviewer reliability scores
-      const reviewerReliabilities = await this.calculateReviewerReliabilities(
+      // Calculate reviewer reliability scores using the new Reliability Service
+      const reliabilityMap = await reliabilityService.getReliabilityScores(
         reviews.map(r => r.reviewerId)
       )
+
+      // Map to the internal interface for compatibility with existing methods
+      const reviewerReliabilities = new Map<string, ReviewerReliability>()
+      reliabilityMap.forEach((res, id) => {
+        reviewerReliabilities.set(id, {
+          reviewerId: id,
+          reliabilityScore: res.score,
+          totalReviews: res.metrics.totalReviews,
+          averageDeviation: res.metrics.avgDeviation,
+          qualityRating: res.metrics.avgQualityRating
+        })
+      })
 
       // Detect and handle outliers
       const peerXpScores = reviews.map(r => r.xpScore)
@@ -116,6 +133,47 @@ export class ConsensusCalculatorService {
         reviewerReliabilities,
         outliers
       )
+
+      // --- SHADOW MODE LOGGING (Non-blocking) ---
+      if (RELIABILITY_CONFIG.ENABLE_SHADOW_MODE) {
+        setImmediate(async () => {
+          try {
+            const shadowFormula = getFormula('CUSTOM_V1')
+            let shadowWeightedSum = 0
+            let shadowTotalWeight = 0
+
+            const outlierIds = new Set(outliers.map(o => o.reviewId))
+            const validReviews = reviews.filter(review => !outlierIds.has(review.id))
+
+            for (const review of validReviews) {
+              const res = reliabilityMap.get(review.reviewerId)
+              if (res) {
+                const shadowScore = calculateScore(res.metrics, shadowFormula.weights)
+                shadowWeightedSum += (review.xpScore || 0) * shadowScore
+                shadowTotalWeight += shadowScore
+              }
+            }
+
+            const shadowConsensus = shadowTotalWeight > 0 ? shadowWeightedSum / shadowTotalWeight : weightedPeerAverage
+            const delta = shadowConsensus - weightedPeerAverage
+
+            // Log to database
+            await prisma.shadowConsensusLog.create({
+              data: {
+                submissionId,
+                activeFormulaId: RELIABILITY_CONFIG.ACTIVE_FORMULA,
+                activeScore: weightedPeerAverage,
+                shadowFormulaId: 'CUSTOM_V1',
+                shadowScore: shadowConsensus,
+                delta: delta
+              }
+            })
+          } catch (shadowError) {
+            console.warn('[SHADOW MODE] Failed to log shadow consensus:', shadowError)
+          }
+        })
+      }
+      // ---------------------------
 
       // Peer-only consensus: compute agreement among peers, ignore AI completely
       const agreement = this.calculateAgreement(peerXpScores)
@@ -187,67 +245,24 @@ export class ConsensusCalculatorService {
   }
 
   /**
-   * Calculate reviewer reliability scores
+   * Legacy method kept for interface compatibility, now redirects to ReliabilityService
+   * @deprecated Use reliabilityService.getReliabilityScores directly
    */
   private async calculateReviewerReliabilities(reviewerIds: string[]): Promise<Map<string, ReviewerReliability>> {
-    const reliabilities = new Map<string, ReviewerReliability>()
+    const reliabilityMap = await reliabilityService.getReliabilityScores(reviewerIds)
+    const results = new Map<string, ReviewerReliability>()
 
-    for (const reviewerId of reviewerIds) {
-      try {
-        // Get reviewer's historical reviews
-        const { data: historicalReviews } = await supabase
-          .from('PeerReview')
-          .select('xpScore, qualityRating, isLate')
-          .eq('reviewerId', reviewerId)
-          .limit(50) // Last 50 reviews
+    reliabilityMap.forEach((res, id) => {
+      results.set(id, {
+        reviewerId: id,
+        reliabilityScore: res.score,
+        totalReviews: res.metrics.totalReviews,
+        averageDeviation: res.metrics.avgDeviation,
+        qualityRating: res.metrics.avgQualityRating
+      })
+    })
 
-        if (!historicalReviews || historicalReviews.length === 0) {
-          // New reviewer - assign neutral reliability
-          reliabilities.set(reviewerId, {
-            reviewerId,
-            reliabilityScore: 0.7, // Neutral score for new reviewers
-            totalReviews: 0,
-            averageDeviation: 0,
-            qualityRating: 3.5
-          })
-          continue
-        }
-
-        // Calculate average quality rating
-        const qualityRatings = historicalReviews.filter(r => r.qualityRating).map(r => r.qualityRating)
-        const averageQuality = qualityRatings.length > 0
-          ? qualityRatings.reduce((sum, rating) => sum + rating, 0) / qualityRatings.length
-          : 3.5
-
-        // Calculate reliability score based on consistency and quality
-        const lateReviews = historicalReviews.filter(r => r.isLate).length
-        const timelinessScore = 1 - (lateReviews / historicalReviews.length)
-        const qualityScore = (averageQuality - 1) / 4 // Normalize to 0-1
-
-        const reliabilityScore = (timelinessScore * 0.3) + (qualityScore * 0.7)
-
-        reliabilities.set(reviewerId, {
-          reviewerId,
-          reliabilityScore: Math.max(0.1, Math.min(1.0, reliabilityScore)),
-          totalReviews: historicalReviews.length,
-          averageDeviation: 0, // TODO: Calculate based on historical consensus data
-          qualityRating: averageQuality
-        })
-
-      } catch (error) {
-        console.error(`Error calculating reliability for reviewer ${reviewerId}:`, error)
-        // Assign default reliability on error
-        reliabilities.set(reviewerId, {
-          reviewerId,
-          reliabilityScore: 0.5,
-          totalReviews: 0,
-          averageDeviation: 0,
-          qualityRating: 3.0
-        })
-      }
-    }
-
-    return reliabilities
+    return results
   }
 
   /**
@@ -436,13 +451,13 @@ export class ConsensusCalculatorService {
               where: { submissionId },
               select: { comments: true, xpScore: true, qualityRating: true }
             })
-            
+
             if (reviews.length > 0) {
               const summary = await generateReviewSummary(
                 submission.url || 'Untitled Submission',
                 reviews
               )
-              
+
               if (!summary.startsWith('Failed to generate') && !summary.startsWith('No detailed feedback')) {
                 await prisma.submission.update({
                   where: { id: submissionId },

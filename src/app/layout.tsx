@@ -3,17 +3,22 @@
 import type { Metadata } from 'next'
 import { Oxanium } from 'next/font/google'
 import './globals.css'
-import { AuthProvider } from '@/contexts/AuthContext'
 import AuthErrorBoundary from '@/components/Auth/AuthErrorBoundary'
 import ConditionalLayout from '@/components/ConditionalLayout'
 import { ThemeProvider } from '@/components/theme-provider'
+import { PrivyAuthProvider } from '@/components/providers/PrivyAuthProvider'
 // import { PerformanceMonitorProvider } from '@/components/PerformanceMonitorProvider'
 import { Toaster } from 'sonner'
 import { Analytics } from '@vercel/analytics/next';
+import { WalletProvider } from '@/lib/wallet-provider'
+import { WalletSyncProvider } from '@/contexts/WalletSyncContext'
+import { PrivyAuthSyncProvider } from '@/contexts/PrivyAuthSyncContext'
 
 const oxanium = Oxanium({
   subsets: ['latin'],
   variable: '--font-oxanium',
+  display: 'swap',
+  preload: false,
 })
 
 export const metadata: Metadata = {
@@ -48,14 +53,20 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <AuthErrorBoundary>
-            <AuthProvider>
-              <ConditionalLayout>
-                {children}
-              </ConditionalLayout>
-              <Toaster />
-            </AuthProvider>
-          </AuthErrorBoundary>
+          <PrivyAuthProvider>
+            <PrivyAuthSyncProvider>
+              <WalletProvider>
+                <AuthErrorBoundary>
+                  <WalletSyncProvider>
+                    <ConditionalLayout>
+                      {children}
+                    </ConditionalLayout>
+                    <Toaster />
+                  </WalletSyncProvider>
+                </AuthErrorBoundary>
+              </WalletProvider>
+            </PrivyAuthSyncProvider>
+          </PrivyAuthProvider>
         </ThemeProvider>
         <Analytics />
       </body>

@@ -1,0 +1,169 @@
+'use client'
+
+import { useCallback, useMemo } from 'react'
+import { 
+  usePrivy, 
+  useLogin as usePrivyLogin, 
+  useLogout as usePrivyLogout,
+  User as PrivyUser,
+} from '@privy-io/react-auth'
+// IMPORTANT: useCreateWallet must be imported from extended-chains for chainType support
+import { useCreateWallet } from '@privy-io/react-auth/extended-chains'
+
+export interface WalletInfo {
+  address: string
+  publicKey?: string
+  chainType: 'aptos'
+}
+
+export interface UsePrivyAuthReturn {
+  // Auth state
+  isAuthenticated: boolean
+  isLoading: boolean
+  isReady: boolean
+  user: PrivyUser | null
+  
+  // Wallet state
+  walletAddress: string | null
+  hasWallet: boolean
+  
+  // Actions
+  login: () => void
+  logout: () => Promise<void>
+  createWallet: () => Promise<WalletInfo | null>
+  
+  // Raw Privy user for advanced use cases
+  privyUser: PrivyUser | null
+}
+
+/**
+ * Hook that wraps Privy authentication with wallet management.
+ * Handles automatic wallet creation for new users in the onComplete callback.
+ */
+export function usePrivyAuth(): UsePrivyAuthReturn {
+  const { ready, authenticated, user } = usePrivy()
+  const { createWallet: privyCreateWallet } = useCreateWallet()
+  const { logout: privyLogout } = usePrivyLogout()
+
+  // Extract Aptos/Movement wallet from linked accounts
+  // CRITICAL: Must filter by chainType === 'aptos' for Movement Network
+  const aptosWallet = useMemo(() => {
+    if (!user?.linkedAccounts) return null
+    
+    // Find Movement wallet (chainType: 'aptos')
+    const wallet = user.linkedAccounts.find(
+      (account): account is typeof account & { address: string } => 
+        account.type === 'wallet' && 
+        'chainType' in account && 
+        account.chainType === 'aptos'
+    )
+    
+    // Log warning if Ethereum wallets exist but no Movement wallet
+    if (!wallet) {
+      const ethereumWallets = user.linkedAccounts.filter(
+        (account) => account.type === 'wallet' && 
+          'chainType' in account && 
+          (account as { chainType?: string }).chainType === 'ethereum'
+      )
+      if (ethereumWallets.length > 0) {
+        console.warn(
+          `Found ${ethereumWallets.length} Ethereum wallet(s) but no Movement wallet. ` +
+          'User may need to create a Movement wallet.'
+        )
+      }
+    }
+    
+    return wallet || null
+  }, [user?.linkedAccounts])
+
+  const walletAddress = aptosWallet?.address || null
+  const hasWallet = !!walletAddress
+
+  // Login handler - the actual login is triggered by calling this
+  // Wallet creation is handled by PrivyAuthSyncContext
+  const { login } = usePrivyLogin({
+    onComplete: async ({ user: _user, isNewUser: _isNewUser }) => {
+      // Wallet creation moved to PrivyAuthSyncContext to handle both
+      // new logins and returning sessions consistently
+    },
+    onError: (error) => {
+      // "exited_auth_flow" is expected when user closes the modal - not an error
+      if (error === 'exited_auth_flow') {
+        return
+      }
+      console.error('Privy login error:', error)
+    },
+  })
+
+  // Logout handler
+  const logout = useCallback(async () => {
+    try {
+      await privyLogout()
+      
+      // Clear local storage
+      if (typeof window !== 'undefined') {
+        localStorage.clear()
+        sessionStorage.clear()
+      }
+      
+      // Redirect to home
+      window.location.href = '/'
+    } catch (error) {
+      console.error('Logout error:', error)
+      // Still redirect on error
+      window.location.href = '/'
+    }
+  }, [privyLogout])
+
+  // Manual wallet creation (for users who need to retry)
+  // CRITICAL: Must specify chainType: 'aptos' for Movement Network
+  const createWallet = useCallback(async (): Promise<WalletInfo | null> => {
+    try {
+      // console.log('Creating Movement wallet with chainType: aptos...')
+      const wallet = await privyCreateWallet({ chainType: 'aptos' })
+      
+      // Cast to any to access address property (Privy types don't expose it directly)
+      const walletData = wallet as { address?: string; chainType?: string }
+      
+      if (walletData && walletData.address) {
+        // Verify wallet was created with correct chain type
+        if (walletData.chainType !== 'aptos') {
+          console.error('Wallet created with wrong chain type:', walletData.chainType)
+          throw new Error('Failed to create Movement wallet - wrong chain type')
+        }
+        
+        // console.log('Movement wallet created:', walletData.address)
+        return {
+          address: walletData.address,
+          chainType: 'aptos',
+        }
+      }
+      return null
+    } catch (error) {
+      console.error('Failed to create Movement wallet:', error)
+      throw error
+    }
+  }, [privyCreateWallet])
+
+  return {
+    // Auth state
+    isAuthenticated: authenticated,
+    isLoading: !ready,
+    isReady: ready,
+    user,
+    
+    // Wallet state
+    walletAddress,
+    hasWallet,
+    
+    // Actions
+    login,
+    logout,
+    createWallet,
+    
+    // Raw user
+    privyUser: user,
+  }
+}
+
+export default usePrivyAuth

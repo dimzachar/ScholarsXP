@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useMemo, useState } from 'react'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
@@ -19,35 +20,36 @@ function formatMonthLabel(month: string) {
 }
 
 export default function MonthlyLeaderboard() {
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const [months, setMonths] = useState<string[]>([])
   const [activeMonth, setActiveMonth] = useState<string>('')
   const [standings, setStandings] = useState<Standing[]>([])
-  const [winners, setWinners] = useState<any[]>([])
+  const [winners, setWinners] = useState<unknown[]>([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     const run = async () => {
-      const res = await fetch('/api/leaderboard/months')
+      const res = await authenticatedFetch('/api/leaderboard/months')
       const json = await res.json()
       const list: string[] = json?.data?.months || []
       setMonths(list)
       if (list.length && !activeMonth) setActiveMonth(list[0])
     }
     run()
-  }, [])
+  }, [authenticatedFetch])
 
   useEffect(() => {
     if (!activeMonth) return
     setLoading(true)
     const run = async () => {
-      const res = await fetch(`/api/leaderboard/month?month=${activeMonth}`)
+      const res = await authenticatedFetch(`/api/leaderboard/month?month=${activeMonth}`)
       const json = await res.json()
       setStandings(json?.data?.items || [])
       setWinners(json?.data?.winners || [])
       setLoading(false)
     }
     run()
-  }, [activeMonth])
+  }, [activeMonth, authenticatedFetch])
 
   const tabItems = useMemo(() => months.map((m) => (
     <TabsTrigger key={m} value={m}>{formatMonthLabel(m)}</TabsTrigger>

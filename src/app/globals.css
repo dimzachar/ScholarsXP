@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Privy modal customization to match app design */
+[data-privy-dialog],
+.privy-dialog,
+#privy-modal-content {
+  --privy-color-background: hsl(0 0% 16.5%) !important;
+  --privy-color-background-2: hsl(0 0% 11.5%) !important;
+  --privy-color-foreground: hsl(0 0% 87.8%) !important;
+  --privy-color-foreground-2: hsl(0 0% 62.7%) !important;
+  --privy-color-accent: #E53935 !important;
+  --privy-border-radius-sm: 0px !important;
+  --privy-border-radius-md: 0px !important;
+  --privy-border-radius-lg: 0px !important;
+  --privy-border-radius-full: 0px !important;
+  font-family: var(--font-oxanium), Oxanium, sans-serif !important;
+}
+
 /* Prevent horizontal overflow on mobile */
 html, body {
   overflow-x: hidden;

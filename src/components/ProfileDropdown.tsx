@@ -12,8 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { User, LogOut } from 'lucide-react'
-import { UserProfile } from '@/contexts/AuthContext'
-import { User as SupabaseUser } from '@supabase/supabase-js'
+import { SyncedUser } from '@/contexts/PrivyAuthSyncContext'
 import { getGamifiedRank, type RankTier } from '@/lib/gamified-ranks'
 import { ScrambleText } from '@/components/ui/scramble-text'
 
@@ -28,25 +27,23 @@ const tierStyles: Record<RankTier | 'base', string> = {
 }
 
 interface ProfileDropdownProps extends React.HTMLAttributes<HTMLDivElement> {
-  user: SupabaseUser
-  userProfile: UserProfile | null
+  user: SyncedUser
   onSignOut: () => void
 }
 
 export default function ProfileDropdown({
   user,
-  userProfile,
   onSignOut,
   className,
   ...props
 }: ProfileDropdownProps) {
   const [isOpen, setIsOpen] = React.useState(false)
 
-  const displayName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'User'
-  const avatarUrl = user.user_metadata?.avatar_url
+  const displayName = user.username || user.discordHandle || user.email?.split('@')[0] || 'User'
+  const avatarUrl = user.discordAvatarUrl
   const initial = displayName[0].toUpperCase()
 
-  const totalXp = userProfile?.totalXp ?? 0
+  const totalXp = user.totalXp ?? 0
   const gamifiedRank = getGamifiedRank(totalXp)
   const RankIcon = gamifiedRank?.icon
 
@@ -95,7 +92,7 @@ export default function ProfileDropdown({
                   gamifiedRank ? `bg-gradient-to-br ${gamifiedRank.gradient}` : "bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400"
                 )}>
                   <Avatar className="w-full h-full">
-                    <AvatarImage src={avatarUrl} alt={displayName} className="object-cover" />
+                    <AvatarImage src={avatarUrl || undefined} alt={displayName} className="object-cover" />
                     <AvatarFallback className="bg-background text-foreground font-semibold">
                       {initial}
                     </AvatarFallback>

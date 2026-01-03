@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -78,7 +79,8 @@ interface DetailedLeaderboardData {
 }
 
 export default function DetailedLeaderboardPage() {
-  const { user, userProfile, loading } = useAuth()
+  const { user, isLoading: loading, isAdmin } = usePrivyAuthSync()
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const router = useRouter()
   const [data, setData] = useState<DetailedLeaderboardData | null>(null)
   const [loadingData, setLoadingData] = useState(true)
@@ -127,6 +129,9 @@ export default function DetailedLeaderboardPage() {
       }
       setError(null)
 
+      // Debug: Check if we have auth
+      // console.log('Fetching detailed leaderboard, user:', user?.id, 'privyUserId:', user?.privyUserId)
+
       const params = new URLSearchParams()
       Object.entries(filters).forEach(([key, value]) => {
         if (value && value !== 'all') params.append(key, value)
@@ -137,7 +142,7 @@ export default function DetailedLeaderboardPage() {
       params.append('limit', pageSize.toString())
       params.append('refreshCache', 'true')
 
-      const response = await fetch(`/api/leaderboard/detailed?${params.toString()}`, {
+      const response = await authenticatedFetch(`/api/leaderboard/detailed?${params.toString()}`, {
         cache: 'no-store'
       })
 
@@ -155,12 +160,13 @@ export default function DetailedLeaderboardPage() {
         setLoadingData(false)
       }
     }
-  }, [filters, currentPage, pageSize])
+  }, [user?.id, user?.privyUserId, filters, currentPage, pageSize, authenticatedFetch])
 
   // Initial load useEffect
   useEffect(() => {
-    if (!loading && userProfile && !hasInitiallyLoaded.current) {
-      if (!user || (userProfile.role !== 'ADMIN' && userProfile.role !== 'REVIEWER')) {
+    // Wait for user to be fully loaded with privyUserId
+    if (!loading && user && user.privyUserId && !hasInitiallyLoaded.current) {
+      if (user.role !== 'ADMIN' && user.role !== 'REVIEWER') {
         router.push('/leaderboard')
         return
       }
@@ -168,16 +174,16 @@ export default function DetailedLeaderboardPage() {
       lastFetchedPage.current = currentPage // Track that we're fetching this page
       fetchDetailedLeaderboard(false) // Initial load
     }
-  }, [user?.id, userProfile?.role, loading, router, currentPage, fetchDetailedLeaderboard, user, userProfile])
+  }, [user, loading, router, currentPage, fetchDetailedLeaderboard])
 
   // Pagination useEffect - triggers when currentPage changes after initial load
   useEffect(() => {
     // Only fetch if we haven't already fetched this page and we have completed initial load
-    if (!loading && userProfile && user && hasInitiallyLoaded.current && currentPage !== lastFetchedPage.current) {
+    if (!loading && user && user.privyUserId && hasInitiallyLoaded.current && currentPage !== lastFetchedPage.current) {
       lastFetchedPage.current = currentPage
       fetchDetailedLeaderboard(true) // Pagination
     }
-  }, [currentPage, loading, userProfile, user, fetchDetailedLeaderboard])
+  }, [currentPage, loading, user, fetchDetailedLeaderboard])
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }))
@@ -277,7 +283,7 @@ export default function DetailedLeaderboardPage() {
 
             pageParams.set('refreshCache', 'true')
 
-            const response = await fetch(`/api/leaderboard/detailed?${pageParams.toString()}`,
+            const response = await authenticatedFetch(`/api/leaderboard/detailed?${pageParams.toString()}`,
               { cache: 'no-store' }
             )
             if (!response.ok) {
@@ -745,7 +751,7 @@ export default function DetailedLeaderboardPage() {
                                 <ExternalLink className="h-4 w-4" />
                               </Button>
                             </Link>
-                            {userProfile?.role === 'ADMIN' && (
+                            {isAdmin && (
                               <Link href={`/admin/submissions/${submission.id}`}>
                                 <Button variant="ghost" size="sm" title="Admin details">
                                   <Award className="h-4 w-4" />
@@ -780,3 +786,4 @@ export default function DetailedLeaderboardPage() {
     </div>
   )
 }
+

@@ -1,7 +1,8 @@
-import { notFound, redirect } from 'next/navigation'
-import { cookies } from 'next/headers'
-import { createAuthenticatedClient } from '@/lib/supabase-server'
-import { verifyAuthToken } from '@/lib/auth-middleware'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter, notFound } from 'next/navigation'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { SubmissionStatus } from '@/components/SubmissionStatus'
 import { ArrowLeft, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
@@ -12,53 +13,96 @@ interface SubmissionStatusPageProps {
   }
 }
 
+interface SubmissionData {
+  id: string
+  url: string
+  platform: string
+  status: string
+  taskTypes: string[]
+  aiXp: number | null
+  finalXp: number | null
+  createdAt: string
+  user: { id: string; username: string | null; email: string | null } | null
+}
+
 const aiDisabled = (process.env.NEXT_PUBLIC_AI_DISABLED || 'false').toLowerCase() === 'true'
 
-export default async function SubmissionStatusPage({ params }: SubmissionStatusPageProps) {
-  const cookieStore = cookies()
-  const accessToken = cookieStore.get('sb-access-token')?.value
+export default function SubmissionStatusPage({ params }: SubmissionStatusPageProps) {
+  const { user, isLoading } = usePrivyAuthSync()
+  const router = useRouter()
+  const [submission, setSubmission] = useState<SubmissionData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  if (!accessToken) {
-    redirect('/login')
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.push('/login')
+    }
+  }, [isLoading, user, router])
+
+  useEffect(() => {
+    async function fetchSubmission() {
+      if (!user?.privyUserId) return
+
+      try {
+        const response = await fetch(`/api/submissions/${params.id}`, {
+          headers: {
+            'X-Privy-User-Id': user.privyUserId
+          }
+        })
+
+        if (!response.ok) {
+          if (response.status === 404) {
+            setError('not_found')
+          } else if (response.status === 403) {
+            setError('not_found') // Treat forbidden as not found for security
+          } else {
+            setError('Failed to load submission')
+          }
+          return
+        }
+
+        const data = await response.json()
+        setSubmission(data)
+      } catch {
+        setError('Failed to load submission')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (user) {
+      fetchSubmission()
+    }
+  }, [user, params.id])
+
+  if (isLoading || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-sm text-gray-500">Loading submission...</p>
+        </div>
+      </div>
+    )
   }
 
-  const { user, error } = await verifyAuthToken(accessToken)
-
-  if (error || !user) {
-    redirect('/login')
+  if (!user) {
+    return null
   }
 
-  const userWithRole = user as typeof user & { role?: string }
-  const userRole = userWithRole.role ?? 'USER'
-
-  const supabase = createAuthenticatedClient(accessToken)
-
-  const { data: submission, error: submissionError } = await supabase
-    .from('Submission')
-    .select(`
-      id,
-      url,
-      platform,
-      status,
-      taskTypes,
-      aiXp,
-      finalXp,
-      createdAt,
-      user:User(id, username, email)
-    `)
-    .eq('id', params.id)
-    .single()
-
-  if (submissionError || !submission) {
+  if (error === 'not_found' || !submission) {
     notFound()
   }
 
-  const submissionOwnerId = submission.user?.id
-  const isOwner = submissionOwnerId === user.id
-  const isAdmin = userRole === 'ADMIN'
-
-  if (!isOwner && !isAdmin) {
-    notFound()
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <p className="text-red-600">{error}</p>
+        </div>
+      </div>
+    )
   }
 
   return (

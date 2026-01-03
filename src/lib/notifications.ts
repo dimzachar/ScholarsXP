@@ -1,5 +1,5 @@
 import { supabaseClient } from '@/lib/supabase'
-import { createServiceClient, createAuthenticatedClient } from '@/lib/supabase-server'
+import { createServiceClient } from '@/lib/supabase-server'
 
 export interface Notification {
   id: string
@@ -72,22 +72,20 @@ export async function createNotification(
   }
 }
 
-function getNotificationClient(accessToken?: string) {
-  if (accessToken) {
-    return createAuthenticatedClient(accessToken)
-  }
-  return supabaseClient
+function getNotificationClient() {
+  // Use service client for all notification operations
+  // Auth is handled at the API route level via Privy middleware
+  return createServiceClient()
 }
 
 export async function getUserNotifications(
   userId: string,
   page: number = 1,
   limit: number = 20,
-  unreadOnly: boolean = false,
-  accessToken?: string
+  unreadOnly: boolean = false
 ): Promise<{ notifications: Notification[], total: number }> {
   try {
-    const client = getNotificationClient(accessToken)
+    const client = getNotificationClient()
     // Build the query
     let query = client
       .from('notifications')
@@ -126,9 +124,9 @@ export async function getUserNotifications(
   }
 }
 
-export async function markNotificationAsRead(userId: string, notificationId: string, accessToken?: string): Promise<boolean> {
+export async function markNotificationAsRead(userId: string, notificationId: string): Promise<boolean> {
   try {
-    const client = getNotificationClient(accessToken)
+    const client = getNotificationClient()
     const { error, data } = await client
       .from('notifications')
       .update({
@@ -152,9 +150,9 @@ export async function markNotificationAsRead(userId: string, notificationId: str
   }
 }
 
-export async function markAllNotificationsAsRead(userId: string, accessToken?: string): Promise<number> {
+export async function markAllNotificationsAsRead(userId: string): Promise<number> {
   try {
-    const client = getNotificationClient(accessToken)
+    const client = getNotificationClient()
     const { error, count } = await client
       .from('notifications')
       .update({
@@ -176,7 +174,7 @@ export async function markAllNotificationsAsRead(userId: string, accessToken?: s
   }
 }
 
-export async function deleteAllNotifications(userId: string, accessToken?: string): Promise<number> {
+export async function deleteAllNotifications(userId: string): Promise<number> {
   try {
     const service = createServiceClient()
     const { error, count } = await service
@@ -196,9 +194,9 @@ export async function deleteAllNotifications(userId: string, accessToken?: strin
   }
 }
 
-export async function getUnreadCount(userId: string, accessToken?: string): Promise<number> {
+export async function getUnreadCount(userId: string): Promise<number> {
   try {
-    const client = getNotificationClient(accessToken)
+    const client = getNotificationClient()
     const { count, error } = await client
       .from('notifications')
       .select('*', { count: 'exact', head: true })
@@ -217,7 +215,7 @@ export async function getUnreadCount(userId: string, accessToken?: string): Prom
   }
 }
 
-export async function deleteNotification(userId: string, notificationId: string, accessToken?: string): Promise<boolean> {
+export async function deleteNotification(userId: string, notificationId: string): Promise<boolean> {
   try {
     const service = createServiceClient()
     const { error, count } = await service

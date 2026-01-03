@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -85,7 +86,8 @@ interface SubmissionDetail {
 
 
 export default function AdminSubmissionDetailPage() {
-  const { user: _user, userProfile, loading } = useAuth()
+  const { user, isLoading: loading } = usePrivyAuthSync()
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const router = useRouter()
   const params = useParams()
   const submissionId = params.id as string
@@ -106,7 +108,7 @@ export default function AdminSubmissionDetailPage() {
       setLoadingSubmission(true)
       setError(null)
 
-      const response = await fetch(`/api/admin/submissions/${submissionId}`)
+      const response = await authenticatedFetch(`/api/admin/submissions/${submissionId}`)
       
       if (!response.ok) {
         throw new Error(`Failed to fetch submission: ${response.status}`)
@@ -120,20 +122,20 @@ export default function AdminSubmissionDetailPage() {
     } finally {
       setLoadingSubmission(false)
     }
-  }, [submissionId])
+  }, [submissionId, authenticatedFetch])
 
   useEffect(() => {
     // Only redirect if we're not loading and the user is not an admin
-    if (!loading && userProfile && userProfile.role !== 'ADMIN') {
+    if (!loading && user && user.role !== 'ADMIN') {
       router.push('/dashboard')
       return
     }
 
     // Only fetch submission if we have an ID and user is loading or is admin
-    if (submissionId && (loading || (userProfile && userProfile.role === 'ADMIN'))) {
+    if (submissionId && (loading || (user && user.role === 'ADMIN'))) {
       fetchSubmissionDetails()
     }
-  }, [submissionId, userProfile?.role, loading, router, fetchSubmissionDetails])
+  }, [submissionId, user?.role, loading, router, fetchSubmissionDetails])
 
 
 
@@ -196,11 +198,8 @@ export default function AdminSubmissionDetailPage() {
         body.assignmentIds = [assignmentId]
       }
 
-      const response = await fetch(`/api/admin/submissions/${submissionId}/manual-reshuffle`, {
+      const response = await authenticatedFetch(`/api/admin/submissions/${submissionId}/manual-reshuffle`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify(body)
       })
 
@@ -232,7 +231,7 @@ export default function AdminSubmissionDetailPage() {
     } finally {
       setReshuffling(false)
     }
-  }, [submissionId, reshuffling, fetchSubmissionDetails])
+  }, [submissionId, reshuffling, fetchSubmissionDetails, authenticatedFetch])
 
   const handleConsensusDebug = useCallback(async () => {
     if (!submissionId || debuggingConsensus) return
@@ -242,12 +241,8 @@ export default function AdminSubmissionDetailPage() {
       setConsensusDebugResult(null)
       setConsensusDebugError(null)
 
-      const response = await fetch(`/api/admin/submissions/${submissionId}/consensus-debug`, {
+      const response = await authenticatedFetch(`/api/admin/submissions/${submissionId}/consensus-debug`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include'
       })
 
       const data = await response.json().catch(() => ({}))
@@ -269,7 +264,7 @@ export default function AdminSubmissionDetailPage() {
     } finally {
       setDebuggingConsensus(false)
     }
-  }, [submissionId, debuggingConsensus, fetchSubmissionDetails])
+  }, [submissionId, debuggingConsensus, fetchSubmissionDetails, authenticatedFetch])
 
   if (loading || loadingSubmission) {
     return (

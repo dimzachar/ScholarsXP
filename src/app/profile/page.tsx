@@ -1,15 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout'
 import { MobileLayout, MobileSection, MobileHeader } from '@/components/layout/MobileLayout'
 import { ENABLE_ACHIEVEMENTS } from '@/config/feature-flags'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import {
   User,
   Trophy,
@@ -25,6 +26,7 @@ import {
 import { SubmissionsList } from '@/components/profile/SubmissionsList'
 import { GamifiedRankDisplay, GamifiedRankBadge } from '@/components/gamified'
 import { getGamifiedRank } from '@/lib/gamified-ranks'
+import { WalletBadge } from '@/components/wallet'
 
 interface UserProfileData {
   profile: {
@@ -87,26 +89,22 @@ interface UserProfileData {
 }
 
 export default function ProfilePage() {
-  const { user, userProfile: _userProfile, loading: authLoading } = useAuth()
+  const { user, isLoading: authLoading } = usePrivyAuthSync()
   const _router = useRouter()
   const { isMobile: _isMobile, isTablet: _isTablet } = useResponsiveLayout()
+  const { authenticatedFetch } = useAuthenticatedFetch()
 
   const [profileData, setProfileData] = useState<UserProfileData | null>(null)
   const [loading, setLoading] = useState(true)
   const [isInitialLoad, setIsInitialLoad] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!authLoading && user) {
-      fetchCompleteProfile()
-    }
-  }, [user, authLoading])
-
-  const fetchCompleteProfile = async () => {
+  const fetchCompleteProfile = useCallback(async () => {
     try {
       setLoading(true)
+      
       // Add cache-busting timestamp to ensure fresh data
-      const response = await fetch(`/api/user/profile/complete?_t=${Date.now()}`)
+      const response = await authenticatedFetch(`/api/user/profile/complete?_t=${Date.now()}`)
 
       if (!response.ok) {
         throw new Error('Failed to fetch profile data')
@@ -122,7 +120,13 @@ export default function ProfilePage() {
       setLoading(false)
       setIsInitialLoad(false)
     }
-  }
+  }, [authenticatedFetch])
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      fetchCompleteProfile()
+    }
+  }, [user, authLoading, fetchCompleteProfile])
 
   const getRoleIcon = (role: string) => {
     switch (role) {
@@ -197,7 +201,7 @@ export default function ProfilePage() {
         <div className="p-8 flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
           <div>
             <Avatar className="h-32 w-32 border-4 border-background shadow-xl">
-              <AvatarImage src={user?.user_metadata?.avatar_url} className="object-cover" />
+              <AvatarImage src={user?.discordAvatarUrl || undefined} className="object-cover" />
               <AvatarFallback className="text-4xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
                 {profile.username?.charAt(0)?.toUpperCase() || 'U'}
               </AvatarFallback>
@@ -242,6 +246,7 @@ export default function ProfilePage() {
                 <TrendingUp className="h-3.5 w-3.5 mr-1.5 text-green-500" />
                 Weekly {statistics?.rank?.weekly && statistics.rank.weekly > 0 ? `#${statistics.rank.weekly}` : '—'}
               </Badge>
+              <WalletBadge />
             </div>
           </div>
         </div>
@@ -321,6 +326,8 @@ export default function ProfilePage() {
           </Card>
         </div>
       </MobileSection>
+
+
 
       {ENABLE_ACHIEVEMENTS && (
         <MobileSection spacing="normal">

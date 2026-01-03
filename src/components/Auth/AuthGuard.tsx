@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 
 interface AuthGuardProps {
   children: React.ReactNode
@@ -10,7 +10,7 @@ interface AuthGuardProps {
 }
 
 export default function AuthGuard({ children, fallback }: AuthGuardProps) {
-  const { user, loading } = useAuth()
+  const { user, isLoading: loading } = usePrivyAuthSync()
   const router = useRouter()
 
   useEffect(() => {

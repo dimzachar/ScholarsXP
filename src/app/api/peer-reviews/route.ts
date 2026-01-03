@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
-import { createAuthenticatedClient, createServiceClient } from '@/lib/supabase-server'
+import { createServiceClient } from '@/lib/supabase-server'
 import {
   resolveTaskFromPlatform,
   getXpForTier,
@@ -46,16 +46,8 @@ export const POST = withPermission('review_content')(
     // Get reviewer ID from authenticated user
     const reviewerId = request.user.id
 
-    // Create authenticated Supabase client that respects RLS policies
-    // Get access token from the authenticated user (provided by auth middleware)
-    const accessToken = request.user.access_token ||
-                       request.headers.get('authorization')?.replace('Bearer ', '') ||
-                       request.cookies.get('sb-access-token')?.value || ''
-
-    const supabase = createAuthenticatedClient(
-      accessToken,
-      request.user.refresh_token || request.cookies.get('sb-refresh-token')?.value
-    )
+    // Create service client for database queries (auth handled by middleware)
+    const supabase = createServiceClient()
 
     // Get submission to determine platform/task for XP mapping
     const { data: submission, error: submissionError } = await supabase

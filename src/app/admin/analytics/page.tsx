@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { getTaskDisplayInfo } from '@/lib/xp-rules-v2'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -95,8 +96,9 @@ interface AnalyticsData {
 }
 
 export default function AdminAnalyticsPage() {
-  const { user, loading } = useAuth()
+  const { user, isLoading: loading } = usePrivyAuthSync()
   // const router = useRouter()
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null)
   const [loadingAnalytics, setLoadingAnalytics] = useState(true)
   const [timeframe, setTimeframe] = useState('last_30_days')
@@ -105,7 +107,7 @@ export default function AdminAnalyticsPage() {
     try {
       setLoadingAnalytics(true)
       
-      const response = await fetch(`/api/admin/analytics?timeframe=${timeframe}`)
+      const response = await authenticatedFetch(`/api/admin/analytics?timeframe=${timeframe}`)
       
       if (response.ok) {
         const data: AnalyticsData = await response.json()
@@ -116,7 +118,7 @@ export default function AdminAnalyticsPage() {
     } finally {
       setLoadingAnalytics(false)
     }
-  }, [timeframe])
+  }, [timeframe, authenticatedFetch])
 
   useEffect(() => {
     fetchAnalyticsData()

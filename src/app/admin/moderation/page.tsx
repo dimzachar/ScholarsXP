@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -86,7 +86,7 @@ interface ContentFlag {
 }
 
 export default function AdminModerationPage() {
-  const { user: _user, loading } = useAuth()
+  const { user: _user, isLoading: loading } = usePrivyAuthSync()
   const _router = useRouter()
   const [contentFlags, setContentFlags] = useState<ContentFlag[]>([])
   const [loadingFlags, setLoadingFlags] = useState(true)

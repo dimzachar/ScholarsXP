@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -92,7 +93,8 @@ interface UserData {
 }
 
 export default function AdminUsersPage() {
-  const { user: _user, loading, session } = useAuth()
+  const { user: _user, isLoading: loading } = usePrivyAuthSync()
+  const { getAuthHeaders } = useAuthenticatedFetch()
   const router = useRouter()
   const [users, setUsers] = useState<UserData[]>([])
   const [loadingUsers, setLoadingUsers] = useState(true)
@@ -160,9 +162,7 @@ export default function AdminUsersPage() {
 
       const response = await fetch(`/api/admin/users?${params.toString()}`, {
         credentials: 'include',
-        headers: {
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
+        headers: getAuthHeaders(),
       })
       
       if (response.ok) {
@@ -193,7 +193,7 @@ export default function AdminUsersPage() {
     } finally {
       setLoadingUsers(false)
     }
-  }, [pagination.page, pagination.limit, filters, sortBy, sortOrder])
+  }, [pagination.page, pagination.limit, filters, sortBy, sortOrder, getAuthHeaders])
 
   useEffect(() => {
     fetchUsers()
@@ -236,10 +236,7 @@ export default function AdminUsersPage() {
       const response = await fetch('/api/admin/users', {
         method: 'PATCH',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           action: 'updateRole',
           userIds: selectedUsers,
@@ -266,10 +263,7 @@ export default function AdminUsersPage() {
       const response = await fetch('/api/admin/users', {
         method: 'PATCH',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           action: 'adjustXp',
           userIds: selectedUsers,
@@ -328,10 +322,7 @@ export default function AdminUsersPage() {
       const response = await fetch('/api/admin/users', {
         method: 'PATCH',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           action: 'toggleStatus',
           userIds: [userToDeactivate.id],
@@ -403,9 +394,7 @@ export default function AdminUsersPage() {
         })
 
         const response = await fetch(`/api/admin/users?${params.toString()}` , {
-          headers: {
-            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-          },
+          headers: getAuthHeaders(),
         })
 
         if (!response.ok) {

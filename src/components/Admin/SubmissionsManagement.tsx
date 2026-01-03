@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -86,7 +87,8 @@ interface SubmissionsManagementProps {
 }
 
 export default function SubmissionsManagement({ className }: SubmissionsManagementProps) {
-  const { user, userProfile, loading, session } = useAuth()
+  const { user, isLoading: loading, isAdmin } = usePrivyAuthSync()
+  const { getAuthHeaders } = useAuthenticatedFetch()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [submissions, setSubmissions] = useState<Submission[]>([])
@@ -202,7 +204,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          ...getAuthHeaders(),
         }
       })
 
@@ -231,7 +233,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
           statusCounts: {},
           totalSubmissions: 0
         })
-        
+
         // Update dynamic filter options from response
         console.log('📋 API response filterOptions:', data.filterOptions)
         if (data.filterOptions) {
@@ -245,14 +247,14 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
     } finally {
       setLoadingSubmissions(false)
     }
-  }, [pagination.page, pagination.limit, sortBy, sortOrder, filters, session.access_token])
+  }, [pagination.page, pagination.limit, sortBy, sortOrder, filters, getAuthHeaders])
 
   useEffect(() => {
-    // Only fetch when user is loaded and is admin, and pagination is initialized
-    if (!loading && userProfile?.role === 'ADMIN' && pagination) {
+    // Only fetch when user is loaded with privyUserId and is admin, and pagination is initialized
+    if (!loading && isAdmin && user?.privyUserId && pagination) {
       fetchSubmissions()
     }
-  }, [pagination, filters, sortBy, sortOrder, userProfile?.role, loading, fetchSubmissions])
+  }, [pagination, filters, sortBy, sortOrder, user?.role, user?.privyUserId, loading, fetchSubmissions, isAdmin])
 
   const handleFilterChange = (key: string, value: any) => {
     setFilters(prev => ({ ...prev, [key]: value }))
@@ -642,7 +644,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
     )
   }
 
-  if (userProfile?.role !== 'ADMIN') {
+  if (!isAdmin) {
     return null
   }
 
@@ -919,8 +921,8 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
             </div>
             {bulkMessage && (
               <div className={`mt-2 p-2 rounded-md ${bulkMessage.type === 'success'
-                  ? 'bg-green-100 border border-green-200 text-green-800'
-                  : 'bg-red-100 border border-red-200 text-red-800'
+                ? 'bg-green-100 border border-green-200 text-green-800'
+                : 'bg-red-100 border border-red-200 text-red-800'
                 } text-sm`}
               >
                 {bulkMessage.text}
@@ -1519,3 +1521,4 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
     </div>
   )
 }
+

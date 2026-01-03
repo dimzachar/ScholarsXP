@@ -6,6 +6,9 @@ import { withEnhancedCache, EnhancedCacheKeys, EnhancedCacheTTL } from '@/lib/ca
 import { withAdminOptimization } from '@/middleware/api-optimization'
 import { createClient } from '@supabase/supabase-js'
 import { getWeekNumber } from '@/lib/utils'
+import { reliabilityService } from '@/lib/reliability/reliability-service'
+import { getFormula } from '@/lib/reliability/formulas'
+import { RELIABILITY_CONFIG } from '@/config/reliability'
 
 export const GET = withAdminOptimization(withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
@@ -125,7 +128,7 @@ async function fetchUserMetricsData(
     if (xpMax !== undefined) where.totalXp.lte = xpMax
   }
 
-    if (lastActiveFrom || lastActiveTo) {
+  if (lastActiveFrom || lastActiveTo) {
     where.lastActiveAt = {}
     if (lastActiveFrom) where.lastActiveAt.gte = new Date(lastActiveFrom)
     if (lastActiveTo) where.lastActiveAt.lte = new Date(lastActiveTo)
@@ -214,7 +217,8 @@ async function fetchUserMetricsData(
             sourceId: true,
             createdAt: true,
             description: true
-          }
+          },
+          take: 1000  // Limit transactions to prevent unbounded queries
         }
       }
     }),
@@ -313,70 +317,15 @@ async function fetchUserMetricsData(
   }
 
   // Calculate reviewer reliability scores for users with review history
-  const reviewerIds = users.filter(u => u._count.peerReviews > 0).map(u => u.id)
-  const reliabilityScores = new Map<string, number>()
+  const reviewersWithReviews = users.filter(u => u._count.peerReviews > 0)
+  const reviewerIdsWithReviews = reviewersWithReviews.map(u => u.id)
+  let reliabilityMap = new Map<string, { score: number }>()
 
-  if (reviewerIds.length > 0) {
+  if (reviewerIdsWithReviews.length > 0) {
     try {
-      // Create supabase client
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      )
-
-      // Get all peer reviews for these users to calculate reliability
-      const { data: allReviews } = await supabase
-        .from('PeerReview')
-        .select('reviewerId, qualityRating, isLate')
-        .in('reviewerId', reviewerIds)
-        .limit(5000) // Reasonable limit for batch processing
-
-      if (allReviews) {
-        // Group reviews by reviewer
-        const reviewsByReviewer = allReviews.reduce((acc: Record<string, any[]>, review: any) => {
-          if (!acc[review.reviewerId]) {
-            acc[review.reviewerId] = []
-          }
-          acc[review.reviewerId].push(review)
-          return acc
-        }, {})
-
-        // Calculate reliability for each reviewer using the same formula as consensus-calculator.ts:227-232
-        Object.entries(reviewsByReviewer).forEach(([reviewerId, reviewerReviews]) => {
-          const last50Reviews = reviewerReviews.slice(0, 50) // Take last 50 reviews
-          
-          // Calculate average quality rating
-          const qualityRatings = last50Reviews.filter((r: any) => r.qualityRating).map((r: any) => r.qualityRating)
-          const averageQuality = qualityRatings.length > 0 
-            ? qualityRatings.reduce((sum: number, rating: number) => sum + rating, 0) / qualityRatings.length
-            : 3.5
-
-          // Calculate timeliness score
-          const lateReviews = last50Reviews.filter((r: any) => r.isLate).length
-          const timelinessScore = 1 - (lateReviews / last50Reviews.length)
-          
-          // Calculate quality score (normalize 1-5 scale to 0-1)
-          const qualityScore = (averageQuality - 1) / 4
-          
-          // Calculate weighted reliability score (30% timeliness, 70% quality) - same as consensus-calculator.ts:227-232
-          const reliabilityScore = (timelinessScore * 0.3) + (qualityScore * 0.7)
-
-          reliabilityScores.set(reviewerId, Math.max(0.1, Math.min(1.0, reliabilityScore)))
-        })
-
-        // Add default reliability score for reviewers with no data
-        reviewerIds.forEach(reviewerId => {
-          if (!reliabilityScores.has(reviewerId)) {
-            reliabilityScores.set(reviewerId, 0.7) // New reviewer default
-          }
-        })
-      }
+      reliabilityMap = await reliabilityService.getReliabilityScores(reviewerIdsWithReviews)
     } catch (error) {
-      // console.warn('Failed to calculate reliability scores:', error)
-      // Set default reliability for all reviewers
-      reviewerIds.forEach(reviewerId => {
-        reliabilityScores.set(reviewerId, 0.5) // Default fallback
-      })
+      console.error('Failed to calculate reliability scores via service:', error)
     }
   }
 
@@ -384,10 +333,8 @@ async function fetchUserMetricsData(
   let usersWithMetrics = users.map((user) => {
     // Calculate weekly XP from transactions to show detailed breakdown
     const weeklyXp = user.xpTransactions.reduce((sum, tx) => sum + tx.amount, 0)
-    
+
     // Group transactions by type and subtype for detailed breakdown
-    // Note: Removed deduplication logic as it was incorrectly filtering out legitimate transactions
-    // Each transaction represents a separate XP award and should be counted individually
     const transactionBreakdown = user.xpTransactions.reduce((acc, tx) => {
       // Special handling for REVIEW_REWARD to separate regular rewards from quality bonuses
       if (tx.type === 'REVIEW_REWARD') {
@@ -415,12 +362,6 @@ async function fetchUserMetricsData(
     const submissionsXp = user.xpTransactions
       .filter(tx => tx.type === 'SUBMISSION_REWARD')
       .reduce((sum, tx) => sum + tx.amount, 0)
-    
-    // Debug: Calculate from transactions for verification (remove in production if needed)
-    const weeklyXpFromTransactions = user.xpTransactions.reduce((sum, tx) => sum + tx.amount, 0)
-    if (weeklyXp !== weeklyXpFromTransactions && process.env.NODE_ENV === 'development') {
-      // console.warn(`Weekly XP mismatch for user ${user.id}: User table shows ${weeklyXp}, transactions show ${weeklyXpFromTransactions}`)
-    }
 
     // Completed submissions and legacy counts
     const completedSubmissions = completedCountMap.get(user.id) || 0
@@ -435,7 +376,8 @@ async function fetchUserMetricsData(
     const avgReviewScore = avgReviewMap.get(user.id) || 0
 
     // Get reliability score (calculated above)
-    const reliabilityScore = reliabilityScores.get(user.id) || (user._count.peerReviews > 0 ? 0.7 : null)
+    const activeFormula = getFormula(RELIABILITY_CONFIG.ACTIVE_FORMULA)
+    const reliabilityScore = reliabilityMap.get(user.id)?.score || (user._count.peerReviews > 0 ? (0.3 * 1.0 + 0.7 * (activeFormula.defaultValues?.quality || 0.5)) : null)
 
     // Determine activity status
     const daysSinceLastActive = user.lastActiveAt
@@ -606,21 +548,21 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
           }
         })
 
-          // Create admin action audit for each user
-          for (const userId of userIds) {
-            await prisma.adminAction.create({
-              data: {
-                adminId: request.user.id,
-                action: 'USER_ROLE_CHANGE',
-                targetType: 'user',
-                targetId: userId,
-                details: {
-                  newRole: data.role,
-                  reason: data.reason || null
-                } as any
-              }
-            })
-          }
+        // Create admin action audit for each user
+        for (const userId of userIds) {
+          await prisma.adminAction.create({
+            data: {
+              adminId: request.user.id,
+              action: 'USER_ROLE_CHANGE',
+              targetType: 'user',
+              targetId: userId,
+              details: {
+                newRole: data.role,
+                reason: data.reason || null
+              } as any
+            }
+          })
+        }
         break
 
       case 'adjustXp':

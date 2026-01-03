@@ -9,7 +9,7 @@ import MonthlyLeaderboard from '@/components/leaderboard/MonthlyLeaderboardNew'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 // import { Progress } from '@/components/ui/progress'
 import AuthGuard from '@/components/Auth/AuthGuard'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { Pagination, PaginationInfo } from '@/components/ui/pagination'
 import { apiGet } from '@/lib/api-client'
 import Link from 'next/link'
@@ -81,7 +81,7 @@ interface UserPosition {
 }
 
 export default function LeaderboardPage() {
-  const { user } = useAuth()
+  const { user } = usePrivyAuthSync()
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats | null>(null)
   const [allTimeLeaders, setAllTimeLeaders] = useState<LeaderboardEntry[]>([])
   const [allTimePagination, setAllTimePagination] = useState<PaginationInfo | null>(null)
@@ -97,8 +97,8 @@ export default function LeaderboardPage() {
   const userId = user?.id
   const userEmail = user?.email
   const fetchCurrentUserPosition = useCallback(async () => {
-    if (!userId) {
-      console.log('No user available for position fetch')
+    if (!user) {
+      // console.log('No user available for position fetch')
       return null
     }
 
@@ -118,7 +118,7 @@ export default function LeaderboardPage() {
         allTime: { rank: 0, xp: 0, totalUsers: 0 }
       }
     }
-  }, [userId, userEmail])
+  }, [user, userId, userEmail])
 
   const fetchLeaderboardData = useCallback(async () => {
     try {
@@ -597,8 +597,8 @@ export default function LeaderboardPage() {
               Compete with fellow scholars and earn your place on the leaderboard
             </p>
 
-            {/* Detailed View Button for Authorized Users */}
-            {(user?.role === 'ADMIN' || user?.role === 'REVIEWER') && (
+            {/* Detailed View Button for Authorized Users - temporarily disabled */}
+            {/* {(user?.role === 'ADMIN') && (
               <div className="flex justify-center">
                 <Link href="/leaderboard/detailed">
                   <Button variant="outline" className="flex items-center gap-2">
@@ -607,7 +607,7 @@ export default function LeaderboardPage() {
                   </Button>
                 </Link>
               </div>
-            )}
+            )} */}
           </div>
 
           {/* Stats now render inside each tab for contextual accuracy */}

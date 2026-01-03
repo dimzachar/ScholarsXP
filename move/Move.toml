@@ -1,0 +1,17 @@
+[package]
+name = "scholarxp"
+version = "1.0.0"
+authors = []
+
+[addresses]
+scholarxp = "_"
+
+[dev-addresses]
+scholarxp = "0x6ba9a3cc09f55656df6502453727481a7e72167faf900f7602716e09cad01d62"
+
+[dependencies.AptosFramework]
+git = "https://github.com/movementlabsxyz/aptos-core.git"
+rev = "movement"
+subdir = "aptos-move/framework/aptos-framework"
+
+[dev-dependencies]

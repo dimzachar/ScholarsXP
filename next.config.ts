@@ -18,6 +18,25 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react'],
   },
+  // Suppress keyv dynamic require warning from @aptos-labs/ts-sdk
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.ignoreWarnings = [
+        { module: /node_modules\/keyv/ },
+      ];
+    }
+    return config;
+  },
+  // Allow Discord CDN images for user avatars
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'cdn.discordapp.com',
+        pathname: '/avatars/**',
+      },
+    ],
+  },
   async headers() {
     return [
       {

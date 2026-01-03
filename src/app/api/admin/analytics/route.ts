@@ -54,10 +54,10 @@ const originalHandler = withPermission('admin_access')(async (request: Authentic
     // Use optimized or legacy analytics based on feature flag
     let analyticsData
     if (useOptimizedAnalytics) {
-      console.log('📊 Using optimized analytics implementation')
+      // console.log('📊 Using optimized analytics implementation')
       analyticsData = await getConsolidatedAnalytics(startDate, timeframe, metric)
     } else {
-      console.log('📊 Using legacy analytics implementation')
+      // console.log('📊 Using legacy analytics implementation')
       analyticsData = await getFallbackAnalytics(startDate, timeframe, metric)
     }
 
@@ -93,13 +93,13 @@ const optimizedAnalyticsHandler = withPermission('admin_access')(async (request:
     const useNewOptimization = process.env.USE_NEW_ANALYTICS_OPTIMIZATION !== 'false'
 
     if (useNewOptimization) {
-      console.log('🚀 Using new optimized analytics implementation')
+      // console.log('🚀 Using new optimized analytics implementation')
       const startTime = Date.now()
 
       const analyticsData = await getOptimizedAnalyticsSummary(timeframe)
 
       const executionTime = Date.now() - startTime
-      console.log(`⚡ New optimized analytics completed in ${executionTime}ms`)
+      // console.log(`⚡ New optimized analytics completed in ${executionTime}ms`)
 
       // Return optimized response with compression
       return NextResponse.json({
@@ -116,7 +116,7 @@ const optimizedAnalyticsHandler = withPermission('admin_access')(async (request:
     }
 
     // Fall back to existing implementation
-    console.log('🔄 Using legacy analytics implementation')
+    // console.log('🔄 Using legacy analytics implementation')
     return await originalHandler(request)
   } catch (error) {
     console.error('Analytics API error:', error)

@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -86,7 +86,7 @@ interface AchievementsData {
 }
 
 export default function AchievementsPage() {
-  const { user, loading } = useAuth()
+  const { user, isLoading: loading } = usePrivyAuthSync()
   const router = useRouter()
   const [achievementsData, setAchievementsData] = useState<AchievementsData | null>(null)
   const [loadingAchievements, setLoadingAchievements] = useState(true)

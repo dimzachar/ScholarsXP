@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -39,6 +40,7 @@ interface SearchResult {
 }
 
 export default function XpManagementPage() {
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -81,7 +83,7 @@ export default function XpManagementPage() {
         limit: '20'
       })
 
-      const response = await fetch(`/api/admin/users?${params}`, { credentials: 'include' })
+      const response = await authenticatedFetch(`/api/admin/users?${params}`)
       const data: SearchResult = await response.json()
 
       if (response.ok) {
@@ -104,7 +106,7 @@ export default function XpManagementPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [authenticatedFetch])
 
   const handleSearchChange = (value: string) => {
     setSearchTerm(value)
@@ -131,9 +133,8 @@ export default function XpManagementPage() {
       setUpdating(true)
       setResult(null)
 
-      const response = await fetch('/api/admin/update-xp', {
+      const response = await authenticatedFetch('/api/admin/update-xp', {
         method: 'POST',
-        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },

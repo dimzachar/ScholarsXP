@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
-import { createAuthenticatedClient, createServiceClient } from '@/lib/supabase-server'
+import { createServiceClient } from '@/lib/supabase-server'
 
 export const GET = withPermission('review_content')(async (request: AuthenticatedRequest) => {
   try {

@@ -21,13 +21,13 @@ const optimizedProfileHandler = withPermission('authenticated')(async (request: 
     const skipCache = searchParams.get('skipCache') === '1' || searchParams.get('skipCache') === 'true'
 
     if (useOptimizedProfile) {
-      console.log('🚀 Using optimized user profile implementation')
+      // console.log('🚀 Using optimized user profile implementation')
       const startTime = Date.now()
 
       const profileData = await getOptimizedCompleteProfile(userId, { refreshCache, skipCache })
 
       const executionTime = Date.now() - startTime
-      console.log(`⚡ Optimized user profile completed in ${executionTime}ms`)
+      // console.log(`⚡ Optimized user profile completed in ${executionTime}ms`)
 
       return NextResponse.json(profileData, {
         headers: {
@@ -44,7 +44,7 @@ const optimizedProfileHandler = withPermission('authenticated')(async (request: 
     }
 
     // Fall back to existing implementation
-    console.log('🔄 Using legacy user profile implementation')
+    // console.log('🔄 Using legacy user profile implementation')
     return await originalHandler(request)
   } catch (error) {
     console.error('Complete profile API error:', error)
@@ -120,12 +120,12 @@ async function getOptimizedCompleteProfile(
                 .order('importedAt', { ascending: false });
 
               if (result.data && result.data.length > 0) {
-                console.log(`✅ Found legacy submissions for discord handle variation: "${variation}" (original: "${handle}")`);
+                // console.log(`✅ Found legacy submissions for discord handle variation: "${variation}" (original: "${handle}")`);
                 return result;
               }
             }
 
-            console.log(`❌ No legacy submissions found for any variation of discord handle: "${handle}"`);
+            // console.log(`❌ No legacy submissions found for any variation of discord handle: "${handle}"`);
             return { data: [], count: 0 };
           };
 
@@ -250,9 +250,9 @@ async function getOptimizedCompleteProfile(
       const allSubmissions = [...regularSubmissions, ...legacySubmissionsFormatted]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
-      // DEBUG: Log submission data to check aiSummary
-      console.log('🔍 DEBUG: First submission data:', JSON.stringify(allSubmissions[0], null, 2))
-      console.log('🔍 DEBUG: Raw Supabase data sample:', JSON.stringify(submissionsResult.data?.[0], null, 2))
+      // DEBUG: Log submission data to check aiSummary (commented out to reduce noise)
+      // console.log('🔍 DEBUG: First submission data:', JSON.stringify(allSubmissions[0], null, 2))
+      // console.log('🔍 DEBUG: Raw Supabase data sample:', JSON.stringify(submissionsResult.data?.[0], null, 2))
 
       const recentSubmissions = allSubmissions
 

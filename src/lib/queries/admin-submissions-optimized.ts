@@ -253,7 +253,7 @@ export async function getOptimizedAdminSubmissions(
   opts: { skipCache?: boolean } = {}
 ): Promise<AdminSubmissionsResponseDTO> {
   const cacheKey = QueryCache.createKey('admin_submissions', { ...filters, ...pagination })
-  console.log('Admin submissions query - filters:', filters)
+  // console.log('Admin submissions query - filters:', filters)
 
   return await withQueryCache(
     cacheKey,
@@ -263,8 +263,8 @@ export async function getOptimizedAdminSubmissions(
 
       // Build optimized query using pagination helper
       const cleanedFilters = cleanFilters(filters)
-      console.log('Cleaned filters:', cleanedFilters)
-      console.log('LowReviews filter value:', cleanedFilters.lowReviews)
+      // console.log('Cleaned filters:', cleanedFilters)
+      // console.log('LowReviews filter value:', cleanedFilters.lowReviews)
 
       const queryParams = {
         ...pagination,
@@ -272,7 +272,7 @@ export async function getOptimizedAdminSubmissions(
       }
 
       const query = PaginationHelper.createSubmissionQuery(queryParams)
-      console.log('Generated query where clause:', JSON.stringify(query.where, null, 2))
+      // console.log('Generated query where clause:', JSON.stringify(query.where, null, 2))
 
       const baseWhere = query.where || {}
       const orderBy = query.orderBy
@@ -310,7 +310,7 @@ export async function getOptimizedAdminSubmissions(
       const totalCount = regularCount + legacyCount
 
       const executionTime = Date.now() - startTime
-      console.log(`⚡ Optimized admin submissions completed in ${executionTime}ms`)
+      // console.log(`⚡ Optimized admin submissions completed in ${executionTime}ms`)
 
       return {
         submissions: submissions.map(ResponseTransformer.toAdminSubmissionDTO),
@@ -640,7 +640,7 @@ function formatLegacySubmissions(legacySubmissions: LegacySubmissionWithUser[]) 
   })
 
   // User feedback loop logging
-  console.log(`📊 Legacy submissions: ${linkedCount} linked, ${orphanedCount} orphaned`)
+  // console.log(`📊 Legacy submissions: ${linkedCount} linked, ${orphanedCount} orphaned`)
 
   return formatted
 }
@@ -824,7 +824,7 @@ async function getFilterOptions(): Promise<{ platforms: string[]; taskTypes: str
           .filter((t): t is string => !!t)
           .sort()
 
-        console.log('📋 Filter options loaded:', { platforms, taskTypes })
+        // console.log('📋 Filter options loaded:', { platforms, taskTypes })
         return { platforms, taskTypes }
       } catch (error) {
         console.error('❌ Error loading filter options:', error)

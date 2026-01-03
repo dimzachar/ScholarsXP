@@ -13,7 +13,7 @@
 import { detectPlatform, getWeekNumber } from '@/lib/utils'
 import { withPermission, withAuth, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { submissionProcessingQueue } from '@/lib/submission-processing-queue'
-import { createAuthenticatedClient } from '@/lib/supabase-server'
+import { createServiceClient } from '@/lib/supabase-server'
 import { submissionService } from '@/lib/database'
 import { enhancedDuplicateDetectionService } from '@/lib/enhanced-duplicate-detection'
 import { withAPIOptimization } from '@/middleware/api-optimization'
@@ -83,8 +83,8 @@ export const POST = withAPIOptimization(
 
     // 4. Weekly cap pre-check: max 5 non-rejected submissions this week
     const weekNumber = getWeekNumber()
-    // Use authenticated client so RLS sees the user without relying on cookies
-    const supabase = createAuthenticatedClient(request.user!.access_token!)
+    // Use service client for database queries (auth handled by middleware)
+    const supabase = createServiceClient()
     try {
       const { count, error: capError } = await supabase
         .from('Submission')
