@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
             FROM "Submission" s
             JOIN "PeerReview" pr ON s.id = pr."submissionId"
             WHERE s.status = 'FINALIZED'
-            AND s."createdAt" >= NOW() - INTERVAL '30 days'
+            AND s."createdAt" >= NOW() - INTERVAL '90 days'
             GROUP BY s.id, s.url, s.platform, s.title, s.content, s."aiXp", s."finalXp", s."createdAt"
             HAVING STDDEV(pr."xpScore") > 50
             ORDER BY STDDEV(pr."xpScore") DESC
