@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import SubmissionReviewRow from '@/components/SubmissionReviewRow'
 import AuthGuard from '@/components/Auth/AuthGuard'
 import { ReviewerGuard } from '@/components/Auth/RoleGuard'
-import { api, handleApiError } from '@/lib/api-client'
+import { handleApiError } from '@/lib/api-client'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -58,18 +58,6 @@ interface PendingReview {
     isOverdue?: boolean
     weekendExtension?: boolean
   }
-}
-
-interface AssignmentResponse {
-  assignments: Array<{
-    id: string
-    deadline: string
-    status?: 'PENDING' | 'IN_PROGRESS' | 'MISSED' | 'COMPLETED'
-    timeRemaining?: { hours: number; minutes: number }
-    isOverdue?: boolean
-    weekendExtension?: boolean
-    submission?: Submission
-  }>
 }
 
 interface ReviewSubmissionPayload {
@@ -146,6 +134,7 @@ interface UserReviewsResponse {
 export default function ReviewPage() {
   const { user, isAdmin, isLoading: authLoading } = usePrivyAuthSync()
   const { authenticatedFetch } = useAuthenticatedFetch()
+  const privyUserId = user?.privyUserId
   const [pendingReviews, setPendingReviews] = useState<PendingReview[]>([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
@@ -171,14 +160,56 @@ export default function ReviewPage() {
   const [showBackToTop, setShowBackToTop] = useState(false)
 
   useEffect(() => {
-    if (user) {
-      fetchPendingReviews()
+    if (!privyUserId) return
+    
+    const doFetch = async () => {
+      try {
+        const response = await fetch('/api/assignments/my?status=pending', {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Privy-User-Id': privyUserId
+          }
+        })
+        if (!response.ok) {
+          throw new Error('Failed to fetch pending reviews')
+        }
+        const json = await response.json()
+        // API wraps response in { success, data: { assignments } }
+        const assignments = json.data?.assignments || json.assignments || []
+
+        const mappedReviews: PendingReview[] = assignments
+          .filter((assignment: { submission?: Submission }) => assignment.submission)
+          .map((assignment: { submission?: Submission; id: string; deadline: string; status?: string; timeRemaining?: { hours: number; minutes: number }; isOverdue?: boolean; weekendExtension?: boolean }) => {
+            const submission = assignment.submission as Submission
+
+            return {
+              submission,
+              assignment: {
+                id: assignment.id,
+                deadline: assignment.deadline,
+                status: assignment.status,
+                timeRemaining: assignment.timeRemaining,
+                isOverdue: assignment.isOverdue,
+                weekendExtension: assignment.weekendExtension
+              }
+            }
+          })
+
+        setPendingReviews(mappedReviews)
+      } catch (error) {
+        console.error('Error fetching pending reviews:', error)
+        setMessage(handleApiError(error).message)
+      } finally {
+        setLoading(false)
+      }
     }
-  }, [authenticatedFetch, user])
+    
+    doFetch()
+  }, [privyUserId])
 
   // Fetch user's own reviews (given)
   useEffect(() => {
-    if (!user) return
+    if (!privyUserId) return
     const fetchMyReviews = async () => {
       try {
         setMyReviewsLoading(true)
@@ -198,7 +229,7 @@ export default function ReviewPage() {
       }
     }
     fetchMyReviews()
-  }, [authenticatedFetch, user])
+  }, [authenticatedFetch, privyUserId])
 
   // Back to Top behavior (copied style from changelog)
   useEffect(() => {
@@ -210,7 +241,7 @@ export default function ReviewPage() {
 
   // Admin: fetch all pending submissions (read-only list)
   useEffect(() => {
-    if (!user) return
+    if (!privyUserId) return
     const fetchAdminPending = async () => {
       if (!isAdmin) return
       try {
@@ -262,7 +293,7 @@ export default function ReviewPage() {
     }
 
     fetchAdminPending()
-  }, [isAdmin, authenticatedFetch])
+  }, [isAdmin, authenticatedFetch, privyUserId])
 
   const filteredAdminSubmissions = adminPendingSubmissions.filter((s) => {
     const matchesSearch = adminSearch
@@ -288,42 +319,6 @@ export default function ReviewPage() {
   })
   const hasMoreAdmin = adminSortedSubmissions.length > 5
   const displayedAdminSubmissions = showAllAdmin ? adminSortedSubmissions : adminSortedSubmissions.slice(0, 5)
-
-  const fetchPendingReviews = async () => {
-    try {
-      const response = await authenticatedFetch('/api/assignments/my?status=pending')
-      if (!response.ok) {
-        throw new Error('Failed to fetch pending reviews')
-      }
-      const data: AssignmentResponse = await response.json()
-      const assignments = data.assignments || []
-
-      const mappedReviews: PendingReview[] = assignments
-        .filter((assignment) => assignment.submission)
-        .map((assignment) => {
-          const submission = assignment.submission as Submission
-
-          return {
-            submission,
-            assignment: {
-              id: assignment.id,
-              deadline: assignment.deadline,
-              status: assignment.status,
-              timeRemaining: assignment.timeRemaining,
-              isOverdue: assignment.isOverdue,
-              weekendExtension: assignment.weekendExtension
-            }
-          }
-        })
-
-      setPendingReviews(mappedReviews)
-    } catch (error) {
-      console.error('Error fetching pending reviews:', error)
-      setMessage(handleApiError(error).message)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleReviewSubmit = async (
     submissionId: string,
@@ -369,15 +364,14 @@ export default function ReviewPage() {
     }
   }
 
-  // Show AuthGuard loading/redirect for unauthenticated users
+  // Redirect unauthenticated users via AuthGuard
   if (authLoading || !user) {
     return <AuthGuard>{null}</AuthGuard>
   }
 
   if (loading) {
     return (
-      <AuthGuard>
-        <ReviewerGuard>
+      <ReviewerGuard>
           <div className="min-h-screen bg-gradient-to-br from-background via-muted/50 to-muted">
             <div className="container mx-auto px-4 py-8 pb-20 md:pb-8">
               <div className="text-center">
@@ -391,13 +385,11 @@ export default function ReviewPage() {
             </div>
           </div>
         </ReviewerGuard>
-      </AuthGuard>
     )
   }
 
   return (
-    <AuthGuard>
-      <ReviewerGuard>
+    <ReviewerGuard>
         <div className="min-h-screen bg-gradient-to-br from-background via-muted/50 to-muted">
       <div className="container mx-auto px-4 py-8 pb-24 md:pb-10">
         {/* Header */}
@@ -822,7 +814,6 @@ export default function ReviewPage() {
         </div>
         </div>
       </ReviewerGuard>
-    </AuthGuard>
   )
 }
 
