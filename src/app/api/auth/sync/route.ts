@@ -6,17 +6,14 @@ interface SyncUserRequest {
   privyUserId: string
   discordUsername?: string | null
   discordId?: string | null
-  discordAvatar?: string | null
   movementWalletAddress?: string | null
   email?: string | null
 }
 
 /**
- * Fetch Discord user avatar from Discord API
- * Returns the avatar URL or a default avatar if not available
+ * Fetch Discord user avatar using bot token
  */
 async function fetchDiscordAvatar(discordId: string): Promise<string | null> {
-  // If we have a Discord bot token, try to fetch the real avatar
   if (process.env.DISCORD_BOT_TOKEN) {
     try {
       const response = await fetch(`https://discord.com/api/v10/users/${discordId}`, {
@@ -27,9 +24,7 @@ async function fetchDiscordAvatar(discordId: string): Promise<string | null> {
 
       if (response.ok) {
         const userData = await response.json()
-
         if (userData.avatar) {
-          // Construct avatar URL from Discord CDN
           const extension = userData.avatar.startsWith('a_') ? 'gif' : 'png'
           return `https://cdn.discordapp.com/avatars/${discordId}/${userData.avatar}.${extension}`
         }
@@ -39,19 +34,14 @@ async function fetchDiscordAvatar(discordId: string): Promise<string | null> {
     }
   }
 
-  // Fallback: Use Discord's default avatar based on user ID
-  // Discord has 6 default avatars (0-5), selected by (user_id >> 22) % 6 for new system
-  // or user_id % 5 for legacy discriminator system
+  // Fallback: Discord's default avatar based on user ID
   try {
-    // Ensure discordId is a valid numeric string for BigInt
     if (!discordId || !/^\d+$/.test(discordId)) {
-      console.warn('Invalid discordId for BigInt:', discordId)
       return `https://cdn.discordapp.com/embed/avatars/0.png`
     }
     const defaultAvatarIndex = (BigInt(discordId) >> BigInt(22)) % BigInt(6)
     return `https://cdn.discordapp.com/embed/avatars/${defaultAvatarIndex}.png`
-  } catch (error) {
-    console.error('Error calculating default Discord avatar:', error)
+  } catch {
     return `https://cdn.discordapp.com/embed/avatars/0.png`
   }
 }
@@ -62,15 +52,14 @@ async function fetchDiscordAvatar(discordId: string): Promise<string | null> {
  * Creates or updates User record with Privy identity fields
  */
 export async function POST(request: NextRequest) {
-  console.log('POST /api/auth/sync called')
   let body: SyncUserRequest | undefined
   try {
     body = await request.json()
     if (!body) throw new Error('Empty request body')
 
-    // If no avatar provided but we have a Discord ID, try to fetch it or use default
-    let discordAvatar = body.discordAvatar
-    if (!discordAvatar && body.discordId) {
+    // Fetch avatar from Discord API if we have a Discord ID
+    let discordAvatar: string | null = null
+    if (body.discordId) {
       discordAvatar = await fetchDiscordAvatar(body.discordId)
     }
 
@@ -163,17 +152,13 @@ export async function POST(request: NextRequest) {
       if (body.discordId !== undefined) {
         updateData.discordId = body.discordId
       }
-      // Only update avatar if:
-      // 1. User doesn't have an avatar yet, OR
-      // 2. User has a default avatar (embed/avatars) and we have a real one from Privy
-      // Never overwrite a real avatar (cdn.discordapp.com/avatars/) with a default one
-      const userHasRealAvatar = user.discordAvatarUrl?.includes('/avatars/')
-      const newAvatarIsReal = discordAvatar?.includes('/avatars/') || body.discordAvatar?.includes('/avatars/')
-      const newAvatar = discordAvatar || body.discordAvatar
+      // Only update avatar if user doesn't have one or has a default avatar
+      const userHasRealAvatar = user.discordAvatarUrl?.includes('/avatars/') && !user.discordAvatarUrl?.includes('/embed/')
+      const newAvatarIsReal = discordAvatar?.includes('/avatars/') && !discordAvatar?.includes('/embed/')
 
       if (!user.discordAvatarUrl || (newAvatarIsReal && !userHasRealAvatar)) {
-        if (newAvatar) {
-          updateData.discordAvatarUrl = newAvatar
+        if (discordAvatar) {
+          updateData.discordAvatarUrl = discordAvatar
         }
       }
       // Only update email if it's a non-null string (email is required in DB)

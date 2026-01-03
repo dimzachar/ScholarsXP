@@ -124,31 +124,6 @@ export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) 
         )
         const finalWalletAddress = walletAddress || (aptosWallet && 'address' in aptosWallet ? aptosWallet.address : null)
         
-        // Extract avatar URL - try multiple possible field names from Privy
-        let avatarUrl: string | null = null
-        if (discordAccount) {
-          // Try direct URL fields first
-          avatarUrl = 
-            ('profilePictureUrl' in discordAccount ? (discordAccount.profilePictureUrl as string | null) : null) ||
-            ('avatarUrl' in discordAccount ? (discordAccount.avatarUrl as string | null) : null) ||
-            null
-          
-          // If no direct URL, try to construct from Discord ID and avatar hash
-          if (!avatarUrl && 'subject' in discordAccount && 'avatar' in discordAccount) {
-            const discordUserId = discordAccount.subject as string
-            const avatarHash = discordAccount.avatar as string
-            if (discordUserId && avatarHash) {
-              avatarUrl = `https://cdn.discordapp.com/avatars/${discordUserId}/${avatarHash}.png`
-            }
-          }
-        }
-        
-        // console.log('Calling /api/auth/sync with:', { 
-        //   privyUserId: privyUser.id,
-        //   discordAvatar: avatarUrl,
-        //   discordUsername: discordAccount && 'username' in discordAccount ? discordAccount.username : null
-        // })
-        
         // Extract email - prefer Privy email, then Discord email from linked account
         const discordEmail = discordAccount && 'email' in discordAccount ? (discordAccount.email as string | null) : null
         const userEmail = privyUser.email?.address || discordEmail || null
@@ -160,7 +135,6 @@ export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) 
             privyUserId: privyUser.id,
             discordUsername: discordAccount && 'username' in discordAccount ? discordAccount.username : null,
             discordId: discordAccount && 'subject' in discordAccount ? discordAccount.subject : null,
-            discordAvatar: avatarUrl,
             movementWalletAddress: finalWalletAddress,
             email: userEmail,
           }),
