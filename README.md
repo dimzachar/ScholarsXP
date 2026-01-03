@@ -2,20 +2,20 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/dimzachar/ScholarsXP)
 
-**Scholars_XP** is a comprehensive gamified content evaluation platform built with Next.js 15, Supabase, and PostgreSQL. The system enables users to submit content from various platforms (Twitter/X, Medium, Reddit, Notion) for AI-powered evaluation and peer review, implementing a sophisticated role-based access control system with three distinct user roles: USER, REVIEWER, and ADMIN.
+**Scholars_XP** is a comprehensive gamified content evaluation platform built with Next.js 15, Supabase, and PostgreSQL. The system enables users to submit content from various platforms (Twitter/X, Medium, Reddit, Notion) for peer review, implementing a sophisticated role-based access control system with three distinct user roles: USER, REVIEWER, and ADMIN.
 
 ## 🎯 Project Overview
 
-Scholars_XP transforms content evaluation into an engaging, gamified experience where users earn XP (Experience Points) for submitting quality content and participating in peer reviews. The platform combines AI-powered content analysis with community-driven validation to ensure fair and accurate scoring.
+Scholars_XP transforms content evaluation into an engaging, gamified experience where users earn XP (Experience Points) for submitting quality content and participating in peer reviews. The platform uses community-driven validation to ensure fair and accurate scoring.
 
 ### Key Features
 
-- **🚀 Content Submission & Evaluation**: Multi-platform content submission with AI-powered assessment
-- **🤖 AI-Powered Assessment**: LLM evaluates content and assigns XP scores based on quality and task classification
+- **🚀 Content Submission & Evaluation**: Multi-platform content submission with peer-based assessment
 - **👥 Peer Review System**: Community-driven review process with reviewer incentives and quality assurance
+- **🤖 AI-Powered Assessment** *(Future Feature)*: LLM evaluation is currently disabled; peer reviewers determine all XP scores
 - **⚖️ Community Voting (Judgment)**: On-chain voting system for resolving divergent peer review scores using Movement Network
 - **💼 Wallet Integration**: Multi-wallet support (Privy embedded + external wallets like Nightly) with gasless transactions via Shinami
-- **🎮 Gamification**: XP tracking, weekly streaks, leaderboards, achievements, and role progression
+- **🎮 Gamification**: XP tracking, weekly streaks, leaderboards, and role progression
 - **🛡️ Admin Management**: Comprehensive administrative oversight with user management and system operations
 - **📱 Real-time Notifications**: Supabase Realtime integration for instant updates without page reloads
 - **🔐 Role-Based Access Control**: Three-tier permission system (USER, REVIEWER, ADMIN)
@@ -31,7 +31,7 @@ Scholars_XP transforms content evaluation into an engaging, gamified experience 
 | **ORM** | Prisma | 6.11.1 |
 | **Authentication** | Supabase Auth | 2.50.5 |
 | **Real-time** | Supabase Realtime | 2.50.5 |
-| **AI Evaluation** | OpenRouter (GPT-4) | Latest |
+| **AI Evaluation** | OpenRouter (GPT-4) | Latest (disabled) |
 | **Styling** | Tailwind CSS + shadcn/ui | Latest |
 | **Deployment** | Vercel (Serverless) | Latest |
 | **Background Jobs** | Supabase pg_cron | Latest |
@@ -46,7 +46,7 @@ Before setting up Scholars_XP, ensure you have:
 - **Node.js**: Version 18.0 or higher
 - **npm/pnpm**: Latest version (project uses pnpm)
 - **Supabase Account**: For database and authentication
-- **OpenRouter API Key**: For AI content evaluation
+- **OpenRouter API Key**: For AI content evaluation (optional - currently disabled)
 - **Vercel Account**: For production deployment (optional)
 
 ## 🚀 Installation Instructions
@@ -73,7 +73,7 @@ NEXT_PUBLIC_SUPABASE_URL="https://[PROJECT-ID].supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY="[ANON-KEY]"
 SUPABASE_SERVICE_ROLE_KEY="[SERVICE-ROLE-KEY]"
 
-# AI Evaluation - OpenRouter (Primary)
+# AI Evaluation - OpenRouter (currently disabled)
 OPENROUTER_API_KEY="your_openrouter_api_key_here"
 
 # Privy Authentication (Wallet Integration)
@@ -86,7 +86,9 @@ NEXT_PUBLIC_VOTE_CONTRACT="0x..."  # Set after deploying vote.move contract
 NEXT_PUBLIC_MOVEMENT_RPC_URL="https://testnet.movementnetwork.xyz/v1"
 
 # Feature Flags
-ENABLE_AI_EVALUATION=true
+ENABLE_AI_EVALUATION=false          # AI evaluation currently disabled
+DISABLE_CONTENT_FETCH=true          # Content fetching disabled (peer-only mode)
+NEXT_PUBLIC_AI_DISABLED=true        # UI reflects AI is disabled
 ENABLE_LEGACY_DUPLICATE_CHECK=true
 AI_EVALUATION_TIMEOUT=120000
 ROLE_PROMOTION_BATCH_SIZE=100
@@ -123,7 +125,7 @@ Visit `http://localhost:3002` to access the application.
 
 1. **Database Connection**: Verify Supabase connection in the dashboard
 2. **Authentication**: Test user registration and login
-3. **AI Evaluation**: Submit test content to verify OpenRouter integration
+3. **Peer Review Flow**: Submit test content and verify reviewer assignment
 4. **Real-time Features**: Check notifications and live updates
 
 ## 🚀 Production Deployment
@@ -173,17 +175,16 @@ Visit `http://localhost:3002` to access the application.
 1. **Content Submission**:
    - Navigate to Submit tab in dashboard
    - Paste Twitter/X, Medium, Reddit, or Notion URL
-   - Select applicable task types (A-F)
-   - Submit for AI evaluation
+   - Task type is auto-assigned based on platform (A for Twitter, B for others)
+   - Submit for peer review
 
 2. **Track Progress**:
    - Monitor XP earnings in Overview tab
    - View submission history and status
    - Check weekly progress toward goals
 
-3. **Achievements**:
+3. **Streaks & Leaderboards**:
    - Earn streaks for consistent weekly activity
-   - Unlock achievements for milestones
    - Compete on leaderboards
 
 ### For Reviewers (REVIEWER Role)
@@ -208,7 +209,7 @@ Visit `http://localhost:3002` to access the application.
 2. **Content Moderation**:
    - Review flagged submissions
    - Manage duplicate content
-   - Override AI evaluations when needed
+   - Override peer review scores when needed
 
 3. **System Operations**:
    - Trigger weekly operations
@@ -246,33 +247,38 @@ When peer reviewers assign significantly different XP scores to a submission (st
 
 ### Task Classification System
 
-The platform supports 6 distinct task types, each with specific XP ranges and weekly limits:
+The platform currently supports 2 active task types (legacy types C-F are deprecated):
 
-| Task Type | Description | XP Range | Weekly Limit | Max Completions |
-|-----------|-------------|----------|--------------|-----------------|
-| **Task A** | Thread or Long Article (Twitter 5+ tweets OR 2000+ chars) | 20-30 | 90 XP | 3 |
-| **Task B** | Platform Article (Reddit/Notion/Medium only) | 75-150 | 450 XP | 3 |
-| **Task C** | Tutorial/Guide | 20-30 | 90 XP | 3 |
-| **Task D** | Protocol Explanation | 50-75 | 225 XP | 3 |
-| **Task E** | Correction Bounty | 50-75 | 225 XP | 3 |
-| **Task F** | Strategies | 50-75 | 150-225 XP | 3 |
+| Task Type | Description | Platforms | XP Range by Category |
+|-----------|-------------|-----------|----------------------|
+| **Task A** | Twitter/X thread (5+ tweets) OR Twitter Article | Twitter, X | Strategy: 50-150, Guide: 30-130, Technical: 40-140 |
+| **Task B** | Platform Article (2000+ characters) | Medium, Reddit, Notion | Strategy: 80-250, Guide: 60-230, Technical: 70-240 |
+
+### Quality Tiers
+
+Peer reviewers assign XP based on content quality tier:
+- **Basic**: Lower end of XP range
+- **Average**: Mid-range XP
+- **Awesome**: Maximum XP for the category
+
+### Content Categories
+
+- **Strategy**: Strategic analysis and insights
+- **Guide**: How-to guides and tutorials
+- **Technical**: Technical explanations and deep dives
 
 ### Scoring & Evaluation Process
 
-1. **Content Submission**: User submits URL with #ScholarXP hashtag
-2. **AI Evaluation**: OpenRouter GPT-4 analyzes content for:
-   - Quality assessment (0-100 score)
-   - Task type classification
-   - Originality detection (0-1 score)
-   - Content validation
-3. **Peer Review**: 3 community reviewers evaluate within 48 hours
-4. **XP Aggregation**: Final score calculated using weighted average
-5. **Weekly Caps**: Applied per task type to prevent gaming
+1. **Content Submission**: User submits URL (task type auto-assigned by platform)
+2. **Peer Review**: 3 community reviewers evaluate within 48 hours
+3. **XP Aggregation**: Final score calculated from peer review consensus
+4. **Weekly Caps**: Applied per task type to prevent gaming
+
+> **Note**: AI evaluation is currently disabled. All XP scores are determined by peer reviewers.
 
 ### Quality Assurance
 
 - **Duplicate Detection**: Content fingerprinting prevents resubmissions
-- **AI Content Detection**: Flags potentially generated content
 - **Spam Prevention**: Pattern analysis for promotional content
 - **Review Incentives**: +50 XP per completed review (+5 XP timeliness bonus), penalties for missed reviews
 - **Streak System**: Bonus XP every 4 weeks for consistent activity
@@ -283,7 +289,6 @@ The platform supports 6 distinct task types, each with specific XP ranges and we
 - `POST /api/submissions` - Submit new content for evaluation
 - `GET /api/submissions` - List user submissions with filtering
 - `POST /api/validate-content` - Real-time content validation
-- `POST /api/evaluate` - Trigger AI evaluation process
 
 ### Peer Review System
 - `GET /api/peer-reviews/pending` - Get pending review assignments
@@ -293,7 +298,6 @@ The platform supports 6 distinct task types, each with specific XP ranges and we
 ### User & Analytics
 - `GET /api/user/profile` - Get user profile and XP data
 - `GET /api/user/xp-breakdown` - Detailed XP analytics
-- `GET /api/user/achievements` - User achievements and progress
 - `GET /api/user/wallet` - Get user's linked wallets
 - `GET /api/leaderboard` - Weekly and all-time rankings
 
@@ -325,7 +329,6 @@ The platform supports 6 distinct task types, each with specific XP ranges and we
 
 ### Input Validation & Security
 - **URL Validation**: Platform-specific URL format verification
-- **Content Requirements**: #ScholarXP hashtag validation
 - **XP Bounds Checking**: Prevents invalid score submissions
 - **SQL Injection Protection**: Prisma ORM with parameterized queries
 - **XSS Prevention**: Input sanitization and CSP headers
@@ -351,8 +354,8 @@ The platform supports 6 distinct task types, each with specific XP ranges and we
 - **Responsive Design**: Mobile-first approach with breakpoint optimization
 
 ### Key Components
-- **Dashboard**: Tabbed interface with Overview, Submit, Analytics, Achievements
-- **SubmissionForm**: Multi-step content submission with real-time validation
+- **Dashboard**: Tabbed interface with Overview, Submit, and Analytics
+- **SubmissionForm**: Content submission with real-time validation
 - **NotificationCenter**: Real-time notifications with Supabase Realtime
 - **Leaderboard**: Interactive rankings with filtering and search
 - **AdminPanel**: Comprehensive management interface for system operations
@@ -409,7 +412,7 @@ pnpm test:analytics-optimization
 ### Manual Testing Checklist
 
 - [ ] **Authentication Flow**: Registration, login, logout, session management
-- [ ] **Content Submission**: URL validation, task type selection, AI evaluation
+- [ ] **Content Submission**: URL validation, task type auto-assignment, peer review flow
 - [ ] **Peer Review Process**: Assignment, scoring, deadline management
 - [ ] **XP Calculation**: Aggregation, weekly caps, streak bonuses
 - [ ] **Admin Functions**: User management, content moderation, system operations
