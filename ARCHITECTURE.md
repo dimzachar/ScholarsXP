@@ -1,12 +1,12 @@
 # Scholars_XP System Architecture Documentation
 
-**Version**: 3.0  
+**Version**: 4.0  
 **Last Updated**: 2025  
 **Status**: Production-Ready Core with Comprehensive Documentation
 
 ## Executive Summary
 
-Scholars_XP is a comprehensive gamified content evaluation platform built with Next.js 15, Supabase, and PostgreSQL. The system enables users to submit content from various platforms (Twitter/X, Medium, Reddit, Notion) for AI-powered evaluation and peer review, implementing a sophisticated role-based access control system with three distinct user roles: USER, REVIEWER, and ADMIN.
+Scholars_XP is a comprehensive gamified content evaluation platform built with Next.js 15, Supabase, and PostgreSQL. The system enables users to submit content from various platforms (Twitter/X, Medium, Reddit, Notion) for AI-powered evaluation and peer review, implementing a sophisticated role-based access control system with three distinct user roles: USER, REVIEWER, and ADMIN. The platform now includes on-chain community voting via Movement Network for resolving divergent peer review scores.
 
 ### Key Architectural Principles
 
@@ -15,6 +15,7 @@ Scholars_XP is a comprehensive gamified content evaluation platform built with N
 - **Security-Focused**: Multi-layered security with authentication, authorization, and data protection
 - **Scalable Design**: Horizontal scaling through serverless functions and database optimization
 - **Performance Optimized**: Efficient queries, caching strategies, and background processing
+- **Blockchain-Integrated**: On-chain voting via Movement Network with gasless transactions
 
 ## System Architecture Overview
 
@@ -38,6 +39,7 @@ graph TB
         I[Notification Service]
         J[XP Calculation Service]
         K[Background Processing]
+        L1[Vote Consensus Service]
     end
     
     subgraph "Data Layer"
@@ -51,6 +53,9 @@ graph TB
         P[OpenRouter API]
         Q[Platform APIs]
         R[Vercel Deployment]
+        S[Movement Network]
+        T[Shinami Gas Station]
+        U[Privy Auth]
     end
     
     A --> D
@@ -59,19 +64,24 @@ graph TB
     D --> H
     D --> I
     D --> J
+    D --> L1
     E --> M
     F --> G
     G --> N
+    G --> U
     H --> P
     I --> O
     J --> L
     K --> L
+    L1 --> S
+    L1 --> T
     M --> L
     
     style A fill:#e1f5fe
     style D fill:#f3e5f5
     style L fill:#e8f5e8
     style P fill:#fff3e0
+    style S fill:#e8f5e8
 ```
 
 ## Core Components Architecture
@@ -218,6 +228,9 @@ erDiagram
         int missedReviews
         string profileImageUrl
         string bio
+        string privyUserId UK
+        string movementWalletAddress UK
+        datetime walletLinkedAt
         datetime joinedAt
         datetime lastActiveAt
         json preferences
@@ -256,6 +269,9 @@ erDiagram
         int timeSpent
         int qualityRating
         boolean isLate
+        string contentCategory
+        string qualityTier
+        enum judgmentStatus
         datetime createdAt
         datetime updatedAt
     }
@@ -297,13 +313,49 @@ erDiagram
         datetime updatedAt
     }
     
+    JudgmentVote {
+        uuid id PK
+        uuid submissionId FK
+        string walletAddress
+        int voteXp
+        string signature
+        datetime createdAt
+    }
+    
+    UserWallet {
+        uuid id PK
+        uuid userId FK
+        string address UK
+        string label
+        enum type
+        boolean isPrimary
+        datetime linkedAt
+        datetime createdAt
+        datetime updatedAt
+    }
+    
+    VoteAnalyticsEvent {
+        uuid id PK
+        string sessionId
+        string visitorId
+        string submissionId
+        string eventType
+        int votedXp
+        string buttonPosition
+        string highXpPosition
+        int timeSpentMs
+        datetime timestamp
+    }
+    
     User ||--o{ Submission : creates
     User ||--o{ PeerReview : writes
     User ||--o{ WeeklyStats : has
     User ||--o{ XpTransaction : receives
     User ||--o{ Notification : receives
+    User ||--o{ UserWallet : owns
     Submission ||--o{ PeerReview : receives
     Submission ||--o{ XpTransaction : generates
+    Submission ||--o{ JudgmentVote : receives
 ```
 
 ## API Endpoints Documentation

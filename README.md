@@ -13,6 +13,8 @@ Scholars_XP transforms content evaluation into an engaging, gamified experience 
 - **🚀 Content Submission & Evaluation**: Multi-platform content submission with AI-powered assessment
 - **🤖 AI-Powered Assessment**: LLM evaluates content and assigns XP scores based on quality and task classification
 - **👥 Peer Review System**: Community-driven review process with reviewer incentives and quality assurance
+- **⚖️ Community Voting (Judgment)**: On-chain voting system for resolving divergent peer review scores using Movement Network
+- **💼 Wallet Integration**: Multi-wallet support (Privy embedded + external wallets like Nightly) with gasless transactions via Shinami
 - **🎮 Gamification**: XP tracking, weekly streaks, leaderboards, achievements, and role progression
 - **🛡️ Admin Management**: Comprehensive administrative oversight with user management and system operations
 - **📱 Real-time Notifications**: Supabase Realtime integration for instant updates without page reloads
@@ -33,6 +35,9 @@ Scholars_XP transforms content evaluation into an engaging, gamified experience 
 | **Styling** | Tailwind CSS + shadcn/ui | Latest |
 | **Deployment** | Vercel (Serverless) | Latest |
 | **Background Jobs** | Supabase pg_cron | Latest |
+| **Blockchain** | Movement Network (Aptos-based) | Testnet |
+| **Wallet Auth** | Privy | Latest |
+| **Gas Sponsorship** | Shinami Gas Station | Latest |
 
 ## 📋 Prerequisites
 
@@ -70,6 +75,15 @@ SUPABASE_SERVICE_ROLE_KEY="[SERVICE-ROLE-KEY]"
 
 # AI Evaluation - OpenRouter (Primary)
 OPENROUTER_API_KEY="your_openrouter_api_key_here"
+
+# Privy Authentication (Wallet Integration)
+NEXT_PUBLIC_PRIVY_APP_ID="your_privy_app_id"
+PRIVY_APP_SECRET="your_privy_app_secret"
+
+# Movement Network & Shinami Gas Station
+SHINAMI_GAS_STATION_KEY="your_shinami_gas_station_key"
+NEXT_PUBLIC_VOTE_CONTRACT="0x..."  # Set after deploying vote.move contract
+NEXT_PUBLIC_MOVEMENT_RPC_URL="https://testnet.movementnetwork.xyz/v1"
 
 # Feature Flags
 ENABLE_AI_EVALUATION=true
@@ -201,6 +215,33 @@ Visit `http://localhost:3002` to access the application.
    - Monitor system health
    - Access detailed analytics
 
+## ⚖️ Community Voting System (Judgment)
+
+When peer reviewers assign significantly different XP scores to a submission (standard deviation > 50), the case becomes eligible for community voting. This decentralized dispute resolution mechanism allows the broader community to determine the correct XP value.
+
+### How It Works
+
+1. **Divergent Detection**: System identifies finalized submissions with high score variance
+2. **Case Presentation**: Users see the submission content, reviewer scores, and analysis
+3. **On-Chain Voting**: Votes are recorded on Movement Network (Aptos-based blockchain)
+4. **Consensus Resolution**: When 50+ votes reach >50% agreement, the winning score is applied
+5. **Reviewer Feedback**: Reviews matching the consensus are marked VALIDATED; others INVALIDATED
+
+### Technical Implementation
+
+- **Blockchain**: Movement Network Testnet (Aptos SDK)
+- **Gas Sponsorship**: Shinami Gas Station covers transaction fees for users
+- **Wallet Support**: Privy embedded wallets + external wallets (Nightly, etc.)
+- **Vote Contract**: Optional Move smart contract for on-chain vote recording
+
+### Consensus Parameters
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| MIN_VOTES_FOR_CONSENSUS | 50 | Minimum votes before consensus can be reached |
+| CONSENSUS_THRESHOLD | 50% | Percentage required for winning option |
+| DIVERGENCE_THRESHOLD | 50 | Minimum std dev to qualify for voting |
+
 ## 🎯 XP System & Task Types
 
 ### Task Classification System
@@ -253,7 +294,14 @@ The platform supports 6 distinct task types, each with specific XP ranges and we
 - `GET /api/user/profile` - Get user profile and XP data
 - `GET /api/user/xp-breakdown` - Detailed XP analytics
 - `GET /api/user/achievements` - User achievements and progress
+- `GET /api/user/wallet` - Get user's linked wallets
 - `GET /api/leaderboard` - Weekly and all-time rankings
+
+### Community Voting
+- `GET /api/vote` - Fetch divergent submissions for voting
+- `POST /api/vote/sponsored` - Submit sponsored on-chain vote
+- `POST /api/vote/skip` - Skip a voting case
+- `GET /api/vote/analytics` - Vote analytics and stats
 
 ### Administrative
 - `GET /api/admin/stats` - System statistics and metrics
