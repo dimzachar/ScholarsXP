@@ -286,8 +286,30 @@ export default function AdminLeaderboardsPage() {
                     <Button variant="outline"><Download className="h-4 w-4 mr-2" />Export</Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => window.open(`/api/admin/leaderboards/month/${month}/export`, '_blank')}>Export Monthly Preview CSV</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => window.open('/api/admin/leaderboards/winners/export', '_blank')}>Export Winners CSV</DropdownMenuItem>
+                    <DropdownMenuItem onClick={async () => {
+                      const res = await authenticatedFetch(`/api/admin/leaderboards/month/${month}/export`)
+                      if (res.ok) {
+                        const blob = await res.blob()
+                        const url = URL.createObjectURL(blob)
+                        const a = document.createElement('a')
+                        a.href = url
+                        a.download = `monthly_preview_${month}.csv`
+                        a.click()
+                        URL.revokeObjectURL(url)
+                      }
+                    }}>Export Monthly Preview CSV</DropdownMenuItem>
+                    <DropdownMenuItem onClick={async () => {
+                      const res = await authenticatedFetch('/api/admin/leaderboards/winners/export')
+                      if (res.ok) {
+                        const blob = await res.blob()
+                        const url = URL.createObjectURL(blob)
+                        const a = document.createElement('a')
+                        a.href = url
+                        a.download = 'winners_export.csv'
+                        a.click()
+                        URL.revokeObjectURL(url)
+                      }
+                    }}>Export Winners CSV</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <Button variant="ghost" onClick={async () => { await authenticatedFetch('/api/admin/leaderboards/cache/revalidate?scope=monthly&month='+month, { method: 'POST' }); }}>

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -87,6 +88,7 @@ interface ContentFlag {
 
 export default function AdminModerationPage() {
   const { user: _user, isLoading: loading } = usePrivyAuthSync()
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const _router = useRouter()
   const [contentFlags, setContentFlags] = useState<ContentFlag[]>([])
   const [loadingFlags, setLoadingFlags] = useState(true)
@@ -150,7 +152,7 @@ export default function AdminModerationPage() {
         }
       })
 
-      const response = await fetch(`/api/admin/moderation?${params.toString()}`)
+      const response = await authenticatedFetch(`/api/admin/moderation?${params.toString()}`)
       
       if (response.ok) {
         const data = await response.json()
@@ -203,9 +205,8 @@ export default function AdminModerationPage() {
     if (selectedFlags.length === 0) return
 
     try {
-      const response = await fetch('/api/admin/moderation', {
+      const response = await authenticatedFetch('/api/admin/moderation', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action,
           flagIds: selectedFlags,

@@ -94,7 +94,7 @@ interface UserData {
 
 export default function AdminUsersPage() {
   const { user: _user, isLoading: loading } = usePrivyAuthSync()
-  const { getAuthHeaders } = useAuthenticatedFetch()
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const router = useRouter()
   const [users, setUsers] = useState<UserData[]>([])
   const [loadingUsers, setLoadingUsers] = useState(true)
@@ -160,10 +160,7 @@ export default function AdminUsersPage() {
         }
       })
 
-      const response = await fetch(`/api/admin/users?${params.toString()}`, {
-        credentials: 'include',
-        headers: getAuthHeaders(),
-      })
+      const response = await authenticatedFetch(`/api/admin/users?${params.toString()}`)
       
       if (response.ok) {
         const data = await response.json()
@@ -193,7 +190,7 @@ export default function AdminUsersPage() {
     } finally {
       setLoadingUsers(false)
     }
-  }, [pagination.page, pagination.limit, filters, sortBy, sortOrder, getAuthHeaders])
+  }, [pagination.page, pagination.limit, filters, sortBy, sortOrder, authenticatedFetch])
 
   useEffect(() => {
     fetchUsers()
@@ -233,10 +230,8 @@ export default function AdminUsersPage() {
     if (selectedUsers.length === 0 || !newRole) return
 
     try {
-      const response = await fetch('/api/admin/users', {
+      const response = await authenticatedFetch('/api/admin/users', {
         method: 'PATCH',
-        credentials: 'include',
-        headers: getAuthHeaders(),
         body: JSON.stringify({
           action: 'updateRole',
           userIds: selectedUsers,
@@ -260,10 +255,8 @@ export default function AdminUsersPage() {
     if (selectedUsers.length === 0 || !xpAmount) return
 
     try {
-      const response = await fetch('/api/admin/users', {
+      const response = await authenticatedFetch('/api/admin/users', {
         method: 'PATCH',
-        credentials: 'include',
-        headers: getAuthHeaders(),
         body: JSON.stringify({
           action: 'adjustXp',
           userIds: selectedUsers,
@@ -319,10 +312,8 @@ export default function AdminUsersPage() {
     if (!userToDeactivate) return
 
     try {
-      const response = await fetch('/api/admin/users', {
+      const response = await authenticatedFetch('/api/admin/users', {
         method: 'PATCH',
-        credentials: 'include',
-        headers: getAuthHeaders(),
         body: JSON.stringify({
           action: 'toggleStatus',
           userIds: [userToDeactivate.id],
@@ -393,9 +384,7 @@ export default function AdminUsersPage() {
           }
         })
 
-        const response = await fetch(`/api/admin/users?${params.toString()}` , {
-          headers: getAuthHeaders(),
-        })
+        const response = await authenticatedFetch(`/api/admin/users?${params.toString()}`)
 
         if (!response.ok) {
           throw new Error(`Failed to fetch users page ${currentPage} for export`)
@@ -510,9 +499,8 @@ export default function AdminUsersPage() {
     if (selectedUsers.length === 0) return
 
     try {
-      const response = await fetch('/api/admin/users', {
+      const response = await authenticatedFetch('/api/admin/users', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'toggleStatus',
           userIds: selectedUsers,

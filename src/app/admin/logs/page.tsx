@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import type { NormalizedLogRow } from '@/lib/audit-log'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AuthGuard from '@/components/Auth/AuthGuard'
 import { AdminGuard } from '@/components/Auth/RoleGuard'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 
 type EventType = NormalizedLogRow['eventType']
 
@@ -51,6 +52,7 @@ const EVENT_TYPE_META: Record<EventType, { label: string; icon: React.ComponentT
 export default function AdminLogsPage() {
   const router = useRouter()
   const sp = useSearchParams()
+  const { authenticatedFetch } = useAuthenticatedFetch()
 
   const [items, setItems] = useState<NormalizedLogRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -88,7 +90,7 @@ export default function AdminLogsPage() {
     return { dateFrom: from.toISOString(), dateTo: to.toISOString() }
   }, [timeframe])
 
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     setLoading(true)
     try {
       const params = new URLSearchParams()
@@ -101,7 +103,7 @@ export default function AdminLogsPage() {
       if (dateRange.dateFrom) params.set('dateFrom', dateRange.dateFrom)
       if (dateRange.dateTo) params.set('dateTo', dateRange.dateTo)
 
-      const res = await fetch(`/api/admin/logs?${params.toString()}`)
+      const res = await authenticatedFetch(`/api/admin/logs?${params.toString()}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || 'Failed to load logs')
 
@@ -114,7 +116,7 @@ export default function AdminLogsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [page, limit, sortBy, sortDir, q, selectedTypes, dateRange, authenticatedFetch])
 
   useEffect(() => {
     fetchLogs()

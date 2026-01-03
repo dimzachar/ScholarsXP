@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -59,6 +60,7 @@ export default function ReviewerScoreEditor({
   submissionId,
   onSuccess
 }: ReviewerScoreEditorProps) {
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const [newScore, setNewScore] = useState(review.xpScore.toString())
   const [newComments, setNewComments] = useState(review.comments || '')
   const [newQualityRating, setNewQualityRating] = useState(review.qualityRating?.toString() || '')
@@ -125,11 +127,8 @@ export default function ReviewerScoreEditor({
         reason: reason.trim()
       }
 
-      const response = await fetch(`/api/admin/submissions/${submissionId}/peer-reviews/${review.id}`, {
+      const response = await authenticatedFetch(`/api/admin/submissions/${submissionId}/peer-reviews/${review.id}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(requestBody)
       })
 

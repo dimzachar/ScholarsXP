@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -42,26 +43,23 @@ interface AdminStats {
 
 export default function AdminDashboardPage() {
   const { user: _user, isLoading: loading } = usePrivyAuthSync()
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const _router = useRouter()
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [loadingStats, setLoadingStats] = useState(true)
-
-  useEffect(() => {
-    fetchAdminStats()
-  }, [])
 
   const fetchAdminStats = async () => {
     try {
       setLoadingStats(true)
 
       // Fetch all-time stats (includes legacy data)
-      const statsResponse = await fetch('/api/admin/stats', { credentials: 'include' })
+      const statsResponse = await authenticatedFetch('/api/admin/stats')
 
       if (statsResponse.ok) {
         const statsData = await statsResponse.json()
 
         // Also fetch recent analytics for additional metrics
-        const analyticsResponse = await fetch('/api/admin/analytics?timeframe=last_30_days', { credentials: 'include' })
+        const analyticsResponse = await authenticatedFetch('/api/admin/analytics?timeframe=last_30_days')
         const analyticsData = analyticsResponse.ok ? await analyticsResponse.json() : null
 
         // Calculate finalization statistics
@@ -96,6 +94,10 @@ export default function AdminDashboardPage() {
       setLoadingStats(false)
     }
   }
+
+  useEffect(() => {
+    fetchAdminStats()
+  }, [authenticatedFetch])
 
   const adminModules = [
     {

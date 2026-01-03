@@ -160,11 +160,8 @@ export default function AdminSubmissionDetailPage() {
     try {
       setAssigning(true)
       setError(null)
-      const response = await fetch('/api/admin/assignments/auto', {
+      const response = await authenticatedFetch('/api/admin/assignments/auto', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({ submissionId })
       })
 

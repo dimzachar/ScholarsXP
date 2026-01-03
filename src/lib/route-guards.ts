@@ -1,11 +1,13 @@
 /**
- * Route Guards - Privy-First Authentication
+ * Route Guards - Privy-First Authentication with Token Verification
  * 
- * Uses Privy user ID header (X-Privy-User-Id) for authentication.
+ * Uses Bearer token verification for secure authentication.
+ * Falls back to X-Privy-User-Id header only in development.
  */
 
 import { NextRequest } from 'next/server'
 import { getUserProfileByPrivyId, UserRole } from './auth-middleware'
+import { verifyPrivyToken, extractBearerToken } from './privy-server'
 
 export interface AuthenticatedUser {
   id: string
@@ -15,14 +17,50 @@ export interface AuthenticatedUser {
 }
 
 /**
+ * Verify the Privy auth token and extract the user ID.
+ * In production, ONLY accepts cryptographically verified Bearer tokens.
+ */
+async function getVerifiedPrivyUserId(request: NextRequest): Promise<string | null> {
+  const authHeader = request.headers.get('authorization')
+  const bearerToken = extractBearerToken(authHeader)
+  const isProduction = process.env.NODE_ENV === 'production'
+
+  // If we have a Bearer token, verify it cryptographically
+  if (bearerToken) {
+    try {
+      const verified = await verifyPrivyToken(bearerToken)
+      return verified.userId
+    } catch (error) {
+      console.error('Privy token verification failed:', error)
+      if (isProduction) {
+        return null
+      }
+    }
+  }
+
+  // PRODUCTION: Never accept unverified headers
+  if (isProduction) {
+    return null
+  }
+
+  // DEVELOPMENT ONLY: Allow X-Privy-User-Id header as fallback
+  const privyUserIdHeader = request.headers.get('x-privy-user-id')
+  if (privyUserIdHeader) {
+    return privyUserIdHeader
+  }
+
+  return null
+}
+
+/**
  * Higher-order function that creates a route guard requiring specific roles
  * @param allowedRoles Array of roles that are allowed to access the route
  * @returns Function that validates user role and returns authenticated user
  */
 export function requireRole(allowedRoles: UserRole[]) {
   return async (request: NextRequest): Promise<AuthenticatedUser> => {
-    // Get Privy user ID from header
-    const privyUserId = request.headers.get('x-privy-user-id')
+    // Verify Bearer token and get Privy user ID
+    const privyUserId = await getVerifiedPrivyUserId(request)
     
     if (!privyUserId) {
       throw new Error('Authentication required - please sign in')
@@ -71,7 +109,7 @@ export const requireAuth = requireRole(['USER', 'REVIEWER', 'ADMIN'])
  */
 export async function getCurrentUser(request: NextRequest): Promise<AuthenticatedUser | null> {
   try {
-    const privyUserId = request.headers.get('x-privy-user-id')
+    const privyUserId = await getVerifiedPrivyUserId(request)
     
     if (!privyUserId) {
       return null
@@ -106,13 +144,13 @@ export function hasRolePermission(userRole: UserRole, requiredRoles: UserRole[])
 }
 
 /**
- * Get user from Privy user ID header
+ * Get user from Bearer token (preferred) or Privy user ID header (dev only)
  * @param request NextRequest object
  * @returns Authenticated user or null
  */
 export async function getUserFromPrivyHeader(request: NextRequest): Promise<AuthenticatedUser | null> {
   try {
-    const privyUserId = request.headers.get('x-privy-user-id')
+    const privyUserId = await getVerifiedPrivyUserId(request)
     
     if (!privyUserId) {
       return null

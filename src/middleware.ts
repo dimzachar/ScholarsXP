@@ -22,10 +22,10 @@ export async function middleware(request: NextRequest) {
   response.headers.set('Expires', '0')
 
   // Protected routes - authentication is handled client-side by Privy
-  // Admin role protection is handled by API routes via X-Privy-User-Id header
+  // Admin role protection is handled by API routes via Bearer token verification
   // The middleware no longer checks authentication - that's done by:
   // 1. Client-side: PrivyAuthSyncContext checks Privy auth state
-  // 2. API routes: auth-middleware checks X-Privy-User-Id header
+  // 2. API routes: auth-middleware verifies Bearer tokens cryptographically
 
   // Apply rate limiting to API routes
   const shouldRateLimit = process.env.NODE_ENV === 'production' || process.env.RATE_LIMIT_ENABLED === 'true'

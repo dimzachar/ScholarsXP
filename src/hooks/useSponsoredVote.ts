@@ -15,6 +15,7 @@ import {
   Ed25519Signature,
 } from "@aptos-labs/ts-sdk";
 import { VOTE_CONTRACT_ADDRESS, isVoteContractEnabled } from "@/lib/movement";
+import { useAuthenticatedFetch } from "@/hooks/useAuthenticatedFetch";
 
 // Movement Testnet client (for Shinami Gas Station testing)
 const movementClient = new Aptos(new AptosConfig({
@@ -52,6 +53,9 @@ export function useSponsoredVote(): UseSponsoredVoteReturn {
   // Privy (for embedded wallet)
   const { user: privyUser } = usePrivy();
   const { signRawHash } = useSignRawHash();
+  
+  // Authenticated fetch for API calls
+  const { authenticatedFetch } = useAuthenticatedFetch();
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -221,15 +225,9 @@ export function useSponsoredVote(): UseSponsoredVoteReturn {
         serializedSignature = `0x${Buffer.from(serializer.toUint8Array()).toString('hex')}`;
       }
 
-      // Send to backend for sponsorship (with auth header)
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (privyUser?.id) {
-        headers["X-Privy-User-Id"] = privyUser.id;
-      }
-
-      const response = await fetch("/api/vote/sponsored", {
+      // Send to backend for sponsorship using authenticatedFetch
+      const response = await authenticatedFetch("/api/vote/sponsored", {
         method: "POST",
-        headers,
         body: JSON.stringify({
           submissionId,
           voteXp,
@@ -252,7 +250,7 @@ export function useSponsoredVote(): UseSponsoredVoteReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [privyUser?.id, privyAptosWallet, externalAccount?.address, externalConnected, signTransaction, signRawHash, network, wallet]);
+  }, [privyAptosWallet, externalAccount?.address, externalConnected, signTransaction, signRawHash, network, wallet, authenticatedFetch]);
 
   return { 
     vote, 

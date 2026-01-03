@@ -1,20 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getUserProfileByPrivyId } from '@/lib/auth-middleware'
+import { NextResponse } from 'next/server'
+import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+async function getHandler(
+  request: AuthenticatedRequest,
+  context?: unknown
 ) {
-  const privyUserId = request.headers.get('x-privy-user-id')
-
-  if (!privyUserId) {
-    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
-  }
-
-  const userProfile = await getUserProfileByPrivyId(privyUserId)
-  if (!userProfile) {
-    return NextResponse.json({ error: 'User not found' }, { status: 401 })
+  const userProfile = request.userProfile
+  const params = (context as { params: { id: string } } | undefined)?.params
+  
+  if (!params?.id) {
+    return NextResponse.json({ error: 'Missing submission ID' }, { status: 400 })
   }
 
   const submission = await prisma.submission.findUnique({
@@ -45,3 +41,5 @@ export async function GET(
 
   return NextResponse.json(submission)
 }
+
+export const GET = withAuth(getHandler)

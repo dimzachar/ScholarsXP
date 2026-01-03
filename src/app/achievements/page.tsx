@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -87,6 +88,7 @@ interface AchievementsData {
 
 export default function AchievementsPage() {
   const { user, isLoading: loading } = usePrivyAuthSync()
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const router = useRouter()
   const [achievementsData, setAchievementsData] = useState<AchievementsData | null>(null)
   const [loadingAchievements, setLoadingAchievements] = useState(true)
@@ -101,7 +103,7 @@ export default function AchievementsPage() {
       if (selectedCategory !== 'all') params.append('category', selectedCategory)
       if (selectedStatus !== 'all') params.append('status', selectedStatus)
       
-      const response = await fetch(`/api/user/achievements?${params.toString()}`)
+      const response = await authenticatedFetch(`/api/user/achievements?${params.toString()}`)
       
       if (response.ok) {
         const data: AchievementsData = await response.json()

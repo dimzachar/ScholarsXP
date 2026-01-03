@@ -6,9 +6,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-// Remove direct service imports to avoid Next.js server/client issues
-// import { MergeService } from '@/lib/services/MergeService'
-// import type { MergeStatus } from '@/lib/services/MergeService'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 
 // Define types locally
 interface MergeStatus {
@@ -43,6 +41,7 @@ interface UseMergeStatusReturn {
 
 export function useMergeStatus(options: UseMergeStatusOptions = {}): UseMergeStatusReturn {
   const { userId, pollInterval = 5000, autoRefresh = true } = options
+  const { authenticatedFetch } = useAuthenticatedFetch()
   
   const [status, setStatus] = useState<MergeStatus | null>(null)
   const [loading, setLoading] = useState(false)
@@ -55,13 +54,14 @@ export function useMergeStatus(options: UseMergeStatusOptions = {}): UseMergeSta
       setLoading(true)
       setError(null)
 
-      // Use API call instead of direct service
-      const response = await fetch(`/api/merge/initiate?userId=${userId}`)
+      // Use authenticatedFetch for Bearer token auth
+      const response = await authenticatedFetch(`/api/merge/initiate?userId=${userId}`)
       if (response.ok) {
         const mergeStatus = await response.json()
         setStatus(mergeStatus)
       } else {
-        throw new Error('Failed to fetch merge status')
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to fetch merge status')
       }
     } catch (err) {
       console.error('Error fetching merge status:', err)
@@ -69,7 +69,7 @@ export function useMergeStatus(options: UseMergeStatusOptions = {}): UseMergeSta
     } finally {
       setLoading(false)
     }
-  }, [userId])
+  }, [userId, authenticatedFetch])
 
   // Initial load
   useEffect(() => {
@@ -155,6 +155,7 @@ interface UseInitiateMergeReturn {
 
 export function useInitiateMerge(options: UseInitiateMergeOptions = {}): UseInitiateMergeReturn {
   const { onSuccess, onError } = options
+  const { authenticatedFetch } = useAuthenticatedFetch()
   
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -169,12 +170,9 @@ export function useInitiateMerge(options: UseInitiateMergeOptions = {}): UseInit
       setLoading(true)
       setError(null)
 
-      // Use API call instead of direct service
-      const response = await fetch('/api/merge/initiate', {
+      // Use authenticatedFetch for Bearer token auth
+      const response = await authenticatedFetch('/api/merge/initiate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({
           ...params,
           initiatedBy: 'USER'
@@ -191,7 +189,8 @@ export function useInitiateMerge(options: UseInitiateMergeOptions = {}): UseInit
           onError?.(errorMessage)
         }
       } else {
-        throw new Error('API call failed')
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'API call failed')
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to initiate merge'
@@ -200,7 +199,7 @@ export function useInitiateMerge(options: UseInitiateMergeOptions = {}): UseInit
     } finally {
       setLoading(false)
     }
-  }, [onSuccess, onError])
+  }, [onSuccess, onError, authenticatedFetch])
 
   return {
     initiateMerge,

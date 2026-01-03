@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -33,6 +34,7 @@ interface XpModificationDialogProps {
   currentXp: number
   xpType: 'ai' | 'peer' | 'final'
   onSuccess: () => void
+  isLegacySubmission?: boolean
 }
 
 export default function XpModificationDialog({
@@ -44,6 +46,7 @@ export default function XpModificationDialog({
   onSuccess,
   isLegacySubmission = false
 }: XpModificationDialogProps) {
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const [newXp, setNewXp] = useState(currentXp.toString())
   const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(false)
@@ -111,11 +114,8 @@ export default function XpModificationDialog({
         }
       }
 
-      const response = await fetch(endpoint, {
+      const response = await authenticatedFetch(endpoint, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(requestBody)
       })
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -21,20 +22,17 @@ interface XpTransactionHistoryProps {
 }
 
 export default function XpTransactionHistory({ submissionId }: XpTransactionHistoryProps) {
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const [transactions, setTransactions] = useState<XpTransaction[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    fetchTransactions()
-  }, [submissionId])
 
   const fetchTransactions = async () => {
     try {
       setLoading(true)
       setError(null)
 
-      const response = await fetch(`/api/admin/submissions/${submissionId}/xp-transactions`)
+      const response = await authenticatedFetch(`/api/admin/submissions/${submissionId}/xp-transactions`)
       
       if (!response.ok) {
         throw new Error(`Failed to fetch transactions: ${response.status}`)
@@ -49,6 +47,10 @@ export default function XpTransactionHistory({ submissionId }: XpTransactionHist
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    fetchTransactions()
+  }, [submissionId])
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString()

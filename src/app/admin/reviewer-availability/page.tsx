@@ -38,7 +38,7 @@ interface ReviewerRecord {
 
 export default function ReviewerAvailabilityPage() {
   const { user: _user } = usePrivyAuthSync()
-  const { getAuthHeaders } = useAuthenticatedFetch()
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const [reviewers, setReviewers] = useState<ReviewerRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [sortBy, setSortBy] = useState<string>('username')
@@ -68,10 +68,7 @@ export default function ReviewerAvailabilityPage() {
         params.set('sortOrder', 'asc')
       }
 
-      const response = await fetch(`/api/admin/users?${params.toString()}`, {
-        credentials: 'include',
-        headers: getAuthHeaders()
-      })
+      const response = await authenticatedFetch(`/api/admin/users?${params.toString()}`)
 
       if (!response.ok) {
         throw new Error('Failed to load reviewer availability')
@@ -104,7 +101,7 @@ export default function ReviewerAvailabilityPage() {
     } finally {
       setLoading(false)
     }
-  }, [getAuthHeaders, sortBy, sortOrder])
+  }, [authenticatedFetch, sortBy, sortOrder])
 
   useEffect(() => {
     fetchReviewers()
@@ -160,10 +157,8 @@ export default function ReviewerAvailabilityPage() {
     try {
       setUpdatingUserId(reviewer.id)
 
-      const response = await fetch('/api/admin/users', {
+      const response = await authenticatedFetch('/api/admin/users', {
         method: 'PATCH',
-        credentials: 'include',
-        headers: getAuthHeaders(),
         body: JSON.stringify({
           action: 'setReviewAvailability',
           userIds: [reviewer.id],

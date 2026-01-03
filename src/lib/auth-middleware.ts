@@ -1,12 +1,13 @@
 /**
- * Auth Middleware - Privy-First Authentication
+ * Auth Middleware - Privy-First Authentication with Token Verification
  * 
- * Uses Privy user ID header (X-Privy-User-Id) for authentication.
- * Supabase auth fallback has been removed for security.
+ * Uses cryptographic verification of Privy auth tokens to prevent spoofing.
+ * Falls back to X-Privy-User-Id header only in development when PRIVY_APP_SECRET is not set.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { verifyPrivyToken, extractBearerToken } from './privy-server'
 
 // Import UserRole from PrivyAuthSyncContext to avoid circular dependency
 export type UserRole = 'USER' | 'REVIEWER' | 'ADMIN'
@@ -64,7 +65,6 @@ export class AuthError extends Error {
   }
 }
 
-
 export function hasPermission(userRole: UserRole, permission: Permission): boolean {
   return ROLE_PERMISSIONS[userRole].includes(permission)
 }
@@ -91,14 +91,56 @@ export async function getUserProfileByPrivyId(privyUserId: string): Promise<User
   return data as UserProfile
 }
 
+/**
+ * Verify the Privy auth token and extract the user ID.
+ * 
+ * SECURITY: In production, ONLY accepts cryptographically verified Bearer tokens.
+ * The X-Privy-User-Id header is NEVER trusted in production as it can be spoofed.
+ * 
+ * Development: Tries Bearer token first, falls back to X-Privy-User-Id header
+ * for backward compatibility with components not yet updated.
+ */
+async function getVerifiedPrivyUserId(request: NextRequest): Promise<string | null> {
+  const authHeader = request.headers.get('authorization')
+  const bearerToken = extractBearerToken(authHeader)
+  const isProduction = process.env.NODE_ENV === 'production'
+
+  // If we have a Bearer token, verify it cryptographically
+  if (bearerToken) {
+    try {
+      const verified = await verifyPrivyToken(bearerToken)
+      return verified.userId
+    } catch (error) {
+      console.error('Privy token verification failed:', error)
+      // In production, fail. In dev, fall through to header fallback.
+      if (isProduction) {
+        return null
+      }
+    }
+  }
+
+  // PRODUCTION: Never accept unverified headers
+  if (isProduction) {
+    return null
+  }
+
+  // DEVELOPMENT ONLY: Allow X-Privy-User-Id header as fallback
+  const privyUserIdHeader = request.headers.get('x-privy-user-id')
+  if (privyUserIdHeader) {
+    return privyUserIdHeader
+  }
+
+  return null
+}
+
 export function createRoleBasedHandler() {
   return {
     withPermission: (permission: Permission) => {
       return (handler: (request: AuthenticatedRequest, context?: unknown) => Promise<NextResponse>) => {
         return async (request: NextRequest, context?: unknown) => {
           try {
-            // Get Privy user ID from header
-            const privyUserId = request.headers.get('x-privy-user-id')
+            // Verify Privy token and get user ID
+            const privyUserId = await getVerifiedPrivyUserId(request)
             
             if (!privyUserId) {
               return NextResponse.json(
@@ -164,8 +206,8 @@ export function createRoleBasedHandler() {
       return (handler: (request: AuthenticatedRequest, context?: unknown) => Promise<NextResponse>) => {
         return async (request: NextRequest, context?: unknown) => {
           try {
-            // Get Privy user ID from header
-            const privyUserId = request.headers.get('x-privy-user-id')
+            // Verify Privy token and get user ID
+            const privyUserId = await getVerifiedPrivyUserId(request)
             
             if (!privyUserId) {
               return NextResponse.json(
@@ -236,8 +278,8 @@ export function createRoleBasedHandler() {
     withAuth: (handler: (request: AuthenticatedRequest, context?: unknown) => Promise<NextResponse>) => {
       return async (request: NextRequest, context?: unknown) => {
         try {
-          // Get Privy user ID from header
-          const privyUserId = request.headers.get('x-privy-user-id')
+          // Verify Privy token and get user ID
+          const privyUserId = await getVerifiedPrivyUserId(request)
           
           if (!privyUserId) {
             return NextResponse.json(

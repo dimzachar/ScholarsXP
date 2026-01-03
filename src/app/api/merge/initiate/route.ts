@@ -4,13 +4,13 @@
  * Provides API access to the merge service for manual merge initiation
  * and admin tools. Supports both user-initiated and admin-initiated merges.
  * 
- * Updated to use Privy authentication via X-Privy-User-Id header.
+ * Uses withAuth middleware for Bearer token verification.
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { MergeService } from '@/lib/services/MergeService'
 import { withAPIOptimization } from '@/middleware/api-optimization'
-import { getUserProfileByPrivyId } from '@/lib/auth-middleware'
+import { withAuth, withRole, AuthenticatedRequest } from '@/lib/auth-middleware'
 
 interface MergeInitiateRequest {
   realUserId: string
@@ -38,7 +38,7 @@ const extractString = (value: unknown): string | undefined => {
  * POST /api/merge/initiate
  * Initiates a legacy account merge
  */
-async function postHandler(request: NextRequest) {
+async function postHandler(request: AuthenticatedRequest) {
   try {
     const body: MergeInitiateRequest = await request.json()
 
@@ -57,21 +57,8 @@ async function postHandler(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Get Privy user ID from header
-    const privyUserId = request.headers.get('x-privy-user-id')
-    if (!privyUserId) {
-      return NextResponse.json({
-        error: 'Authentication required - please sign in'
-      }, { status: 401 })
-    }
-
-    // Get user profile by Privy ID
-    const userProfile = await getUserProfileByPrivyId(privyUserId)
-    if (!userProfile) {
-      return NextResponse.json({
-        error: 'User not found - please complete sign in'
-      }, { status: 401 })
-    }
+    // User is already authenticated via withAuth middleware
+    const userProfile = request.userProfile
 
     // Authorization check: users can only merge their own accounts
     // Admins can merge any account
@@ -132,7 +119,7 @@ async function postHandler(request: NextRequest) {
  * GET /api/merge/initiate?userId=<uuid>
  * Gets merge status for a user
  */
-async function getHandler(request: NextRequest) {
+async function getHandler(request: AuthenticatedRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('userId')
@@ -151,21 +138,8 @@ async function getHandler(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Get Privy user ID from header
-    const privyUserId = request.headers.get('x-privy-user-id')
-    if (!privyUserId) {
-      return NextResponse.json({
-        error: 'Authentication required - please sign in'
-      }, { status: 401 })
-    }
-
-    // Get user profile by Privy ID
-    const userProfile = await getUserProfileByPrivyId(privyUserId)
-    if (!userProfile) {
-      return NextResponse.json({
-        error: 'User not found - please complete sign in'
-      }, { status: 401 })
-    }
+    // User is already authenticated via withAuth middleware
+    const userProfile = request.userProfile
 
     // Authorization check: users can only check their own status
     // Admins can check any user's status
@@ -203,9 +177,9 @@ async function getHandler(request: NextRequest) {
 
 /**
  * PUT /api/merge/initiate
- * Retries a failed merge
+ * Retries a failed merge (admin only)
  */
-async function putHandler(request: NextRequest) {
+async function putHandler(request: AuthenticatedRequest) {
   try {
     const body: { mergeId: string } = await request.json()
 
@@ -213,29 +187,6 @@ async function putHandler(request: NextRequest) {
       return NextResponse.json({
         error: 'Missing mergeId'
       }, { status: 400 })
-    }
-
-    // Get Privy user ID from header
-    const privyUserId = request.headers.get('x-privy-user-id')
-    if (!privyUserId) {
-      return NextResponse.json({
-        error: 'Authentication required - please sign in'
-      }, { status: 401 })
-    }
-
-    // Get user profile by Privy ID
-    const userProfile = await getUserProfileByPrivyId(privyUserId)
-    if (!userProfile) {
-      return NextResponse.json({
-        error: 'User not found - please complete sign in'
-      }, { status: 401 })
-    }
-
-    // Check if user is admin (only admins can retry merges)
-    if (userProfile.role !== 'ADMIN') {
-      return NextResponse.json({
-        error: 'Unauthorized: Only admins can retry failed merges'
-      }, { status: 403 })
     }
 
     // Retry merge using the service
@@ -269,6 +220,7 @@ async function putHandler(request: NextRequest) {
   }
 }
 
-export const POST = withAPIOptimization(postHandler, { rateLimitType: 'merge', caching: false, compression: true, performanceMonitoring: true })
-export const GET = withAPIOptimization(getHandler, { rateLimitType: 'merge', caching: false, compression: true, performanceMonitoring: true })
-export const PUT = withAPIOptimization(putHandler, { rateLimitType: 'merge', caching: false, compression: true, performanceMonitoring: true })
+// Wrap handlers with auth middleware, then API optimization
+export const POST = withAPIOptimization(withAuth(postHandler), { rateLimitType: 'merge', caching: false, compression: true, performanceMonitoring: true })
+export const GET = withAPIOptimization(withAuth(getHandler), { rateLimitType: 'merge', caching: false, compression: true, performanceMonitoring: true })
+export const PUT = withAPIOptimization(withRole('ADMIN')(putHandler), { rateLimitType: 'merge', caching: false, compression: true, performanceMonitoring: true })

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -60,11 +61,42 @@ interface MergeMetrics {
 }
 
 export default function MergeManagement() {
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const [mergeHistory, setMergeHistory] = useState<MergeHistoryItem[]>([])
   const [metrics, setMetrics] = useState<MergeMetrics | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [retryingMerge, setRetryingMerge] = useState<string | null>(null)
+
+  const loadMergeStatistics = useCallback(async () => {
+    try {
+      const response = await authenticatedFetch('/api/admin/merge-stats?timeframe=day')
+      if (response.ok) {
+        const data = await response.json()
+        return data.statistics
+      } else {
+        throw new Error('Failed to fetch statistics')
+      }
+    } catch (error) {
+      console.error('Error loading merge statistics:', error)
+      return null
+    }
+  }, [authenticatedFetch])
+
+  const loadMergeHistory = useCallback(async (): Promise<MergeHistoryItem[]> => {
+    try {
+      const response = await authenticatedFetch('/api/admin/merge-history?limit=50')
+      if (response.ok) {
+        const data = await response.json()
+        return data.mergeHistory || []
+      } else {
+        throw new Error('Failed to fetch merge history')
+      }
+    } catch (error) {
+      console.error('Error loading merge history:', error)
+      return []
+    }
+  }, [authenticatedFetch])
 
   const loadMergeData = useCallback(async () => {
     try {
@@ -85,41 +117,11 @@ export default function MergeManagement() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [loadMergeHistory, loadMergeStatistics])
 
   useEffect(() => {
     loadMergeData()
   }, [loadMergeData])
-
-  const loadMergeStatistics = async () => {
-    try {
-      const response = await fetch('/api/admin/merge-stats?timeframe=day')
-      if (response.ok) {
-        const data = await response.json()
-        return data.statistics
-      } else {
-        throw new Error('Failed to fetch statistics')
-      }
-    } catch (error) {
-      console.error('Error loading merge statistics:', error)
-      return null
-    }
-  }
-
-  const loadMergeHistory = async (): Promise<MergeHistoryItem[]> => {
-    try {
-      const response = await fetch('/api/admin/merge-history?limit=50')
-      if (response.ok) {
-        const data = await response.json()
-        return data.mergeHistory || []
-      } else {
-        throw new Error('Failed to fetch merge history')
-      }
-    } catch (error) {
-      console.error('Error loading merge history:', error)
-      return []
-    }
-  }
 
   const retryMerge = async (mergeId: string) => {
     try {

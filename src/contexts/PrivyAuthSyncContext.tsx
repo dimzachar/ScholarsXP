@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef } f
 import { usePrivy } from '@privy-io/react-auth'
 // IMPORTANT: useCreateWallet must be imported from extended-chains for chainType support
 import { useCreateWallet } from '@privy-io/react-auth/extended-chains'
-import { setPrivyUserId } from '@/lib/api-client'
+import { setPrivyUserId, setPrivyAuthToken } from '@/lib/api-client'
 
 export type UserRole = 'USER' | 'REVIEWER' | 'ADMIN'
 
@@ -73,7 +73,7 @@ async function sleep(ms: number): Promise<void> {
 }
 
 export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) {
-  const { ready, authenticated, user: privyUser } = usePrivy()
+  const { ready, authenticated, user: privyUser, getAccessToken } = usePrivy()
   const { createWallet: privyCreateWallet } = useCreateWallet()
   
   const [user, setUser] = useState<SyncedUser | null>(null)
@@ -158,6 +158,15 @@ export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) 
         // Set Privy user ID in API client for authenticated requests
         setPrivyUserId(privyUser.id)
         
+        // Get and set the Privy auth token for secure API calls
+        try {
+          const authToken = await getAccessToken()
+          setPrivyAuthToken(authToken)
+        } catch (tokenError) {
+          console.warn('Failed to get Privy auth token:', tokenError)
+          // Continue without token - server will fall back to header verification in dev
+        }
+        
         syncInProgressRef.current = false
         setIsSyncing(false)
         setIsLoading(false)
@@ -212,8 +221,9 @@ export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) 
       setUser(null)
       setIsLoading(false)
       lastSyncedUserIdRef.current = null
-      // Clear Privy user ID from API client on logout
+      // Clear Privy credentials from API client on logout
       setPrivyUserId(null)
+      setPrivyAuthToken(null)
       return
     }
     

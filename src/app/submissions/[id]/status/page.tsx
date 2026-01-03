@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, notFound } from 'next/navigation'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { SubmissionStatus } from '@/components/SubmissionStatus'
 import { ArrowLeft, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
@@ -29,6 +30,7 @@ const aiDisabled = (process.env.NEXT_PUBLIC_AI_DISABLED || 'false').toLowerCase(
 
 export default function SubmissionStatusPage({ params }: SubmissionStatusPageProps) {
   const { user, isLoading } = usePrivyAuthSync()
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const router = useRouter()
   const [submission, setSubmission] = useState<SubmissionData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -45,11 +47,7 @@ export default function SubmissionStatusPage({ params }: SubmissionStatusPagePro
       if (!user?.privyUserId) return
 
       try {
-        const response = await fetch(`/api/submissions/${params.id}`, {
-          headers: {
-            'X-Privy-User-Id': user.privyUserId
-          }
-        })
+        const response = await authenticatedFetch(`/api/submissions/${params.id}`)
 
         if (!response.ok) {
           if (response.status === 404) {
@@ -74,7 +72,7 @@ export default function SubmissionStatusPage({ params }: SubmissionStatusPagePro
     if (user) {
       fetchSubmission()
     }
-  }, [user, params.id])
+  }, [user, params.id, authenticatedFetch])
 
   if (isLoading || loading) {
     return (

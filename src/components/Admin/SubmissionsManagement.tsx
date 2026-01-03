@@ -88,7 +88,7 @@ interface SubmissionsManagementProps {
 
 export default function SubmissionsManagement({ className }: SubmissionsManagementProps) {
   const { user, isLoading: loading, isAdmin } = usePrivyAuthSync()
-  const { getAuthHeaders } = useAuthenticatedFetch()
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [submissions, setSubmissions] = useState<Submission[]>([])
@@ -200,13 +200,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
 
       const apiUrl = `/api/admin/submissions?${params.toString()}`
 
-      const response = await fetch(apiUrl, {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache',
-          ...getAuthHeaders(),
-        }
-      })
+      const response = await authenticatedFetch(apiUrl)
 
       if (response.ok) {
         const responseData = await response.json()
@@ -247,7 +241,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
     } finally {
       setLoadingSubmissions(false)
     }
-  }, [pagination.page, pagination.limit, sortBy, sortOrder, filters, getAuthHeaders])
+  }, [pagination.page, pagination.limit, sortBy, sortOrder, filters, authenticatedFetch])
 
   useEffect(() => {
     // Only fetch when user is loaded with privyUserId and is admin, and pagination is initialized
@@ -256,7 +250,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
     }
   }, [pagination, filters, sortBy, sortOrder, user?.role, user?.privyUserId, loading, fetchSubmissions, isAdmin])
 
-  const handleFilterChange = (key: string, value: any) => {
+  const handleFilterChange = (key: string, value: unknown) => {
     setFilters(prev => ({ ...prev, [key]: value }))
     setPagination(prev => ({ ...prev, page: 1 })) // Reset to first page
   }
@@ -297,9 +291,8 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
     setBulkMessage(null)
 
     try {
-      const response = await fetch('/api/admin/submissions', {
+      const response = await authenticatedFetch('/api/admin/submissions', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action,
           submissionIds: selectedSubmissions,
@@ -352,7 +345,7 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
           flagged: filters.flagged ? 'true' : ''
         })
 
-        const response = await fetch(`/api/admin/submissions?${params.toString()}`)
+        const response = await authenticatedFetch(`/api/admin/submissions?${params.toString()}`)
 
         if (!response.ok) {
           throw new Error(`Failed to fetch submissions page ${currentPage} for export`)
@@ -501,9 +494,8 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
 
     setQuickEditLoading(true)
     try {
-      const response = await fetch(`/api/admin/submissions/${quickEditModal.submission.id}`, {
+      const response = await authenticatedFetch(`/api/admin/submissions/${quickEditModal.submission.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'updateStatus',
           data: {
@@ -557,9 +549,8 @@ export default function SubmissionsManagement({ className }: SubmissionsManageme
       console.log('🔄 Starting bulk reshuffle with reason:', reason.trim())
 
       // Perform the bulk reshuffle directly - the API will return count information
-      const response = await fetch('/api/admin/bulk-reshuffle', {
+      const response = await authenticatedFetch('/api/admin/bulk-reshuffle', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reason: reason.trim()
         })

@@ -1,31 +1,33 @@
 /**
  * Hook for making authenticated API requests using Privy auth.
- * Provides fetch wrapper that automatically includes X-Privy-User-Id header.
+ * Sends Bearer token for server-side verification.
  */
 
+import { usePrivy } from '@privy-io/react-auth'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { useCallback } from 'react'
 
 export function useAuthenticatedFetch() {
   const { user } = usePrivyAuthSync()
-
-  const getAuthHeaders = useCallback((): HeadersInit => {
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    }
-
-    if (user?.privyUserId) {
-      headers['X-Privy-User-Id'] = user.privyUserId
-    }
-
-    return headers
-  }, [user?.privyUserId])
+  const { getAccessToken } = usePrivy()
 
   const authenticatedFetch = useCallback(async (
     url: string,
     options: RequestInit = {}
   ): Promise<Response> => {
-    const headers = getAuthHeaders()
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    }
+
+    // Get fresh access token for each request
+    try {
+      const token = await getAccessToken()
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+    } catch (error) {
+      console.warn('Failed to get access token:', error)
+    }
 
     return fetch(url, {
       ...options,
@@ -34,10 +36,9 @@ export function useAuthenticatedFetch() {
         ...options.headers,
       },
     })
-  }, [getAuthHeaders])
+  }, [getAccessToken])
 
   return {
-    getAuthHeaders,
     authenticatedFetch,
     isAuthenticated: !!user?.privyUserId,
     privyUserId: user?.privyUserId,

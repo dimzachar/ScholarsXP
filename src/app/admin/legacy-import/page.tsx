@@ -2,6 +2,7 @@
 /* eslint react/no-unescaped-entities: off */
 
 import { useState } from 'react'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -19,6 +20,7 @@ interface ImportResult {
 }
 
 export default function LegacyImportPage() {
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const [csvData, setCsvData] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
@@ -62,9 +64,8 @@ export default function LegacyImportPage() {
 
       for (let i = 0; i < total; i += chunkSize) {
         const batch = lines.slice(i, i + chunkSize)
-        const response = await fetch('/api/admin/import-legacy', {
+        const response = await authenticatedFetch('/api/admin/import-legacy', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ csvData: batch.join('\n') })
         })
         const data = await response.json()

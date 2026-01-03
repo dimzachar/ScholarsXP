@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from 'react'
+import { usePrivy } from '@privy-io/react-auth'
 import { ENABLE_ACHIEVEMENTS } from '@/config/feature-flags'
 
 // Simple cache implementation for dashboard data
@@ -57,13 +58,13 @@ interface FetchState<T> {
   error: string | null
 }
 
-// Generic fetcher function with caching
+// Generic fetcher function with caching and Bearer token auth
 async function fetchWithCache<T>(
   url: string,
   cacheKey: string,
   ttl: number,
   forceRefresh = false,
-  privyUserId?: string | null
+  getAccessToken?: () => Promise<string | null>
 ): Promise<T> {
   // Check cache first (unless force refresh is requested)
   if (!forceRefresh) {
@@ -77,10 +78,20 @@ async function fetchWithCache<T>(
   const separator = url.includes('?') ? '&' : '?'
   const fetchUrl = `${url}${separator}_t=${Date.now()}`
 
-  // Build headers with Privy auth if available
-  const headers: HeadersInit = {}
-  if (privyUserId) {
-    headers['X-Privy-User-Id'] = privyUserId
+  // Build headers with Bearer token auth
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  }
+  
+  if (getAccessToken) {
+    try {
+      const token = await getAccessToken()
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+    } catch (error) {
+      console.warn('Failed to get access token for dashboard fetch:', error)
+    }
   }
 
   // Fetch fresh data
@@ -103,6 +114,7 @@ async function fetchWithCache<T>(
 
 // Custom hook for profile data
 export function useProfileData(userId?: string, privyUserId?: string | null) {
+  const { getAccessToken } = usePrivy()
   const [state, setState] = useState<FetchState<any>>({
     data: null,
     loading: true,
@@ -119,7 +131,7 @@ export function useProfileData(userId?: string, privyUserId?: string | null) {
         `profile-${userId || privyUserId}`,
         CACHE_TTL.profile,
         forceRefresh,
-        privyUserId
+        getAccessToken
       )
 
       // Ensure XP consistency across all data sources
@@ -139,7 +151,7 @@ export function useProfileData(userId?: string, privyUserId?: string | null) {
         error: error instanceof Error ? error.message : 'Failed to fetch profile data'
       })
     }
-  }, [userId, privyUserId])
+  }, [userId, privyUserId, getAccessToken])
 
   const forceRefresh = useCallback(() => {
     // console.log('🔄 Force refreshing profile data for user:', userId)
@@ -188,6 +200,7 @@ export function useLeaderboardData(limit = 10) {
 
 // Custom hook for analytics data
 export function useAnalyticsData(timeframe = 'current_week', enabled = true, privyUserId?: string | null) {
+  const { getAccessToken } = usePrivy()
   const [state, setState] = useState<FetchState<any>>({
     data: null,
     loading: enabled,
@@ -206,7 +219,7 @@ export function useAnalyticsData(timeframe = 'current_week', enabled = true, pri
           'achievements',
           CACHE_TTL.achievements,
           false,
-          privyUserId
+          getAccessToken
         )
         : Promise.resolve(EMPTY_ACHIEVEMENTS_SUMMARY)
 
@@ -216,7 +229,7 @@ export function useAnalyticsData(timeframe = 'current_week', enabled = true, pri
           `xp-breakdown-${timeframe}`,
           CACHE_TTL.analytics,
           false,
-          privyUserId
+          getAccessToken
         ),
         achievementsPromise
       ])
@@ -239,7 +252,7 @@ export function useAnalyticsData(timeframe = 'current_week', enabled = true, pri
         error: error instanceof Error ? error.message : 'Failed to fetch analytics data'
       })
     }
-  }, [timeframe, enabled, privyUserId])
+  }, [timeframe, enabled, getAccessToken])
 
   useEffect(() => {
     fetchData()
@@ -285,6 +298,7 @@ export function useDashboardData(userId?: string, activeTab = 'overview', timefr
 
 // Hook for monthly stats
 export function useMonthlyStats(privyUserId?: string | null) {
+  const { getAccessToken } = usePrivy()
   const [state, setState] = useState<FetchState<{ month: string; xp: number; rank: number; totalUsers: number }>>({
     data: null,
     loading: true,
@@ -304,7 +318,7 @@ export function useMonthlyStats(privyUserId?: string | null) {
         'monthly-stats',
         CACHE_TTL.monthlyStats,
         false,
-        privyUserId
+        getAccessToken
       )
       setState({ data: data as { month: string; xp: number; rank: number; totalUsers: number }, loading: false, error: null })
     } catch (error) {
@@ -314,7 +328,7 @@ export function useMonthlyStats(privyUserId?: string | null) {
         error: error instanceof Error ? error.message : 'Failed to fetch monthly stats'
       })
     }
-  }, [privyUserId])
+  }, [privyUserId, getAccessToken])
 
   useEffect(() => {
     fetchData()

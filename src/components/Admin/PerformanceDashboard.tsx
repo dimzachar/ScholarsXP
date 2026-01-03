@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useCallback } from 'react'
+import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -25,6 +26,7 @@ interface WebVitalMetric {
 }
 
 export function PerformanceDashboard() {
+  const { authenticatedFetch } = useAuthenticatedFetch()
   const [data, setData] = useState<PerformanceData | null>(null)
   const [loading, setLoading] = useState(true)
   const [timeframe, setTimeframe] = useState('24h')
@@ -35,7 +37,7 @@ export function PerformanceDashboard() {
       setLoading(true)
       setError(null)
       
-      const response = await fetch(`/api/analytics/performance?timeframe=${timeframe}`)
+      const response = await authenticatedFetch(`/api/analytics/performance?timeframe=${timeframe}`)
       if (!response.ok) {
         throw new Error('Failed to fetch performance data')
       }
@@ -47,7 +49,7 @@ export function PerformanceDashboard() {
     } finally {
       setLoading(false)
     }
-  }, [timeframe])
+  }, [timeframe, authenticatedFetch])
 
   useEffect(() => {
     fetchPerformanceData()

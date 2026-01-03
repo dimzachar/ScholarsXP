@@ -164,12 +164,7 @@ export default function ReviewPage() {
     
     const doFetch = async () => {
       try {
-        const response = await fetch('/api/assignments/my?status=pending', {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Privy-User-Id': privyUserId
-          }
-        })
+        const response = await authenticatedFetch('/api/assignments/my?status=pending')
         if (!response.ok) {
           throw new Error('Failed to fetch pending reviews')
         }
@@ -205,7 +200,7 @@ export default function ReviewPage() {
     }
     
     doFetch()
-  }, [privyUserId])
+  }, [privyUserId, authenticatedFetch])
 
   // Fetch user's own reviews (given)
   useEffect(() => {
