@@ -148,7 +148,9 @@ move/.movement/
 # =============================================================================
 *.html
 *.txt
+# PNG files in public/ are allowed for screenshots
 *.png
+!public/*.png
 *.roo/
 cline_mcp_settings.json
 validation-report.json
