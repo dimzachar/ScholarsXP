@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useEffect, useRef } from 'react'
+import { useMemo, useEffect } from 'react'
 import { ThumbsDown, ThumbsUp, Loader2, SkipForward } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -13,7 +13,6 @@ interface VerdictButtonsProps {
   voting: boolean
   disabled?: boolean
   submissionId?: string
-  onVoteSuccess?: (xp: number, buttonPosition: 'left' | 'right', highXpPosition: 'left' | 'right', timeSpentMs: number) => void
 }
 
 export function VerdictButtons({ 
@@ -22,11 +21,9 @@ export function VerdictButtons({
   onSkip,
   voting, 
   disabled,
-  submissionId,
-  onVoteSuccess
+  submissionId
 }: VerdictButtonsProps) {
   const [lowXp, highXp] = divergentScores
-  const pendingVoteRef = useRef<{ xp: number; buttonPosition: 'left' | 'right' } | null>(null)
 
   // Randomize button order based on submissionId (consistent per case)
   const swapped = useMemo(() => {
@@ -49,16 +46,19 @@ export function VerdictButtons({
     }
   }, [submissionId])
 
-  // Export tracking function for parent to call on success
-  useEffect(() => {
-    if (onVoteSuccess && submissionId) {
-      // Expose the tracking data via callback registration
-    }
-  }, [onVoteSuccess, submissionId])
-
   const handleVote = (xp: number, buttonPosition: 'left' | 'right') => {
-    // Store pending vote info for tracking after success
-    pendingVoteRef.current = { xp, buttonPosition }
+    // Track vote event immediately (before component potentially unmounts)
+    if (submissionId) {
+      trackVoteEvent({
+        submissionId,
+        eventType: 'vote',
+        votedXp: xp,
+        buttonPosition,
+        highXpPosition,
+        timeSpentMs: getTimeSpent(submissionId)
+      })
+    }
+    
     onVote(xp, buttonPosition)
   }
 
@@ -74,27 +74,7 @@ export function VerdictButtons({
     onSkip?.()
   }
 
-  // Expose method to track successful vote (called by parent after tx confirms)
-  // Using a ref-based approach to avoid prop drilling
-  useEffect(() => {
-    if (submissionId && typeof window !== 'undefined') {
-      (window as any).__trackVoteSuccess = (xp: number, buttonPosition: 'left' | 'right') => {
-        trackVoteEvent({
-          submissionId,
-          eventType: 'vote',
-          votedXp: xp,
-          buttonPosition,
-          highXpPosition,
-          timeSpentMs: getTimeSpent(submissionId)
-        })
-      }
-    }
-    return () => {
-      if (typeof window !== 'undefined') {
-        delete (window as any).__trackVoteSuccess
-      }
-    }
-  }, [submissionId, highXpPosition])
+
 
   const lowButton = (
     <Button
@@ -182,9 +162,7 @@ export function VerdictButtons({
   )
 }
 
-// Helper to track vote success from parent component
-export function trackVoteSuccess(xp: number, buttonPosition: 'left' | 'right') {
-  if (typeof window !== 'undefined' && (window as any).__trackVoteSuccess) {
-    (window as any).__trackVoteSuccess(xp, buttonPosition)
-  }
+// Helper to track vote success - no longer needed, tracking happens in VerdictButtons
+export function trackVoteSuccess(_xp: number, _buttonPosition: 'left' | 'right') {
+  // Deprecated: tracking now happens immediately in handleVote before component unmounts
 }
