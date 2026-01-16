@@ -14,7 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { CalendarClock, Loader2, PauseCircle, PlayCircle, RefreshCw, Shield, Users } from 'lucide-react'
+import { CalendarClock, CheckCircle2, Loader2, PauseCircle, PlayCircle, RefreshCw, Shield, Users, XCircle } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 type AvailabilityMode = 'available' | 'temporary' | 'indefinite'
 
@@ -23,6 +24,9 @@ interface ReviewerRecord {
   username: string | null
   email: string
   role: string
+  totalXp: number
+  missedReviews?: number
+  activeAssignments?: number
   lastActiveAt?: string | null
   lastLoginAt?: string | null
   createdAt?: string
@@ -107,14 +111,85 @@ export default function ReviewerAvailabilityPage() {
     fetchReviewers()
   }, [fetchReviewers])
 
+  // Calculate pool eligibility and priority for a reviewer
+  const getPoolEligibility = useCallback((reviewer: ReviewerRecord, allReviewers: ReviewerRecord[]): { 
+    inPool: boolean
+    reasons: string[]
+    priority?: number
+    priorityNote?: string 
+  } => {
+    const reasons: string[] = []
+    const MAX_ACTIVE_ASSIGNMENTS = 5
+    const MIN_XP_REQUIRED = 50
+    const MAX_MISSED_REVIEWS = 3
+
+    // Check if opted out
+    if (reviewer.reviewerOptOutActive) {
+      reasons.push(reviewer.reviewerOptOut ? 'Paused indefinitely' : 'Temporarily paused')
+    }
+
+    // Check missed reviews
+    if ((reviewer.missedReviews || 0) > MAX_MISSED_REVIEWS) {
+      reasons.push(`Too many missed reviews (${reviewer.missedReviews})`)
+    }
+
+    // Check XP requirement (ADMINs exempt)
+    if ((reviewer.totalXp || 0) < MIN_XP_REQUIRED && reviewer.role !== 'ADMIN') {
+      reasons.push(`Insufficient XP (${reviewer.totalXp || 0}/${MIN_XP_REQUIRED})`)
+    }
+
+    // Check workload cap
+    if ((reviewer.activeAssignments || 0) >= MAX_ACTIVE_ASSIGNMENTS) {
+      reasons.push(`At capacity (${reviewer.activeAssignments}/${MAX_ACTIVE_ASSIGNMENTS} assignments)`)
+    }
+
+    const inPool = reasons.length === 0
+
+    // Calculate priority rank among eligible reviewers
+    if (inPool) {
+      const eligibleReviewers = allReviewers.filter(r => {
+        if (r.reviewerOptOutActive) return false
+        if ((r.missedReviews || 0) > MAX_MISSED_REVIEWS) return false
+        if ((r.totalXp || 0) < MIN_XP_REQUIRED && r.role !== 'ADMIN') return false
+        if ((r.activeAssignments || 0) >= MAX_ACTIVE_ASSIGNMENTS) return false
+        return true
+      })
+
+      // Sort by workload (asc) then XP (desc) - same as reviewer-pool.ts
+      const sorted = [...eligibleReviewers].sort((a, b) => {
+        const aAssign = a.activeAssignments || 0
+        const bAssign = b.activeAssignments || 0
+        if (aAssign !== bAssign) return aAssign - bAssign
+        return (b.totalXp || 0) - (a.totalXp || 0)
+      })
+
+      const priority = sorted.findIndex(r => r.id === reviewer.id) + 1
+      const totalEligible = sorted.length
+
+      let priorityNote = ''
+      if (priority <= 3) {
+        priorityNote = 'High priority - likely to be selected'
+      } else if (priority <= Math.ceil(totalEligible / 2)) {
+        priorityNote = 'Medium priority'
+      } else {
+        priorityNote = 'Low priority - higher XP reviewers selected first'
+      }
+
+      return { inPool, reasons, priority, priorityNote }
+    }
+
+    return { inPool, reasons }
+  }, [])
+
   const summary = useMemo(() => {
     const total = reviewers.length
     const paused = reviewers.filter(r => r.reviewerOptOutActive).length
     const indefinite = reviewers.filter(r => r.reviewerOptOut === true).length
     const temporary = Math.max(paused - indefinite, 0)
+    const inPool = reviewers.filter(r => getPoolEligibility(r, reviewers).inPool).length
 
-    return { total, paused, indefinite, temporary }
-  }, [reviewers])
+    return { total, paused, indefinite, temporary, inPool }
+  }, [reviewers, getPoolEligibility])
 
   const resetDialogState = () => {
     setDialogOpen(false)
@@ -304,10 +379,14 @@ export default function ReviewerAvailabilityPage() {
               </Button>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
                 <div className="rounded-lg border p-4">
                   <p className="text-sm text-muted-foreground">Total reviewers</p>
                   <p className="text-2xl font-semibold">{summary.total}</p>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950">
+                  <p className="text-sm text-muted-foreground">In active pool</p>
+                  <p className="text-2xl font-semibold text-green-700 dark:text-green-400">{summary.inPool}</p>
                 </div>
                 <div className="rounded-lg border p-4">
                   <p className="text-sm text-muted-foreground">Temporarily paused</p>
@@ -363,6 +442,7 @@ export default function ReviewerAvailabilityPage() {
                           ) : null}
                         </button>
                       </TableHead>
+                      <TableHead>In Pool</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="hidden md:table-cell">Notes</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -410,6 +490,51 @@ export default function ReviewerAvailabilityPage() {
                                 ? `${Math.round(reviewer.metrics.reliabilityScore * 100)}%`
                                 : '-'
                               }
+                            </TableCell>
+                            <TableCell>
+                              {(() => {
+                                const { inPool, reasons, priority, priorityNote } = getPoolEligibility(reviewer, reviewers)
+                                return (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="flex items-center justify-center gap-1">
+                                          {inPool ? (
+                                            <>
+                                              <CheckCircle2 className="h-5 w-5 text-green-600" />
+                                              {priority && (
+                                                <span className="text-xs text-muted-foreground">#{priority}</span>
+                                              )}
+                                            </>
+                                          ) : (
+                                            <XCircle className="h-5 w-5 text-red-500" />
+                                          )}
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        {inPool ? (
+                                          <div className="space-y-1">
+                                            <p className="font-medium">Priority #{priority} of {summary.inPool}</p>
+                                            <p className="text-sm text-muted-foreground">{priorityNote}</p>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                              XP: {reviewer.totalXp || 0} | Active: {reviewer.activeAssignments || 0}
+                                            </p>
+                                          </div>
+                                        ) : (
+                                          <div className="space-y-1">
+                                            <p className="font-medium">Excluded from pool:</p>
+                                            <ul className="list-disc pl-4 text-sm">
+                                              {reasons.map((reason, i) => (
+                                                <li key={i}>{reason}</li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        )}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )
+                              })()}
                             </TableCell>
                             <TableCell>{renderStatusBadge(reviewer)}</TableCell>
                             <TableCell className="hidden text-sm text-muted-foreground md:table-cell">

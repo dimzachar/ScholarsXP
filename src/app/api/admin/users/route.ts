@@ -194,6 +194,7 @@ async function fetchUserMetricsData(
         totalXp: true,
         currentWeekXp: true,
         streakWeeks: true,
+        missedReviews: true,
         createdAt: true,
         lastActiveAt: true,
         preferences: true,
@@ -231,7 +232,7 @@ async function fetchUserMetricsData(
     .filter((h): h is string => Boolean(h))
 
   // Aggregate heavy metrics via groupBy to avoid N+1 queries
-  const [completedSubmissionsByUser, avgReviewScoreByUser, legacyCountsGrouped] = await Promise.all([
+  const [completedSubmissionsByUser, avgReviewScoreByUser, legacyCountsGrouped, activeAssignmentsByUser] = await Promise.all([
     prisma.submission.groupBy({
       by: ['userId'],
       where: {
@@ -253,6 +254,15 @@ async function fetchUserMetricsData(
         }
       },
       _count: { _all: true }
+    }),
+    // Get active review assignments count per reviewer
+    prisma.reviewAssignment.groupBy({
+      by: ['reviewerId'],
+      where: {
+        reviewerId: { in: userIds },
+        status: { in: ['PENDING', 'IN_PROGRESS'] }
+      },
+      _count: { _all: true }
     })
   ])
 
@@ -264,6 +274,9 @@ async function fetchUserMetricsData(
   )
   const legacyCountByHandle = new Map<string, number>(
     legacyCountsGrouped.map(r => [r.discordHandle as string, r._count._all])
+  )
+  const activeAssignmentsMap = new Map<string, number>(
+    activeAssignmentsByUser.map(r => [r.reviewerId, r._count._all])
   )
 
   const parseReviewerAvailability = (preferences: unknown) => {
@@ -385,7 +398,7 @@ async function fetchUserMetricsData(
       : null
 
     let activityStatus = 'unknown'
-    if (daysSinceLastActive !== null) {
+    if (daysSinceLastActive !== null && user.lastActiveAt) {
       // Check if user is deactivated (lastActiveAt set to very old date)
       const lastActiveYear = new Date(user.lastActiveAt).getFullYear()
       if (lastActiveYear < 2020) {
@@ -401,6 +414,9 @@ async function fetchUserMetricsData(
 
     const reviewerAvailability = parseReviewerAvailability(user.preferences)
 
+    // Get active assignments count for this user
+    const activeAssignments = activeAssignmentsMap.get(user.id) || 0
+
     return {
       id: user.id,
       username: user.username,
@@ -409,6 +425,8 @@ async function fetchUserMetricsData(
       totalXp: user.totalXp,
       currentWeekXp: user.currentWeekXp || 0,
       streakWeeks: user.streakWeeks || 0,
+      missedReviews: user.missedReviews || 0,
+      activeAssignments,
       createdAt: user.createdAt,
       lastActiveAt: user.lastActiveAt,
       reviewerOptOut: reviewerAvailability.reviewerOptOut,
@@ -703,7 +721,7 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
           await prisma.user.update({
             where: { id: userId },
             data: {
-              preferences: currentPreferences,
+              preferences: currentPreferences as any,
               updatedAt: new Date()
             }
           })
