@@ -30,7 +30,7 @@ export class CacheInvalidation {
       })
 
       await Promise.allSettled(invalidationPromises)
-      console.log(`🗑️ Invalidated ${keysToInvalidate.length} cache entries`)
+      // console.log(`🗑️ Invalidated ${keysToInvalidate.length} cache entries`)
     } catch (error) {
       console.error('Cache invalidation failed:', error)
     }

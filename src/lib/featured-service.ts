@@ -291,21 +291,21 @@ export async function getFeatured(
 
     const preferred = pickPreferredCandidate(existing, item)
     if (preferred === existing) {
-      if (DEBUG_AUTHOR && isDebug(item)) {
-        console.log('[FeaturedDebug] deduped out by key', { id: item.id, key, url: item.url, authorKey: item.authorKey })
-      }
+      // if (DEBUG_AUTHOR && isDebug(item)) {
+      //   console.log('[FeaturedDebug] deduped out by key', { id: item.id, key, url: item.url, authorKey: item.authorKey })
+      // }
       continue
     }
 
     mergedByKey.set(key, preferred)
-    if (DEBUG_AUTHOR && (isDebug(item) || isDebug(existing))) {
-      console.log('[FeaturedDebug] dedupe replaced entry', {
-        key,
-        replacedId: existing.id,
-        keptId: preferred.id,
-        keptAuthorKey: preferred.authorKey,
-      })
-    }
+    // if (DEBUG_AUTHOR && (isDebug(item) || isDebug(existing))) {
+    //   console.log('[FeaturedDebug] dedupe replaced entry', {
+    //     key,
+    //     replacedId: existing.id,
+    //     keptId: preferred.id,
+    //     keptAuthorKey: preferred.authorKey,
+    //   })
+    // }
   }
 
   const merged: FeaturedInput[] = mergedOrder
