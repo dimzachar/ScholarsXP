@@ -79,7 +79,8 @@
   "pnpm": {
     "overrides": {
       "js-yaml@<3.14.2": "3.14.2",
-      "preact": "10.28.2"
+      "preact": "10.28.2",
+      "hono": "^4.11.4"
     }
   },
   "devDependencies": {
