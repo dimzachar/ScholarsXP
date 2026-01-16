@@ -72,10 +72,30 @@ async function handleSponsoredVote(request: AuthenticatedRequest) {
     if (isVoteContractEnabled()) {
       const alreadyVotedOnChain = await checkHasVotedOnChain(walletAddress, submissionId);
       if (alreadyVotedOnChain) {
-        return NextResponse.json(
-          { error: "Already voted on this submission (on-chain)" },
-          { status: 409 }
-        );
+        // Check if we have it in DB - if not, sync it
+        const existingDbVote = await prisma.judgmentVote.findFirst({
+          where: { submissionId, walletAddress }
+        });
+        
+        if (!existingDbVote) {
+          // Vote exists on-chain but not in DB - sync it
+          // console.log('[Sponsored Vote] Syncing on-chain vote to DB:', { submissionId, walletAddress, voteXp });
+          await prisma.judgmentVote.create({
+            data: {
+              submissionId,
+              walletAddress,
+              voteXp,
+              signature: 'synced-from-chain',
+            }
+          });
+        }
+        
+        // Return success since vote exists (treat as idempotent)
+        return NextResponse.json({
+          success: true,
+          transactionHash: 'already-on-chain',
+          synced: true
+        });
       }
     }
 

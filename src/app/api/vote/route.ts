@@ -195,6 +195,8 @@ export async function GET(req: NextRequest) {
             `
             const walletAddresses = userWallets.map(w => w.address)
 
+            // console.log('[Vote API] Filtering for userId:', userId, 'wallets:', walletAddresses)
+
             if (walletAddresses.length > 0) {
                 // Get all votes from any of the user's wallets
                 const existingVotes = await prisma.judgmentVote.findMany({
@@ -202,6 +204,7 @@ export async function GET(req: NextRequest) {
                     select: { submissionId: true }
                 })
                 const votedIds = new Set(existingVotes.map(v => v.submissionId))
+                // console.log('[Vote API] Found', existingVotes.length, 'existing votes, filtering out:', [...votedIds])
                 cases = cases.filter(c => !votedIds.has(c.submissionId))
             }
         }

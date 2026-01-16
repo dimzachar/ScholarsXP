@@ -223,7 +223,7 @@ export default function VotePage() {
                 const url = user?.id 
                     ? `/api/vote?userId=${encodeURIComponent(user.id)}`
                     : '/api/vote'
-                const res = await fetch(url)
+                const res = await fetch(url, { cache: 'no-store' })
                 if (!res.ok) throw new Error('Failed to fetch cases')
                 
                 const data = await res.json()
@@ -252,7 +252,7 @@ export default function VotePage() {
         }
     }, [walletFetched, walletLoading, primaryWallet, user?.id])
 
-    const handleVote = useCallback(async (xp: number, direction: 'left' | 'right'): Promise<boolean> => {
+    const handleVote = useCallback(async (xp: number, _direction: 'left' | 'right'): Promise<boolean> => {
         if (!currentCase) {
             toast.error('No case to vote on')
             return false
@@ -314,6 +314,16 @@ export default function VotePage() {
 
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Vote failed'
+            
+            // Handle "already voted" as success - vote exists, move to next case
+            if (errorMessage.includes('Already voted')) {
+                toast.info('Vote already recorded, moving to next case')
+                setVotedIds(prev => new Set([...prev, currentCase.submissionId]))
+                setVoting(false)
+                setAnimating(true)
+                return true
+            }
+            
             toast.error(errorMessage)
             setVoting(false)
             return false
