@@ -119,7 +119,9 @@ export default function AdminUsersPage() {
     xpMax: '',
     lastActiveFrom: '',
     lastActiveTo: '',
-    status: 'all'
+    status: 'all',
+    discordRole: 'all',
+    excludeLegacyImport: 'no'
   })
 
   // Sort state
@@ -425,6 +427,7 @@ export default function AdminUsersPage() {
         'Username',
         'Email',
         'Role',
+        'Discord Role',
         'Total XP',
         'Current Week XP',
         'Streak Weeks',
@@ -438,6 +441,16 @@ export default function AdminUsersPage() {
         'Registration Date',
         'Last Active Date'
       ]
+
+      // Helper function to get Discord role from XP
+      const getDiscordRoleName = (totalXp: number): string => {
+        if (totalXp >= 94500) return 'Master'
+        if (totalXp >= 49000) return 'Erudite'
+        if (totalXp >= 17500) return 'Journeyman'
+        if (totalXp >= 1000) return 'Apprentice'
+        if (totalXp >= 1) return 'Initiate'
+        return 'None'
+      }
 
       // Helper function to escape CSV values
       const escapeCSV = (value: unknown): string => {
@@ -457,6 +470,7 @@ export default function AdminUsersPage() {
           escapeCSV(user.username),
           escapeCSV(user.email),
           escapeCSV(user.role),
+          escapeCSV(getDiscordRoleName(user.totalXp)),
           escapeCSV(user.totalXp),
           escapeCSV(user.currentWeekXp),
           escapeCSV(user.streakWeeks),
@@ -546,14 +560,13 @@ export default function AdminUsersPage() {
     }
   }
 
-  const getActivityColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'bg-success/10 text-success'
-      case 'recent': return 'bg-warning/10 text-warning'
-      case 'inactive': return 'bg-destructive/10 text-destructive'
-      case 'deactivated': return 'bg-red-100 text-red-800 border border-red-200'
-      default: return 'bg-muted text-muted-foreground'
-    }
+  const getDiscordRoleFromXp = (totalXp: number): { name: string; color: string } => {
+    if (totalXp >= 94500) return { name: 'Master', color: 'bg-yellow-500/20 text-yellow-600' }
+    if (totalXp >= 49000) return { name: 'Erudite', color: 'bg-violet-500/20 text-violet-600' }
+    if (totalXp >= 17500) return { name: 'Journeyman', color: 'bg-blue-500/20 text-blue-600' }
+    if (totalXp >= 1000) return { name: 'Apprentice', color: 'bg-orange-500/20 text-orange-600' }
+    if (totalXp >= 1) return { name: 'Initiate', color: 'bg-slate-400/20 text-slate-500' }
+    return { name: 'None', color: 'bg-muted text-muted-foreground' }
   }
 
   if (loading) {
@@ -683,6 +696,37 @@ export default function AdminUsersPage() {
                     <SelectItem value="recent">Recent (30 days)</SelectItem>
                     <SelectItem value="inactive">Inactive (30+ days)</SelectItem>
                     <SelectItem value="deactivated">Deactivated</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="discordRole">Discord Role</Label>
+                <Select value={filters.discordRole} onValueChange={(value) => handleFilterChange('discordRole', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All roles" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All roles</SelectItem>
+                    <SelectItem value="none">None (0 XP)</SelectItem>
+                    <SelectItem value="initiate">Initiate</SelectItem>
+                    <SelectItem value="apprentice">Apprentice</SelectItem>
+                    <SelectItem value="journeyman">Journeyman</SelectItem>
+                    <SelectItem value="erudite">Erudite</SelectItem>
+                    <SelectItem value="master">Master</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="excludeLegacyImport">Exclude Legacy</Label>
+                <Select value={filters.excludeLegacyImport} onValueChange={(value) => handleFilterChange('excludeLegacyImport', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Include all" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no">Include all</SelectItem>
+                    <SelectItem value="yes">Exclude legacy imports</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -957,7 +1001,7 @@ export default function AdminUsersPage() {
                       </div>
                     </TableHead>
                     <TableHead>Weekly XP</TableHead>
-                    <TableHead>Activity</TableHead>
+                    <TableHead>Discord Role</TableHead>
                     <TableHead>Submissions</TableHead>
                     <TableHead>Reviews</TableHead>
                     <TableHead 
@@ -1068,14 +1112,14 @@ export default function AdminUsersPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge className={getActivityColor(userData.metrics.activityStatus)}>
-                          {userData.metrics.activityStatus}
-                        </Badge>
-                        {userData.metrics.daysSinceLastActive !== null && (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {userData.metrics.daysSinceLastActive}d ago
-                          </div>
-                        )}
+                        {(() => {
+                          const discordRole = getDiscordRoleFromXp(userData.totalXp)
+                          return (
+                            <Badge className={discordRole.color}>
+                              {discordRole.name}
+                            </Badge>
+                          )
+                        })()}
                       </TableCell>
                       <TableCell>
                         <div className="font-medium">{userData.metrics.totalSubmissions}</div>

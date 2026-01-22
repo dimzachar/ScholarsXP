@@ -30,9 +30,11 @@ export const GET = withAdminOptimization(withPermission('admin_access')(async (r
     const sortOrder = searchParams.get('sortOrder') || 'desc'
     const status = searchParams.get('status') // 'active', 'inactive', 'suspended'
     const includeLogin = searchParams.get('includeLogin') === '1'
+    const discordRole = searchParams.get('discordRole') // 'none', 'initiate', 'apprentice', 'journeyman', 'erudite', 'master'
+    const excludeLegacyImport = searchParams.get('excludeLegacyImport') === 'yes'
 
     // Create cache key based on all parameters
-    const cacheKey = `${EnhancedCacheKeys.userMetrics(page, limit)}:${role || ''}:${search || ''}:${xpMin || ''}:${xpMax || ''}:${lastActiveFrom || ''}:${lastActiveTo || ''}:${sortBy}:${sortOrder}:${status || ''}`
+    const cacheKey = `${EnhancedCacheKeys.userMetrics(page, limit)}:${role || ''}:${search || ''}:${xpMin || ''}:${xpMax || ''}:${lastActiveFrom || ''}:${lastActiveTo || ''}:${sortBy}:${sortOrder}:${status || ''}:${discordRole || ''}:${excludeLegacyImport}`
 
     // Disable caching for admin users table to prevent stale data issues
     // Admin operations need real-time data, especially after account merges/deletions
@@ -61,7 +63,8 @@ export const GET = withAdminOptimization(withPermission('admin_access')(async (r
       // Always fetch fresh data for admin users table
       responseData = await fetchUserMetricsData(
         page, limit, offset, role, search, xpMin, xpMax,
-        lastActiveFrom, lastActiveTo, sortBy, sortOrder, status, includeLogin
+        lastActiveFrom, lastActiveTo, sortBy, sortOrder, status, includeLogin,
+        discordRole, excludeLegacyImport
       )
 
       return NextResponse.json(responseData, {
@@ -106,7 +109,9 @@ async function fetchUserMetricsData(
   sortBy: string = 'createdAt',
   sortOrder: string = 'desc',
   status?: string | null,
-  includeLogin: boolean = false
+  includeLogin: boolean = false,
+  discordRole?: string | null,
+  excludeLegacyImport: boolean = false
 ) {
   // Build where clause
   const where: any = {}
@@ -126,6 +131,27 @@ async function fetchUserMetricsData(
     where.totalXp = {}
     if (xpMin !== undefined) where.totalXp.gte = xpMin
     if (xpMax !== undefined) where.totalXp.lte = xpMax
+  }
+
+  // Discord role filter (based on XP thresholds)
+  if (discordRole) {
+    const xpRanges: Record<string, { gte?: number; lte?: number; equals?: number }> = {
+      none: { equals: 0 },
+      initiate: { gte: 1, lte: 999 },
+      apprentice: { gte: 1000, lte: 17499 },
+      journeyman: { gte: 17500, lte: 48999 },
+      erudite: { gte: 49000, lte: 94499 },
+      master: { gte: 94500 }
+    }
+    const range = xpRanges[discordRole]
+    if (range) {
+      where.totalXp = { ...where.totalXp, ...range }
+    }
+  }
+
+  // Exclude legacy import users (users with email ending in @legacy.import)
+  if (excludeLegacyImport) {
+    where.email = { not: { endsWith: '@legacy.import' } }
   }
 
   if (lastActiveFrom || lastActiveTo) {
