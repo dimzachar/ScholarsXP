@@ -6,6 +6,7 @@ import { reviewerPoolService } from '@/lib/reviewer-pool'
 import { logAdminAction } from '@/lib/audit-log'
 import { prisma } from '@/lib/prisma'
 import { xpAnalyticsService } from '@/lib/xp-analytics'
+import { notifyReviewAssigned } from '@/lib/notifications'
 
 const MISSED_REVIEW_PENALTY = -10
 
@@ -241,7 +242,7 @@ async function reshuffleSingleAssignment(supabase: any, assignmentId: string, re
     // Get submission details to exclude the submission author
     const { data: submission, error: submissionError } = await supabase
       .from('Submission')
-      .select('userId')
+      .select('userId, url')
       .eq('id', assignment.submissionId)
       .single()
 
@@ -312,6 +313,15 @@ async function reshuffleSingleAssignment(supabase: any, assignmentId: string, re
         .from('Submission')
         .update({ reviewCount: activeAssignments })
         .eq('id', assignment.submissionId)
+    }
+
+    // Notify the new reviewer about their assignment
+    try {
+      await notifyReviewAssigned(newReviewer.id, assignment.submissionId, submission.url)
+      console.log(`📧 Notification sent to new reviewer ${newReviewer.id} for reshuffled assignment`)
+    } catch (notifyError) {
+      console.error(`Failed to notify new reviewer ${newReviewer.id}:`, notifyError)
+      // Don't fail the reshuffle if notification fails
     }
 
     return {

@@ -5,6 +5,7 @@ import { createServiceClient } from '@/lib/supabase-server'
 import { reviewerPoolService } from '@/lib/reviewer-pool'
 import { logAdminAction } from '@/lib/audit-log'
 import { xpAnalyticsService } from '@/lib/xp-analytics'
+import { notifyReviewAssigned } from '@/lib/notifications'
 
 const MISSED_REVIEW_PENALTY = -10
 
@@ -115,10 +116,21 @@ async function reshuffleSingleAssignment(supabase: any, assignmentId: string, re
 
     const excludedReviewerIds = existingAssignments?.map((a: { reviewerId: string }) => a.reviewerId) || []
 
+    // Get submission details for notification
+    const { data: submission, error: submissionError } = await supabase
+      .from('Submission')
+      .select('userId, url')
+      .eq('id', assignment.submissionId)
+      .single()
+
+    if (submissionError) {
+      console.warn(`Failed to fetch submission details for ${assignment.submissionId}:`, submissionError)
+    }
+
     // Use the reviewer pool service directly to find a new reviewer
     const assignmentResult = await reviewerPoolService.assignReviewers(
       assignment.submissionId,
-      assignment.submissionId,
+      submission?.userId || assignment.submissionId,
       {
         excludeUserIds: excludedReviewerIds,
         minimumReviewers: 1,
@@ -168,6 +180,15 @@ async function reshuffleSingleAssignment(supabase: any, assignmentId: string, re
         .from('Submission')
         .update({ reviewCount: activeAssignments })
         .eq('id', assignment.submissionId)
+    }
+
+    // Notify the new reviewer about their assignment
+    try {
+      await notifyReviewAssigned(newReviewer.id, assignment.submissionId, submission?.url)
+      console.log(`📧 Notification sent to new reviewer ${newReviewer.id} for bulk reshuffled assignment`)
+    } catch (notifyError) {
+      console.error(`Failed to notify new reviewer ${newReviewer.id}:`, notifyError)
+      // Don't fail the reshuffle if notification fails
     }
 
     return {

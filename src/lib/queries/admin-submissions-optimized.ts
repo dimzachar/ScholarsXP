@@ -4,6 +4,7 @@ import { QueryCache, CacheTTL, withQueryCache } from '../cache/query-cache'
 import { PaginationParams, PaginationHelper } from '../pagination'
 import { AdminSubmissionsResponseDTO, AdminSubmissionDTO, ResponseTransformer } from '@/types/api-responses'
 import { getWeekNumber, recalculateCurrentWeekXp } from '@/lib/utils'
+import { notifyReviewAssigned } from '@/lib/notifications'
 
 /**
  * TypeScript interface for legacy submissions with user data
@@ -1252,7 +1253,10 @@ export async function bulkUpdateSubmissions(
             id: { in: submissionIds },
             status: 'UNDER_PEER_REVIEW'
           },
-          include: {
+          select: {
+            id: true,
+            userId: true,
+            url: true,
             reviewAssignments: {
               where: { status: 'MISSED' },
               include: { reviewer: true }
@@ -1325,6 +1329,17 @@ export async function bulkUpdateSubmissions(
                 where: { id: submission.id },
                 data: { reviewCount: assignmentResult.assignedReviewers.length }
               })
+
+              // Notify new reviewers about their assignments
+              for (const reviewer of assignmentResult.assignedReviewers) {
+                try {
+                  await notifyReviewAssigned(reviewer.id, submission.id, submission.url)
+                  console.log(`📧 Notification sent to new reviewer ${reviewer.id} for bulk reshuffled submission ${submission.id}`)
+                } catch (notifyError) {
+                  console.error(`Failed to notify new reviewer ${reviewer.id}:`, notifyError)
+                  // Don't fail the reshuffle if notification fails
+                }
+              }
 
               reshuffleResults.push({
                 submissionId: submission.id,
