@@ -36,7 +36,8 @@ import {
   getXpForTier as getXpForTierV2,
   resolveTaskFromPlatform as resolveTaskFromPlatformV2,
   getRejectedXp as getRejectedXpV2,
-  CATEGORY_INFO
+  CATEGORY_INFO,
+  TIER_INFO
 } from '@/lib/xp-rules-v2'
 import {
   Tooltip,
@@ -108,7 +109,7 @@ interface PeerReviewCardProps {
       isRejected?: boolean
     }
   ) => void
-  onSaveDraft?: (submissionId: string, draftData: any) => void
+  onSaveDraft?: (submissionId: string, draftData: unknown) => void
   onFlag?: (submissionId: string, reason: string, description: string) => void
 }
 
@@ -291,7 +292,7 @@ export default function PeerReviewCard({
                     aria-checked={selected}
                     aria-pressed={selected}
                     size="sm"
-                    variant={variant as unknown}
+                    variant={variant}
                     disabled={disabled}
                     onClick={() => {
                       if (disabled) return
@@ -331,46 +332,55 @@ export default function PeerReviewCard({
   const TierSelector = () => {
     const disabled = !!readOnly || isSubmitting || isRejected
     return (
-      <fieldset className="flex items-center gap-2 flex-wrap" role="radiogroup" aria-labelledby="tier-legend" aria-disabled={disabled}>
-      <legend id="tier-legend" className="sr-only">Quality Tier</legend>
-      {(['basic','average','awesome'] as const).map((t) => {
-        const selected = tier === t
-        const variant = selected ? 'default' : 'outline'
-        return (
-          <Button
-            key={t}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            aria-pressed={selected}
-            size="sm"
-            variant={variant as unknown}
-            disabled={disabled}
-            onClick={() => {
-              if (disabled) return
-              setTier(t)
-            }}
-            onKeyDown={(e) => {
-              if (disabled) return
-              if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-                e.preventDefault()
-                const order = ['basic','average','awesome'] as const
-                const idx = order.indexOf(tier)
-                setTier(order[(idx + 1) % order.length])
-              }
-              if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-                e.preventDefault()
-                const order = ['basic','average','awesome'] as const
-                const idx = order.indexOf(tier)
-                setTier(order[(idx - 1 + order.length) % order.length])
-              }
-            }}
-          >
-            {t.charAt(0).toUpperCase()+t.slice(1)}
-          </Button>
-        )
-      })}
-      </fieldset>
+      <TooltipProvider delayDuration={200}>
+        <fieldset className="flex items-center gap-2 flex-wrap" role="radiogroup" aria-labelledby="tier-legend" aria-disabled={disabled}>
+          <legend id="tier-legend" className="sr-only">Quality Tier</legend>
+          {(['basic','average','awesome'] as const).map((t) => {
+            const selected = tier === t
+            const variant = selected ? 'default' : 'outline'
+            const info = TIER_INFO[t]
+            return (
+              <Tooltip key={t}>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    aria-pressed={selected}
+                    size="sm"
+                    variant={variant}
+                    disabled={disabled}
+                    onClick={() => {
+                      if (disabled) return
+                      setTier(t)
+                    }}
+                    onKeyDown={(e) => {
+                      if (disabled) return
+                      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                        e.preventDefault()
+                        const order = ['basic','average','awesome'] as const
+                        const idx = order.indexOf(tier)
+                        setTier(order[(idx + 1) % order.length])
+                      }
+                      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                        e.preventDefault()
+                        const order = ['basic','average','awesome'] as const
+                        const idx = order.indexOf(tier)
+                        setTier(order[(idx - 1 + order.length) % order.length])
+                      }
+                    }}
+                  >
+                    {info.label}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs p-2">
+                  <p className="text-sm">{info.description}</p>
+                </TooltipContent>
+              </Tooltip>
+            )
+          })}
+        </fieldset>
+      </TooltipProvider>
     )
   }
 

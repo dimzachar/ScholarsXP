@@ -23,13 +23,36 @@ export const CATEGORY_INFO: Record<TaskCategory, CategoryDisplayInfo> = {
     label: 'Guide',
     description: 'Teaches how to do something with clear steps you can follow',
     includes: [],
-    excludes: ['You can\'t actually use this to accomplish a task']
+    excludes: ["You can't actually use this to accomplish a task"]
   },
   technical: {
     label: 'Technical',
     description: 'Explains code, protocols, or architecture — how systems actually work',
     includes: [],
     excludes: ['Just buzzwords without explaining how anything works']
+  }
+}
+
+/**
+ * Tier display metadata for reviewer guidance
+ */
+export interface TierDisplayInfo {
+  label: string
+  description: string
+}
+
+export const TIER_INFO: Record<QualityTier, TierDisplayInfo> = {
+  basic: {
+    label: 'Basic',
+    description: 'Covers the topic but lacks depth, structure, or originality'
+  },
+  average: {
+    label: 'Average',
+    description: 'Solid content with clear structure and useful insights'
+  },
+  awesome: {
+    label: 'Awesome',
+    description: 'Exceptional depth, originality, and presentation — stands out'
   }
 }
 
