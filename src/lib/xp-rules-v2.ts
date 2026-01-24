@@ -3,6 +3,37 @@ export type TaskCategory = 'strategy' | 'guide' | 'technical'
 export type QualityTier = 'basic' | 'average' | 'awesome'
 
 /**
+ * Category display metadata for reviewer guidance
+ */
+export interface CategoryDisplayInfo {
+  label: string
+  description: string
+  includes: string[]
+  excludes: string[]
+}
+
+export const CATEGORY_INFO: Record<TaskCategory, CategoryDisplayInfo> = {
+  strategy: {
+    label: 'Strategy',
+    description: 'Analyzes business models, competitive positioning, roadmaps, or market risks',
+    includes: [],
+    excludes: ['No analysis of why something matters or how it competes']
+  },
+  guide: {
+    label: 'Guide',
+    description: 'Teaches how to do something with clear steps you can follow',
+    includes: [],
+    excludes: ['You can\'t actually use this to accomplish a task']
+  },
+  technical: {
+    label: 'Technical',
+    description: 'Explains code, protocols, or architecture — how systems actually work',
+    includes: [],
+    excludes: ['Just buzzwords without explaining how anything works']
+  }
+}
+
+/**
  * Task display metadata for UI components
  */
 export interface TaskDisplayInfo {

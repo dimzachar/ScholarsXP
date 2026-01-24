@@ -35,8 +35,15 @@ import {
 import {
   getXpForTier as getXpForTierV2,
   resolveTaskFromPlatform as resolveTaskFromPlatformV2,
-  getRejectedXp as getRejectedXpV2
+  getRejectedXp as getRejectedXpV2,
+  CATEGORY_INFO
 } from '@/lib/xp-rules-v2'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from '@/components/ui/tooltip'
 
 type FeedbackTemplate = {
   label: string
@@ -268,46 +275,56 @@ export default function PeerReviewCard({
   const CategorySelector = () => {
     const disabled = !!readOnly || isSubmitting || isRejected
     return (
-      <fieldset className="flex items-center gap-2 flex-wrap" role="radiogroup" aria-labelledby="category-legend" aria-disabled={disabled}>
-      <legend id="category-legend" className="sr-only">Category</legend>
-      {(['strategy','guide','technical'] as const).map((c) => {
-        const selected = category === c
-        const variant = selected ? 'default' : 'outline'
-        return (
-          <Button
-            key={c}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            aria-pressed={selected}
-            size="sm"
-            variant={variant as any}
-            disabled={disabled}
-            onClick={() => {
-              if (disabled) return
-              setCategory(c)
-            }}
-            onKeyDown={(e) => {
-              if (disabled) return
-              if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-                e.preventDefault()
-                const order = ['strategy','guide','technical'] as const
-                const idx = order.indexOf(category)
-                setCategory(order[(idx + 1) % order.length])
-              }
-              if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-                e.preventDefault()
-                const order = ['strategy','guide','technical'] as const
-                const idx = order.indexOf(category)
-                setCategory(order[(idx - 1 + order.length) % order.length])
-              }
-            }}
-          >
-            {c.charAt(0).toUpperCase()+c.slice(1)}
-          </Button>
-        )
-      })}
-      </fieldset>
+      <TooltipProvider delayDuration={200}>
+        <fieldset className="flex items-center gap-2 flex-wrap" role="radiogroup" aria-labelledby="category-legend" aria-disabled={disabled}>
+          <legend id="category-legend" className="sr-only">Category</legend>
+          {(['strategy','guide','technical'] as const).map((c) => {
+            const selected = category === c
+            const variant = selected ? 'default' : 'outline'
+            const info = CATEGORY_INFO[c]
+            return (
+              <Tooltip key={c}>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    aria-pressed={selected}
+                    size="sm"
+                    variant={variant as unknown}
+                    disabled={disabled}
+                    onClick={() => {
+                      if (disabled) return
+                      setCategory(c)
+                    }}
+                    onKeyDown={(e) => {
+                      if (disabled) return
+                      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                        e.preventDefault()
+                        const order = ['strategy','guide','technical'] as const
+                        const idx = order.indexOf(category)
+                        setCategory(order[(idx + 1) % order.length])
+                      }
+                      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                        e.preventDefault()
+                        const order = ['strategy','guide','technical'] as const
+                        const idx = order.indexOf(category)
+                        setCategory(order[(idx - 1 + order.length) % order.length])
+                      }
+                    }}
+                  >
+                    {info.label}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs p-2">
+                  <p className="text-sm">{info.description}</p>
+                  <p className="text-xs text-muted-foreground mt-1">✗ {info.excludes[0]}</p>
+                </TooltipContent>
+              </Tooltip>
+            )
+          })}
+        </fieldset>
+      </TooltipProvider>
     )
   }
 
@@ -327,7 +344,7 @@ export default function PeerReviewCard({
             aria-checked={selected}
             aria-pressed={selected}
             size="sm"
-            variant={variant as any}
+            variant={variant as unknown}
             disabled={disabled}
             onClick={() => {
               if (disabled) return
