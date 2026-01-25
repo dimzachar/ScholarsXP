@@ -1,15 +1,27 @@
 import OpenAI from 'openai'
 
+// Fallback models in order of preference
+const MODELS = [
+    'z-ai/glm-4.5-air:free',
+    'xiaomi/mimo-v2-flash:free',
+]
+
 /**
  * Generate a summary of peer reviews for a submission
  */
 export async function generateReviewSummary(
     submissionTitle: string,
-    reviews: Array<{ comments?: string | null; xpScore: number; qualityRating?: number | null }>
+    reviews: Array<{ comments?: string | null; xpScore: number; qualityRating?: number | null }>,
+    options?: { verbose?: boolean }
 ): Promise<string> {
+    const verbose = options?.verbose ?? false
+    const log = (msg: string) => verbose && console.log(msg)
+
     try {
-        // console.log('🔧 Starting generateReviewSummary...')
-        // console.log('🔑 OpenRouter API Key exists:', !!process.env.OPENROUTER_API_KEY)
+        if (!process.env.OPENROUTER_API_KEY) {
+            log('❌ OPENROUTER_API_KEY not set')
+            return "Unable to generate summary - API key missing."
+        }
 
         // Initialize OpenRouter client
         const openai = new OpenAI({
@@ -45,43 +57,58 @@ Please provide a concise summary (max 3-4 sentences) that:
 Do not use bullet points. Write in a flowing, encouraging paragraph.
 `
 
-        // console.log(`🤖 Generating summary for "${submissionTitle}" with ${validReviews.length} reviews`)
-        // console.log(`📝 Prompt preview: ${prompt.substring(0, 100)}...`)
+        // Try each model until one works
+        let lastError: Error | null = null
+        for (const model of MODELS) {
+            try {
+                log(`🤖 Trying model: ${model}`)
 
-        const response = await openai.chat.completions.create({
-            model: 'z-ai/glm-4.5-air:free',
-            messages: [
-                {
-                    role: 'system',
-                    content: 'You are a helpful, constructive mentor.'
-                },
-                {
-                    role: 'user',
-                    content: prompt
+                const response = await openai.chat.completions.create({
+                    model,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: 'You are a helpful, constructive mentor.'
+                        },
+                        {
+                            role: 'user',
+                            content: prompt
+                        }
+                    ],
+                    temperature: 0.3,
+                    max_tokens: 300,
+                    // @ts-expect-error - OpenRouter specific: disable reasoning/thinking mode
+                    reasoning: { enabled: false }
+                })
+
+                const content = response.choices[0]?.message?.content
+                const finishReason = response.choices[0]?.finish_reason
+
+                if (content && content.trim().length > 20) {
+                    log(`✅ Success with ${model}`)
+                    return content.trim()
                 }
-            ],
-            temperature: 0.3,
-            max_tokens: 300
-        })
 
-        // console.log('✅ OpenRouter response received')
-        const content = response.choices[0]?.message?.content
-
-        if (!content) {
-            // console.error('❌ No content in OpenRouter response', response)
-            return "Unable to generate summary."
+                // Detailed logging for empty responses
+                log(`⚠️ Empty response from ${model}`)
+                log(`   - finish_reason: ${finishReason}`)
+                log(`   - choices count: ${response.choices?.length}`)
+                log(`   - content length: ${content?.length ?? 0}`)
+                log(`   - content preview: "${content?.substring(0, 100) || '(empty)'}"`)
+                log(`   - full response: ${JSON.stringify(response, null, 2)}`)
+            } catch (modelError: any) {
+                lastError = modelError
+                log(`⚠️ Model ${model} failed: ${modelError?.message || 'Unknown error'}`)
+                // Continue to next model
+            }
         }
 
-        return content
+        log(`❌ All models failed. Last error: ${lastError?.message}`)
+        return "Unable to generate summary."
 
     } catch (error: any) {
-        // console.error('❌ Error generating review summary:', error)
-        // console.error('❌ Error message:', error?.message)
-        // console.error('❌ Error stack:', error?.stack)
-        if (error?.response) {
-            // console.error('❌ Error response data:', error.response.data)
-        }
-        // Return a generic message without exposing internal error details
+        const msg = error?.message || 'Unknown error'
+        verbose && console.error('❌ Error generating review summary:', msg)
         return "Unable to generate feedback summary at this time."
     }
 }
