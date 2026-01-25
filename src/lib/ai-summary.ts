@@ -49,7 +49,7 @@ Do not use bullet points. Write in a flowing, encouraging paragraph.
         // console.log(`📝 Prompt preview: ${prompt.substring(0, 100)}...`)
 
         const response = await openai.chat.completions.create({
-            model: 'kwaipilot/kat-coder-pro:free',
+            model: 'z-ai/glm-4.5-air:free',
             messages: [
                 {
                     role: 'system',
@@ -81,6 +81,7 @@ Do not use bullet points. Write in a flowing, encouraging paragraph.
         if (error?.response) {
             // console.error('❌ Error response data:', error.response.data)
         }
-        return `Failed to generate feedback summary. Error: ${error?.message || 'Unknown error'}`
+        // Return a generic message without exposing internal error details
+        return "Unable to generate feedback summary at this time."
     }
 }

@@ -87,7 +87,7 @@ RULES:
 - Keep insights brief and actionable`
 
     const response = await openai.chat.completions.create({
-      model: 'kwaipilot/kat-coder-pro:free',
+      model: 'z-ai/glm-4.5-air:free',
       messages: [
         { role: 'system', content: 'You are a neutral case analyst. Always respond with valid JSON.' },
         { role: 'user', content: prompt }
