@@ -8,9 +8,6 @@ const securityHeaders = [
 ]
 
 const nextConfig: NextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -18,6 +15,8 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react'],
   },
+  // Empty turbopack config to silence warning when webpack config is present
+  turbopack: {},
   // Suppress keyv dynamic require warning from @aptos-labs/ts-sdk
   webpack: (config, { isServer }) => {
     if (isServer) {

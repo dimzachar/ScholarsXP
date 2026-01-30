@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkEdgeRateLimit } from '@/lib/edge-rate-limit'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Create response
   const response = NextResponse.next()
 
-  // Always bypass middleware for Next.js internals and favicon
+  // Always bypass proxy for Next.js internals and favicon
   // Prevents accidental interception of dev HMR, flight, data, and static assets
   if (
     pathname.startsWith('/_next') ||
@@ -23,7 +23,7 @@ export async function middleware(request: NextRequest) {
 
   // Protected routes - authentication is handled client-side by Privy
   // Admin role protection is handled by API routes via Bearer token verification
-  // The middleware no longer checks authentication - that's done by:
+  // The proxy no longer checks authentication - that's done by:
   // 1. Client-side: PrivyAuthSyncContext checks Privy auth state
   // 2. API routes: auth-middleware verifies Bearer tokens cryptographically
 
@@ -146,4 +146,3 @@ export const config = {
     '/((?!api|_next/.*|favicon.ico).*)',
   ],
 }
-
