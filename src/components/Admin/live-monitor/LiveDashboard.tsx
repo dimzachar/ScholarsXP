@@ -38,7 +38,7 @@ interface LiveDashboardProps {
                 flagged: boolean
                 flags: string[]
             }>
-            hourlyVelocity: Array<{ hour: number; label: string; count: number }>
+            hourlyVelocity: Array<{ hour: number; day?: number; date?: string; label: string; count: number }>
             peakVPH: number
             peakHourLabel: string | null
             clickAnalytics?: {
@@ -196,26 +196,28 @@ export function LiveDashboard({ data, onRefresh, loading, onViewChange }: LiveDa
                                     <div className="flex justify-between items-start mb-4">
                                         <div>
                                             <h3 className="text-lg font-bold text-foreground">Voting Velocity</h3>
-                                            <p className="text-sm text-muted-foreground">Votes per hour over the last 24 hours</p>
+                                            <p className="text-sm text-muted-foreground">Votes per hour over the last 7 days</p>
                                         </div>
                                         <div className="text-right">
                                             <p className="text-2xl font-bold text-foreground">{voteStats.peakVPH}</p>
-                                            <p className="text-xs text-muted-foreground">peak VPH</p>
+                                            <p className="text-xs text-muted-foreground">peak VPH{voteStats.peakHourLabel ? ` (${voteStats.peakHourLabel})` : ''}</p>
                                         </div>
                                     </div>
-                                    <div className="h-32 flex items-end gap-1">
+                                    <div className="h-32 flex items-end gap-[1px]">
                                         {voteStats.hourlyVelocity.map((hour, i) => {
                                             const heightPct = voteStats.peakVPH > 0 ? (hour.count / voteStats.peakVPH) * 100 : 0
                                             const isPeak = hour.count === voteStats.peakVPH && hour.count > 0
                                             return (
-                                                <div key={i} className="flex-1 flex flex-col items-center group relative">
+                                                <div 
+                                                    key={i} 
+                                                    className="flex-1 group relative h-full flex items-end"
+                                                >
                                                     <div 
-                                                        className={`w-full rounded-t transition-all ${isPeak ? 'bg-primary' : 'bg-primary/40 hover:bg-primary/60'}`}
-                                                        style={{ height: `${Math.max(heightPct, 2)}%` }}
+                                                        className={`w-full ${isPeak ? 'bg-primary' : 'bg-primary/40 hover:bg-primary/60'}`}
+                                                        style={{ height: `${Math.max(heightPct, 2)}%`, minHeight: '1px' }}
                                                         title={`${hour.label}: ${hour.count} votes`}
                                                     />
-                                                    {/* Tooltip on hover */}
-                                                    <div className="absolute bottom-full mb-2 hidden group-hover:block bg-popover text-popover-foreground text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-10">
+                                                    <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block bg-popover text-popover-foreground text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-10 pointer-events-none">
                                                         {hour.label}: {hour.count} votes
                                                     </div>
                                                 </div>
@@ -223,11 +225,11 @@ export function LiveDashboard({ data, onRefresh, loading, onViewChange }: LiveDa
                                         })}
                                     </div>
                                     <div className="flex justify-between mt-2 text-xs text-muted-foreground">
-                                        <span>00:00</span>
-                                        <span>06:00</span>
-                                        <span>12:00</span>
-                                        <span>18:00</span>
-                                        <span>24:00</span>
+                                        <span>7d ago</span>
+                                        <span>5d</span>
+                                        <span>3d</span>
+                                        <span>1d</span>
+                                        <span>Now</span>
                                     </div>
                                 </Card>
                             </div>

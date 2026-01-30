@@ -260,18 +260,25 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
             return b.totalVotes - a.totalVotes
         })
 
-        // Calculate hourly velocity (votes per hour over last 24h)
+        // Calculate hourly velocity (votes per hour over last 7 days = 168 hours)
         const now = new Date()
-        const hourlyVelocity = Array(24).fill(0).map((_, i) => {
-            const hourStart = new Date(now.getTime() - (23 - i) * 60 * 60 * 1000)
+        const totalHours = 168 // 7 days
+        const hourlyVelocity = Array(totalHours).fill(0).map((_, i) => {
+            const hourStart = new Date(now.getTime() - (totalHours - 1 - i) * 60 * 60 * 1000)
             const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000)
             const hourVotes = allVotes.filter(v => {
                 const vTime = new Date(v.createdAt)
                 return vTime >= hourStart && vTime < hourEnd
             })
+            // Format: "Mon 14:00" for readability
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+            const dayName = dayNames[hourStart.getDay()]
+            const hourStr = hourStart.getHours().toString().padStart(2, '0')
             return {
                 hour: hourStart.getHours(),
-                label: `${hourStart.getHours().toString().padStart(2, '0')}:00`,
+                day: hourStart.getDay(),
+                date: hourStart.toISOString().split('T')[0],
+                label: `${dayName} ${hourStr}:00`,
                 count: hourVotes.length
             }
         })
