@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import NotificationCenter from '@/components/NotificationCenter'
+import NotificationCenterOptimized from '@/components/NotificationCenterOptimized'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import ProfileDropdown from '@/components/ProfileDropdown'
 import { MobileBottomNav, createNavItem } from '@/components/navigation/MobileBottomNav'
@@ -126,7 +126,7 @@ export default function Navigation() {
 
           {/* Right side actions - responsive spacing */}
           <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-            <NotificationCenter />
+            <NotificationCenterOptimized />
             <ThemeToggle />
 
             <Separator orientation="vertical" className="h-6 hidden sm:block" />
