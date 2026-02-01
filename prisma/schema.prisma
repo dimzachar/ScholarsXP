@@ -250,6 +250,7 @@ enum UserRole {
   USER
   REVIEWER
   ADMIN
+  DEVELOPER
 
   @@map("user_role")
 }

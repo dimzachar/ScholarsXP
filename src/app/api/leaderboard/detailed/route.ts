@@ -6,6 +6,7 @@ import { parsePaginationParams } from '@/lib/pagination'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import { getWeekNumber } from '@/lib/utils'
+import { isAdmin, isReviewer, REVIEWER_ROLES } from '@/lib/roles'
 
 // Optimized leaderboard detailed handler with compression
 const optimizedLeaderboardHandler = withPermission('authenticated')(async (request: AuthenticatedRequest) => {
@@ -13,7 +14,7 @@ const optimizedLeaderboardHandler = withPermission('authenticated')(async (reque
     const { searchParams } = new URL(request.url)
 
     // Check if user has permission to view detailed leaderboard
-    if (request.userProfile.role !== 'ADMIN' && request.userProfile.role !== 'REVIEWER') {
+    if (!isReviewer(request.userProfile.role)) {
       return NextResponse.json(
         { message: 'Access denied. Detailed leaderboard is only available to admins and reviewers.' },
         { status: 403 }
@@ -83,7 +84,7 @@ const originalHandler = withPermission('authenticated')(async (request: Authenti
     const { searchParams } = new URL(request.url)
     
     // Check if user has permission to view detailed leaderboard
-    if (request.userProfile.role !== 'ADMIN' && request.userProfile.role !== 'REVIEWER') {
+    if (!isReviewer(request.userProfile.role)) {
       return NextResponse.json(
         { message: 'Access denied. Detailed leaderboard is only available to admins and reviewers.' },
         { status: 403 }
@@ -376,10 +377,10 @@ const originalHandler = withPermission('authenticated')(async (request: Authenti
 
     // Get reviewer contributions if user is admin
     let reviewerContributions = null
-    if (request.userProfile.role === 'ADMIN') {
+    if (isAdmin(request.userProfile.role)) {
       const reviewers = await prisma.user.findMany({
         where: {
-          role: 'REVIEWER'
+          role: { in: REVIEWER_ROLES }
         },
         include: {
           peerReviews: {

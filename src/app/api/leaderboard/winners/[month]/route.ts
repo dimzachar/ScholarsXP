@@ -4,8 +4,8 @@ import { invalidateAllLeaderboardCache } from '@/lib/cache/leaderboard-cache-uti
 import { createServiceClient } from '@/lib/supabase-server'
 import { topUpMonthlyWinnerXpJS } from '@/lib/services/monthly-awards'
 
-export const POST = withPermission('admin_access')(async (_request, { params }: { params: { month: string } }) => {
-  const month = params.month
+export const POST = withPermission('admin_access')(async (_request, context: { params: Promise<{ month: string }> }) => {
+  const { month } = await context.params
   const supabaseAdmin = createServiceClient()
   // Award top 3 winners and return all rows
   const { data, error } = await supabaseAdmin.rpc('award_monthly_winners', { p_month: month })

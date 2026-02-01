@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
+import { isAdmin } from '@/lib/roles'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -126,13 +127,13 @@ export default function AdminSubmissionDetailPage() {
 
   useEffect(() => {
     // Only redirect if we're not loading and the user is not an admin
-    if (!loading && user && user.role !== 'ADMIN') {
+    if (!loading && user && !isAdmin(user.role)) {
       router.push('/dashboard')
       return
     }
 
     // Only fetch submission if we have an ID and user is loading or is admin
-    if (submissionId && (loading || (user && user.role === 'ADMIN'))) {
+    if (submissionId && (loading || (user && isAdmin(user.role)))) {
       fetchSubmissionDetails()
     }
   }, [submissionId, user?.role, loading, router, fetchSubmissionDetails])

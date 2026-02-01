@@ -3,6 +3,7 @@ import { QueryCache, CacheTTL, withQueryCache } from '../cache/query-cache'
 import { PaginationParams, createPaginationResponse } from '../pagination'
 import { DetailedLeaderboardDTO, DetailedSubmissionDTO, ResponseTransformer } from '@/types/api-responses'
 import { getWeekNumber } from '@/lib/utils'
+import { LEADERBOARD_EXCLUDED_ROLES } from '../roles'
 
 /**
  * Retry mechanism for database operations that might fail due to connection issues
@@ -587,12 +588,12 @@ export async function getOptimizedLeaderboard(pagination: PaginationParams) {
           FROM "User" u
           LEFT JOIN "Submission" s ON u.id = s."userId" 
             AND s.status IN ('FINALIZED', 'UNDER_PEER_REVIEW')
-          WHERE u.role != 'ADMIN'
+          WHERE u.role NOT IN ('ADMIN', 'DEVELOPER')
           GROUP BY u.id, u.username, u."totalXp"
           ORDER BY u."totalXp" DESC
           LIMIT ${limit} OFFSET ${offset}
         `,
-        prisma.user.count({ where: { role: { not: 'ADMIN' } } })
+        prisma.user.count({ where: { role: { notIn: LEADERBOARD_EXCLUDED_ROLES } } })
       ])
       
       const executionTime = Date.now() - startTime

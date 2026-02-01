@@ -3,6 +3,7 @@ import { xpAnalyticsService } from './xp-analytics'
 import { achievementEngine } from './achievement-engine'
 import { prisma } from './prisma'
 import { getWeekNumber } from '@/lib/utils'
+import { isAdmin, REVIEWER_ROLES } from './roles'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -258,7 +259,7 @@ export class ReviewIncentivesService {
             createdAt
           )
         `)
-        .in('role', ['REVIEWER', 'ADMIN'])
+        .in('role', REVIEWER_ROLES)
         .order('totalXp', { ascending: false })
         .limit(limit * 2) // Get more to filter and rank properly
 
@@ -400,7 +401,8 @@ export class ReviewIncentivesService {
       if (!user) return
 
       // Temporarily suspend reviewer if they have missed too many reviews
-      if (user.missedReviews >= 5 && user.role === 'REVIEWER') {
+      // Only applies to REVIEWER role, not ADMIN or DEVELOPER
+      if (user.missedReviews >= 5 && normalizeRole(user.role) === 'REVIEWER') {
         // TODO: Implement temporary suspension logic
         // console.log(`⚠️ Reviewer ${reviewerId} should be temporarily suspended (${user.missedReviews} missed reviews)`)
       }

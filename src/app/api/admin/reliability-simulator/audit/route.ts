@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
+import { REVIEWER_ROLES } from '@/lib/roles'
 
 interface MetricStat {
     name: string
@@ -19,7 +20,7 @@ interface MetricStat {
 export const GET = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
     try {
         const reviewers = await prisma.user.findMany({
-            where: { role: { in: ['REVIEWER', 'ADMIN'] as any } },
+            where: { role: { in: REVIEWER_ROLES } },
             select: {
                 id: true,
                 username: true,

@@ -22,9 +22,9 @@ export const PATCH = withPermission('admin_access')(async (
     const body = await request.json()
     const { role } = body
 
-    if (!role || !['USER', 'REVIEWER', 'ADMIN'].includes(role)) {
+    if (!role || !ALL_ROLES.includes(role)) {
       return NextResponse.json(
-        { message: 'Valid role is required (USER, REVIEWER, or ADMIN)' },
+        { message: 'Valid role is required (USER, REVIEWER, ADMIN, or DEVELOPER)' },
         { status: 400 }
       )
     }

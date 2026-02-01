@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Shield, AlertTriangle, ArrowLeft } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { isDeveloper, ADMIN_ROLES, REVIEWER_ROLES } from '@/lib/roles'
 
 interface RoleGuardProps {
   children: React.ReactNode
@@ -47,6 +48,7 @@ export default function RoleGuard({
       if (requiredRole === 'ADMIN') return isAdmin
       if (requiredRole === 'REVIEWER') return isReviewer
       if (requiredRole === 'USER') return true // All authenticated users are at least USER
+      if (requiredRole === 'DEVELOPER') return isDeveloper(user.role)
       return user.role === requiredRole
     }
 
@@ -56,6 +58,7 @@ export default function RoleGuard({
         if (role === 'ADMIN') return isAdmin
         if (role === 'REVIEWER') return isReviewer
         if (role === 'USER') return true
+        if (role === 'DEVELOPER') return isDeveloper(user.role)
         return user.role === role
       })
     }
@@ -122,7 +125,15 @@ export default function RoleGuard({
 // Convenience components for specific roles
 export function AdminGuard({ children, fallback }: { children: React.ReactNode, fallback?: React.ReactNode }) {
   return (
-    <RoleGuard requiredRole="ADMIN" fallback={fallback}>
+    <RoleGuard requiredRoles={ADMIN_ROLES} fallback={fallback}>
+      {children}
+    </RoleGuard>
+  )
+}
+
+export function DeveloperGuard({ children, fallback }: { children: React.ReactNode, fallback?: React.ReactNode }) {
+  return (
+    <RoleGuard requiredRole="DEVELOPER" fallback={fallback}>
       {children}
     </RoleGuard>
   )
@@ -130,7 +141,7 @@ export function AdminGuard({ children, fallback }: { children: React.ReactNode, 
 
 export function ReviewerGuard({ children, fallback }: { children: React.ReactNode, fallback?: React.ReactNode }) {
   return (
-    <RoleGuard requiredRoles={['REVIEWER', 'ADMIN']} fallback={fallback}>
+    <RoleGuard requiredRoles={REVIEWER_ROLES} fallback={fallback}>
       {children}
     </RoleGuard>
   )

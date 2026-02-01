@@ -5,8 +5,8 @@ import { invalidateAllLeaderboardCache } from '@/lib/cache/leaderboard-cache-uti
 import { topUpMonthlyWinnerXpJS } from '@/lib/services/monthly-awards'
 
 // Upserts a winner for the month to the specified userId (admin override)
-export const POST = withPermission('admin_access')(async (request: NextRequest, { params }: { params: { month: string } }) => {
-  const month = params.month
+export const POST = withPermission('admin_access')(async (request: NextRequest, context: { params: Promise<{ month: string }> }) => {
+  const { month } = await context.params
   const body = await request.json().catch(() => ({}))
   const { userId, reason, rank: rankRaw, xpAwarded: xpRaw } = body || {}
   if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 })

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
+import { isAdmin } from '@/lib/roles'
 import { getTaskDisplayInfo } from '@/lib/xp-rules-v2'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -150,7 +151,7 @@ export default function AdminAnalyticsPage() {
     )
   }
 
-  if (user?.role !== 'ADMIN') {
+  if (!isAdmin(user?.role)) {
     return null
   }
 

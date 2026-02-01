@@ -3,12 +3,13 @@ import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
 import { calculateReviewerMetrics } from '@/lib/reliability/metrics-calculator'
 import { ReviewerMetrics, RawReviewerData } from '@/lib/reliability/types'
+import { REVIEWER_ROLES } from '@/lib/roles'
 
 export const GET = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
     console.log('[Reliability Simulator] Fetching reviewers...')
     const reviewers = await prisma.user.findMany({
-      where: { role: { in: ['REVIEWER', 'ADMIN'] as any } },
+      where: { role: { in: REVIEWER_ROLES } },
       select: {
         id: true,
         username: true,

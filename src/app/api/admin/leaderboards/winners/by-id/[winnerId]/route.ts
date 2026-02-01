@@ -4,8 +4,8 @@ import { createServiceClient } from '@/lib/supabase-server'
 import { invalidateAllLeaderboardCache } from '@/lib/cache/leaderboard-cache-utils'
 import { revokeMonthlyWinnerByIdJS } from '@/lib/services/monthly-awards'
 
-export const DELETE = withPermission('admin_access')(async (_req: NextRequest, { params }: { params: { winnerId: string } }) => {
-  const id = params.winnerId
+export const DELETE = withPermission('admin_access')(async (_req: NextRequest, context: { params: Promise<{ winnerId: string }> }) => {
+  const { winnerId: id } = await context.params
   const supabaseAdmin = createServiceClient()
   const { error } = await supabaseAdmin.rpc('revoke_monthly_winner_by_id', { p_winner_id: id })
   if (error) {

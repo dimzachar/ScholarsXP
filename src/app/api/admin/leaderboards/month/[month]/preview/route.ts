@@ -3,8 +3,8 @@ import { withPermission } from '@/lib/auth-middleware'
 import { createServiceClient } from '@/lib/supabase-server'
 
 // Returns monthly standings annotated with cooldown eligibility and reasons
-export const GET = withPermission('admin_access')(async (_request: NextRequest, { params }: { params: { month: string } }) => {
-  const month = params.month
+export const GET = withPermission('admin_access')(async (_request: NextRequest, context: { params: Promise<{ month: string }> }) => {
+  const { month } = await context.params
   const supabaseAdmin = createServiceClient()
 
   // Fetch standings using service client (bypass RLS for admin)

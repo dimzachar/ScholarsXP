@@ -2,8 +2,8 @@ import { withPermission } from '@/lib/auth-middleware'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-server'
 
-export const GET = withPermission('admin_access')(async (_req: NextRequest, { params }: { params: { month: string } }) => {
-  const month = params.month
+export const GET = withPermission('admin_access')(async (_req: NextRequest, context: { params: Promise<{ month: string }> }) => {
+  const { month } = await context.params
   const supabaseAdmin = createServiceClient()
 
   // standings (service client for admin)

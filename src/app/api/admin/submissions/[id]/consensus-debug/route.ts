@@ -4,8 +4,8 @@ import { prisma } from '@/lib/prisma'
 import { withErrorHandling, createSuccessResponse } from '@/lib/api-middleware'
 
 export const POST = withPermission('review_content')(
-  withErrorHandling(async (request: AuthenticatedRequest, { params }: { params: { id: string } }) => {
-    const { id: submissionId } = await params
+  withErrorHandling(async (request: AuthenticatedRequest, context: { params: Promise<{ id: string }> }) => {
+    const { id: submissionId } = await context.params
 
     try {
       // Get detailed information about the submission using Prisma

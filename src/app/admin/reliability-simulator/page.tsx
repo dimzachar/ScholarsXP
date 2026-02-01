@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
+import { isAdmin } from '@/lib/roles'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -304,7 +305,7 @@ export default function ReliabilitySimulatorPage() {
     return result
   }
 
-  if (user?.role !== 'ADMIN') {
+  if (!isAdmin(user?.role)) {
     return null
   }
 

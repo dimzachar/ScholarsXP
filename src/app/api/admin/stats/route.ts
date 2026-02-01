@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { withPermission } from '@/lib/auth-middleware'
 import { withAdminOptimization } from '@/middleware/api-optimization'
 import { getLegacySubmissionCount } from '@/lib/queries/admin-submissions-optimized'
+import { REVIEWER_ROLES } from '@/lib/roles'
 
 const handler = async () => {
   try {
@@ -54,9 +55,9 @@ const handler = async () => {
       // Total XP
       prisma.xpTransaction.aggregate({ _sum: { amount: true } }),
 
-      // Admin/Reviewer count
+      // Admin/Reviewer/Developer count
       prisma.user.count({
-        where: { role: { in: ['ADMIN', 'REVIEWER'] } }
+        where: { role: { in: REVIEWER_ROLES } }
       }),
 
       // Submission status counts

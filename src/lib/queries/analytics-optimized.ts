@@ -263,7 +263,7 @@ async function getTopPerformers(startDate: Date, timeframe: string) {
         FROM "User" u
         LEFT JOIN "Submission" s ON u.id = s."userId"
           AND (${timeframe === 'all_time'} OR s."createdAt" >= ${startDate})
-        WHERE u.role != 'ADMIN'
+        WHERE u.role NOT IN ('ADMIN', 'DEVELOPER')
         GROUP BY u.id, u.username, u."totalXp"
         ORDER BY submission_count DESC, u."totalXp" DESC
         LIMIT 10
@@ -284,7 +284,7 @@ async function getTopPerformers(startDate: Date, timeframe: string) {
         FROM "User" u
         LEFT JOIN "PeerReview" pr ON u.id = pr."reviewerId"
           AND (${timeframe === 'all_time'} OR pr."createdAt" >= ${startDate})
-        WHERE u.role IN ('REVIEWER', 'ADMIN')
+        WHERE u.role IN ('REVIEWER', 'ADMIN', 'DEVELOPER')
         GROUP BY u.id, u.username
         HAVING COUNT(pr.id) > 0
         ORDER BY review_count DESC, avg_score DESC

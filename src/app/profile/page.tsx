@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { getRoleIcon as getCentralizedRoleIcon, getRoleBadgeColor, isUserRole } from '@/lib/roles'
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout'
 import { MobileLayout, MobileSection, MobileHeader } from '@/components/layout/MobileLayout'
 import { ENABLE_ACHIEVEMENTS } from '@/config/feature-flags'
@@ -129,7 +130,9 @@ export default function ProfilePage() {
   }, [user, authLoading, fetchCompleteProfile])
 
   const getRoleIcon = (role: string) => {
+    // Use centralized icon mapping with lucide components
     switch (role) {
+      case 'DEVELOPER': return <Crown className="h-4 w-4 text-purple-500" />
       case 'ADMIN': return <Crown className="h-4 w-4 text-yellow-500" />
       case 'REVIEWER': return <Shield className="h-4 w-4 text-blue-500" />
       default: return <User className="h-4 w-4 text-gray-500" />
@@ -137,7 +140,9 @@ export default function ProfilePage() {
   }
 
   const _getRoleBadgeColor = (role: string) => {
+    // Use centralized badge color mapping
     switch (role) {
+      case 'DEVELOPER': return 'bg-purple-100 text-purple-800 border-purple-200'
       case 'ADMIN': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
       case 'REVIEWER': return 'bg-blue-100 text-blue-800 border-blue-200'
       default: return 'bg-gray-100 text-gray-800 border-gray-200'

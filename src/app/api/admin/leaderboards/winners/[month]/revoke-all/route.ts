@@ -5,8 +5,8 @@ import { invalidateAllLeaderboardCache } from '@/lib/cache/leaderboard-cache-uti
 import { revokeMonthlyWinnersJS } from '@/lib/services/monthly-awards'
 
 // Bulk revoke all winners for a month and reverse their XP awards
-export const POST = withPermission('admin_access')(async (_req: NextRequest, { params }: { params: { month: string } }) => {
-  const month = params.month
+export const POST = withPermission('admin_access')(async (_req: NextRequest, context: { params: Promise<{ month: string }> }) => {
+  const { month } = await context.params
   const supabaseAdmin = createServiceClient()
 
   const { data, error } = await supabaseAdmin.rpc('revoke_monthly_winners', { p_month: month })

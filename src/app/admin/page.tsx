@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
+import { isDeveloper } from '@/lib/roles'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -512,7 +513,7 @@ export default function AdminDashboardPage() {
 
             {/* Main Content */}
             <Tabs defaultValue="actions" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-6 max-w-4xl mx-auto">
+              <TabsList className={`grid w-full max-w-4xl mx-auto ${isDeveloper(_user?.role) ? 'grid-cols-6' : 'grid-cols-5'}`}>
                 <TabsTrigger value="actions" className="flex items-center gap-2">
                   <Zap className="h-4 w-4" />
                   Actions
@@ -529,10 +530,12 @@ export default function AdminDashboardPage() {
                   <FileText className="h-4 w-4" />
                   Submissions
                 </TabsTrigger>
-                <TabsTrigger value="reviews" className="flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4" />
-                  Reviews
-                </TabsTrigger>
+                {isDeveloper(_user?.role) && (
+                  <TabsTrigger value="reviews" className="flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4" />
+                    Reviews
+                  </TabsTrigger>
+                )}
                 <TabsTrigger value="analytics" className="flex items-center gap-2">
                   <BarChart3 className="h-4 w-4" />
                   Analytics
@@ -754,9 +757,11 @@ export default function AdminDashboardPage() {
                 <SubmissionsManagement />
               </TabsContent>
 
-              <TabsContent value="reviews" className="space-y-6">
-                <ReviewsManagement />
-              </TabsContent>
+              {isDeveloper(_user?.role) && (
+                <TabsContent value="reviews" className="space-y-6">
+                  <ReviewsManagement />
+                </TabsContent>
+              )}
 
               <TabsContent value="analytics" className="space-y-6">
                 <Card className="border-0 shadow-xl">

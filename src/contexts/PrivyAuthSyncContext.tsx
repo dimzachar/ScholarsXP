@@ -5,8 +5,9 @@ import { usePrivy } from '@privy-io/react-auth'
 // IMPORTANT: useCreateWallet must be imported from extended-chains for chainType support
 import { useCreateWallet } from '@privy-io/react-auth/extended-chains'
 import { setPrivyUserId, setPrivyAuthToken } from '@/lib/api-client'
+import { ADMIN_ROLES, REVIEWER_ROLES } from '@/lib/roles'
 
-export type UserRole = 'USER' | 'REVIEWER' | 'ADMIN'
+export type UserRole = 'USER' | 'REVIEWER' | 'ADMIN' | 'DEVELOPER'
 
 export interface SyncedUser {
   id: string
@@ -280,8 +281,8 @@ export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) 
     return user?.role === role
   }, [user?.role])
 
-  const isAdmin = user?.role === 'ADMIN'
-  const isReviewer = user?.role === 'REVIEWER' || user?.role === 'ADMIN'
+  const isAdmin = user?.role ? ADMIN_ROLES.includes(user.role) : false
+  const isReviewer = user?.role ? REVIEWER_ROLES.includes(user.role) : false
 
   const value: PrivyAuthSyncContextType = {
     user,

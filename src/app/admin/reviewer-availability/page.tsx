@@ -5,6 +5,7 @@ import AuthGuard from '@/components/Auth/AuthGuard'
 import { AdminGuard } from '@/components/Auth/RoleGuard'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
+import { REVIEWER_ROLES, isAdmin } from '@/lib/roles'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
@@ -80,7 +81,7 @@ export default function ReviewerAvailabilityPage() {
 
       const data = await response.json()
       let reviewerCandidates: ReviewerRecord[] = (data.users || []).filter(
-        (user: ReviewerRecord) => user && ['REVIEWER', 'ADMIN'].includes(user.role)
+        (user: ReviewerRecord) => user && REVIEWER_ROLES.includes(user.role as any)
       )
 
       // Client-side sort for unsupported keys
@@ -133,8 +134,8 @@ export default function ReviewerAvailabilityPage() {
       reasons.push(`Too many missed reviews (${reviewer.missedReviews})`)
     }
 
-    // Check XP requirement (ADMINs exempt)
-    if ((reviewer.totalXp || 0) < MIN_XP_REQUIRED && reviewer.role !== 'ADMIN') {
+    // Check XP requirement (ADMINs and DEVELOPERs exempt)
+    if ((reviewer.totalXp || 0) < MIN_XP_REQUIRED && !isAdmin(reviewer.role)) {
       reasons.push(`Insufficient XP (${reviewer.totalXp || 0}/${MIN_XP_REQUIRED})`)
     }
 
@@ -150,7 +151,7 @@ export default function ReviewerAvailabilityPage() {
       const eligibleReviewers = allReviewers.filter(r => {
         if (r.reviewerOptOutActive) return false
         if ((r.missedReviews || 0) > MAX_MISSED_REVIEWS) return false
-        if ((r.totalXp || 0) < MIN_XP_REQUIRED && r.role !== 'ADMIN') return false
+        if ((r.totalXp || 0) < MIN_XP_REQUIRED && !isAdmin(r.role)) return false
         if ((r.activeAssignments || 0) >= MAX_ACTIVE_ASSIGNMENTS) return false
         return true
       })
@@ -474,7 +475,7 @@ export default function ReviewerAvailabilityPage() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Badge variant={reviewer.role === 'ADMIN' ? 'destructive' : 'secondary'} className="flex w-fit items-center gap-1">
+                              <Badge variant={isAdmin(reviewer.role) ? 'destructive' : 'secondary'} className="flex w-fit items-center gap-1">
                                 <Shield className="h-3.5 w-3.5" />
                                 {reviewer.role}
                               </Badge>

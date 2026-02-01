@@ -17,6 +17,7 @@ import { createServiceClient } from '@/lib/supabase-server'
 import { submissionService } from '@/lib/database'
 import { enhancedDuplicateDetectionService } from '@/lib/enhanced-duplicate-detection'
 import { withAPIOptimization } from '@/middleware/api-optimization'
+import { normalizeRole, isReviewer } from '@/lib/roles'
 import {
   withErrorHandling,
   createSuccessResponse,
@@ -234,7 +235,8 @@ export const GET = withAPIOptimization(
 
       let submissions
 
-      if (userOnly || request.userProfile!.role === 'USER') {
+      const userRole = normalizeRole(request.userProfile?.role)
+      if (userOnly || !isReviewer(userRole)) {
         // Users can only see their own submissions
         submissions = await submissionService.findManyByUser(request.user!.id, limit)
       } else {

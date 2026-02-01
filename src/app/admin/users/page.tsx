@@ -680,6 +680,7 @@ export default function AdminUsersPage() {
                     <SelectItem value="USER">User</SelectItem>
                     <SelectItem value="REVIEWER">Reviewer</SelectItem>
                     <SelectItem value="ADMIN">Admin</SelectItem>
+                    <SelectItem value="DEVELOPER">Developer</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -800,6 +801,7 @@ export default function AdminUsersPage() {
                               <SelectItem value="USER">User</SelectItem>
                               <SelectItem value="REVIEWER">Reviewer</SelectItem>
                               <SelectItem value="ADMIN">Admin</SelectItem>
+                              <SelectItem value="DEVELOPER">Developer</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>

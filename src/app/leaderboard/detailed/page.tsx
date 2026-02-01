@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { useRouter } from 'next/navigation'
+import { isReviewer } from '@/lib/roles'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -166,7 +167,7 @@ export default function DetailedLeaderboardPage() {
   useEffect(() => {
     // Wait for user to be fully loaded with privyUserId
     if (!loading && user && user.privyUserId && !hasInitiallyLoaded.current) {
-      if (user.role !== 'ADMIN' && user.role !== 'REVIEWER') {
+      if (!isReviewer(user.role)) {
         router.push('/leaderboard')
         return
       }

@@ -8,6 +8,7 @@
 import { NextRequest } from 'next/server'
 import { getUserProfileByPrivyId, UserRole } from './auth-middleware'
 import { verifyPrivyToken, extractBearerToken } from './privy-server'
+import { ADMIN_ROLES, REVIEWER_ROLES, ALL_ROLES } from './roles'
 
 export interface AuthenticatedUser {
   id: string
@@ -90,17 +91,17 @@ export function requireRole(allowedRoles: UserRole[]) {
 /**
  * Convenience function for admin-only routes
  */
-export const requireAdmin = requireRole(['ADMIN'])
+export const requireAdmin = requireRole(ADMIN_ROLES)
 
 /**
  * Convenience function for reviewer or admin routes
  */
-export const requireReviewer = requireRole(['REVIEWER', 'ADMIN'])
+export const requireReviewer = requireRole(REVIEWER_ROLES)
 
 /**
  * Convenience function for any authenticated user
  */
-export const requireAuth = requireRole(['USER', 'REVIEWER', 'ADMIN'])
+export const requireAuth = requireRole(ALL_ROLES)
 
 /**
  * Get current user from request without role restrictions

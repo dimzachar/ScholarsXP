@@ -9,6 +9,7 @@ import { getWeekNumber } from '@/lib/utils'
 import { reliabilityService } from '@/lib/reliability/reliability-service'
 import { getFormula } from '@/lib/reliability/formulas'
 import { RELIABILITY_CONFIG } from '@/config/reliability'
+import { ALL_ROLES } from '@/lib/roles'
 
 export const GET = withAdminOptimization(withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
@@ -20,7 +21,7 @@ export const GET = withAdminOptimization(withPermission('admin_access')(async (r
     const offset = (page - 1) * limit
 
     // Filter parameters
-    const role = searchParams.get('role') // 'USER', 'REVIEWER', 'ADMIN'
+    const role = searchParams.get('role') // 'USER', 'REVIEWER', 'ADMIN', 'DEVELOPER'
     const search = searchParams.get('search') // Search by username, email
     const xpMin = searchParams.get('xpMin') ? parseInt(searchParams.get('xpMin')!) : undefined
     const xpMax = searchParams.get('xpMax') ? parseInt(searchParams.get('xpMax')!) : undefined
@@ -577,7 +578,7 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
 
     switch (action) {
       case 'updateRole':
-        if (!data?.role || !['USER', 'REVIEWER', 'ADMIN'].includes(data.role)) {
+        if (!data?.role || !ALL_ROLES.includes(data.role)) {
           return NextResponse.json(
             { message: 'Valid role is required for updateRole action' },
             { status: 400 }

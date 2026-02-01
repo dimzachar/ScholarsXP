@@ -98,7 +98,7 @@ export interface AssignmentResult {
 export class ReviewerPoolService {
   private readonly MAX_ACTIVE_ASSIGNMENTS = 5
   private readonly MIN_REVIEWERS_REQUIRED = 3
-  private readonly REVIEWER_ROLES = ['REVIEWER', 'ADMIN']
+  private readonly REVIEWER_ROLES = REVIEWER_ROLES
 
   /**
    * Get available reviewers for a submission
@@ -133,7 +133,7 @@ export class ReviewerPoolService {
             lastActiveAt,
             preferences
           `)
-          .in('role', this.REVIEWER_ROLES)
+          .in('role', REVIEWER_ROLES)
           .not('id', 'in', `(${excludedIds.map(id => `"${id}"`).join(',')})`),
         'getAvailableReviewers.fetchUsers'
       )
@@ -193,7 +193,7 @@ export class ReviewerPoolService {
           }
 
           // Filter by minimum XP (ensure reviewer has some experience)
-          if (candidate.totalXp < 50 && candidate.role !== 'ADMIN') {
+          if (candidate.totalXp < 50 && !isAdmin(candidate.role)) {
             return false
           }
 
@@ -435,12 +435,12 @@ export class ReviewerPoolService {
     }
 
     // Check role
-    if (!this.REVIEWER_ROLES.includes(reviewer.role)) {
+    if (!REVIEWER_ROLES.includes(reviewer.role as any)) {
       return { canAssign: false, reason: 'User does not have reviewer privileges' }
     }
 
     // Check experience
-    if (reviewer.totalXp < 50 && reviewer.role !== 'ADMIN') {
+    if (reviewer.totalXp < 50 && !isAdmin(reviewer.role)) {
       return { canAssign: false, reason: 'Insufficient experience (minimum 50 XP required)' }
     }
 

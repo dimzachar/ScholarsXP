@@ -6,12 +6,13 @@ import { ReviewerMetrics, RawReviewerData } from '@/lib/reliability/types'
 import { calculateReviewerMetrics } from '@/lib/reliability/metrics-calculator'
 import { detectPatterns, inferRootCause } from '@/app/admin/reliability-simulator/lib/audit'
 import { identifyBad, identifyGood, classifyReviewers, getBadReviewerReason } from '@/app/admin/reliability-simulator/lib/formulas'
+import { REVIEWER_ROLES } from '@/lib/roles'
 
 export const GET = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
     try {
         // 1. Fetch all reviewers with their metrics (reusing logic from main route)
         const reviewers = await prisma.user.findMany({
-            where: { role: { in: ['REVIEWER', 'ADMIN'] as any } },
+            where: { role: { in: REVIEWER_ROLES } },
             select: {
                 id: true,
                 username: true,

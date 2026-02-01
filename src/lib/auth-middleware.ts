@@ -8,9 +8,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyPrivyToken, extractBearerToken } from './privy-server'
+import { 
+  UserRole, 
+  Permission, 
+  hasPermission, 
+  normalizeRole, 
+  isValidRole,
+  hasRoleOrHigher,
+  ROLE_HIERARCHY
+} from './roles'
 
-// Import UserRole from PrivyAuthSyncContext to avoid circular dependency
-export type UserRole = 'USER' | 'REVIEWER' | 'ADMIN'
+// Re-export for backward compatibility
+export type { UserRole, Permission }
 
 export interface UserProfile {
   id: string
@@ -40,33 +49,11 @@ export interface AuthenticatedRequest extends NextRequest {
   userProfile: UserProfile
 }
 
-type Permission =
-  | 'authenticated'
-  | 'submit_content'
-  | 'review_content'
-  | 'admin_access'
-  | 'manage_users'
-  | 'view_analytics'
-
-type RolePermissions = {
-  [key in UserRole]: Permission[]
-}
-
-const ROLE_PERMISSIONS: RolePermissions = {
-  USER: ['authenticated', 'submit_content'],
-  REVIEWER: ['authenticated', 'submit_content', 'review_content'],
-  ADMIN: ['authenticated', 'submit_content', 'review_content', 'admin_access', 'manage_users', 'view_analytics']
-}
-
 export class AuthError extends Error {
   constructor(message: string, public statusCode: number = 401) {
     super(message)
     this.name = 'AuthError'
   }
-}
-
-export function hasPermission(userRole: UserRole, permission: Permission): boolean {
-  return ROLE_PERMISSIONS[userRole].includes(permission)
 }
 
 /**
@@ -159,8 +146,9 @@ export function createRoleBasedHandler() {
               )
             }
 
-            // Check permission
-            if (!hasPermission(userProfile.role, permission)) {
+            // Check permission using normalized role
+            const userRole = normalizeRole(userProfile.role)
+            if (!hasPermission(userRole, permission)) {
               return NextResponse.json(
                 {
                   error: 'Insufficient permissions',
@@ -226,11 +214,9 @@ export function createRoleBasedHandler() {
               )
             }
             
-            // Check role (admin can access everything)
-            const role = userProfile.role as string
-            const hasAccess = role === requiredRole || 
-                             role === 'ADMIN' ||
-                             (requiredRole === 'REVIEWER' && role === 'ADMIN')
+            // Check role using hierarchy (admin/developer can access everything)
+            const userRole = normalizeRole(userProfile.role)
+            const hasAccess = hasRoleOrHigher(userRole, requiredRole)
 
             if (!hasAccess) {
               return NextResponse.json(

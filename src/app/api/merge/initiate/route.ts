@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server'
 import { MergeService } from '@/lib/services/MergeService'
 import { withAPIOptimization } from '@/middleware/api-optimization'
 import { withAuth, withRole, AuthenticatedRequest } from '@/lib/auth-middleware'
+import { isAdmin } from '@/lib/roles'
 
 interface MergeInitiateRequest {
   realUserId: string
@@ -62,10 +63,10 @@ async function postHandler(request: AuthenticatedRequest) {
 
     // Authorization check: users can only merge their own accounts
     // Admins can merge any account
-    const isAdmin = userProfile.role === 'ADMIN'
+    const isAdminUser = isAdmin(userProfile.role)
     const isOwnAccount = userProfile.id === body.realUserId
 
-    if (!isAdmin && !isOwnAccount) {
+    if (!isAdminUser && !isOwnAccount) {
       return NextResponse.json({
         error: 'Unauthorized: You can only merge your own account'
       }, { status: 403 })
@@ -85,7 +86,7 @@ async function postHandler(request: AuthenticatedRequest) {
       discordId: body.discordId,
       email: body.email,
       fallbackUsername: normalizedFallback,
-      initiatedBy: isAdmin ? 'ADMIN' : 'USER'
+      initiatedBy: isAdminUser ? 'ADMIN' : 'USER'
     })
 
     // Return result
@@ -143,10 +144,10 @@ async function getHandler(request: AuthenticatedRequest) {
 
     // Authorization check: users can only check their own status
     // Admins can check any user's status
-    const isAdmin = userProfile.role === 'ADMIN'
+    const isAdminUser = isAdmin(userProfile.role)
     const isOwnAccount = userProfile.id === userId
 
-    if (!isAdmin && !isOwnAccount) {
+    if (!isAdminUser && !isOwnAccount) {
       return NextResponse.json({
         error: 'Unauthorized: You can only check your own merge status'
       }, { status: 403 })

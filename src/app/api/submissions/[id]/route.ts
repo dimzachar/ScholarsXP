@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
+import { isAdmin } from '@/lib/roles'
 
 async function getHandler(
   request: AuthenticatedRequest,
@@ -33,9 +34,9 @@ async function getHandler(
   }
 
   const isOwner = submission.user?.id === userProfile.id
-  const isAdmin = userProfile.role === 'ADMIN'
+  const isAdminUser = isAdmin(userProfile.role)
 
-  if (!isOwner && !isAdmin) {
+  if (!isOwner && !isAdminUser) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

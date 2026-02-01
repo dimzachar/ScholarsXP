@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { usePrivyAuthSync } from '@/contexts/PrivyAuthSyncContext'
 import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
+import { isAdmin } from '@/lib/roles'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LiveDashboard } from '@/components/Admin/live-monitor/LiveDashboard'
 import { LiveFeed } from '@/components/Admin/live-monitor/LiveFeed'
@@ -55,7 +56,7 @@ export default function LiveMonitorPage() {
         )
     }
 
-    if (user?.role !== 'ADMIN') {
+    if (!isAdmin(user?.role)) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[#f6f7f8] dark:bg-[#101922]">
                 <Card className="w-96 text-center">

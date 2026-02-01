@@ -1,5 +1,6 @@
 import { PaginationDTO } from '@/types/api-responses'
 import { Prisma } from '@prisma/client'
+import { LEADERBOARD_EXCLUDED_ROLES } from './roles'
 
 /**
  * Simple offset-based pagination utilities
@@ -305,7 +306,7 @@ export class PaginationHelper {
     // Build leaderboard-specific where clause
     if (query.where) {
       const where: any = {
-        role: { not: 'ADMIN' } // Exclude admins from leaderboard
+        role: { notIn: LEADERBOARD_EXCLUDED_ROLES } // Exclude admins and developers from leaderboard
       }
       
       if (query.where.search) {
@@ -320,7 +321,7 @@ export class PaginationHelper {
       
       query.where = where
     } else {
-      query.where = { role: { not: 'ADMIN' } }
+      query.where = { role: { notIn: LEADERBOARD_EXCLUDED_ROLES } }
     }
     
     return query

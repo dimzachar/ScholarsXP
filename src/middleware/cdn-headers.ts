@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { isAdmin } from '@/lib/roles'
 
 /**
  * CDN headers middleware for optimizing cache behavior
@@ -212,8 +213,8 @@ export function getSmartCacheConfig(
   userRole?: string, 
   isPublic: boolean = false
 ): CacheConfig {
-  // No cache for admin operations
-  if (userRole === 'ADMIN' && endpoint.includes('/admin/')) {
+  // No cache for admin operations (includes DEVELOPER)
+  if (isAdmin(userRole) && endpoint.includes('/admin/')) {
     return CacheConfigs.noCache
   }
   
