@@ -27,16 +27,33 @@ export const GET = withAPIOptimization(
         unreadOnly
       )
 
+      // Compute unread count from already-fetched notifications to avoid extra DB query
+      // For unreadOnly filter, all returned notifications are unread
+      const unreadCount = unreadOnly 
+        ? result.notifications.length 
+        : result.notifications.filter(n => !n.read).length
+
       return createSuccessResponse({
         notifications: result.notifications,
         total: result.total,
         page,
         limit,
-        unreadCount: await getUnreadCount(request.user.id)
+        unreadCount
       })
     })
   ),
-  { rateLimitType: 'notifications', caching: false, compression: true, performanceMonitoring: true, rateLimit: true }
+  { 
+    rateLimitType: 'notifications', 
+    caching: true, // Enable caching with short TTL for user data
+    compression: true, 
+    performanceMonitoring: true, 
+    rateLimit: true,
+    customCacheConfig: {
+      maxAge: 30, // 30 seconds browser cache
+      private: true, // User-specific data
+      mustRevalidate: true
+    }
+  }
 )
 
 
