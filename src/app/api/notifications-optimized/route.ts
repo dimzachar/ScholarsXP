@@ -6,6 +6,10 @@
  * - Cache miss: ~20-50ms (vs 100-200ms before)
  * - Concurrent request deduplication
  * - Edge caching for public/frequently accessed data
+ * 
+ * NOTE: Uses Node.js runtime (not Edge) due to bundle size constraints
+ * with @privy-io/node and @supabase/supabase-js dependencies.
+ * The 50 MB Node.js limit vs 1 MB Edge limit accommodates these auth/db libraries.
  */
 
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
@@ -16,10 +20,6 @@ import {
   getNotificationCacheHeaders
 } from '@/lib/notifications-optimized'
 import { NextResponse } from 'next/server'
-
-// Enable Edge Runtime for lowest latency
-export const runtime = 'edge'
-export const preferredRegion = 'iad1'  // US East (closest to your DB)
 
 /**
  * GET /api/notifications-optimized

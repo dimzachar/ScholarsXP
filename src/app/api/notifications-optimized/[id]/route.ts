@@ -2,6 +2,9 @@
  * Individual Notification Operations
  * PATCH: Mark as read
  * DELETE: Delete notification
+ * 
+ * NOTE: Uses Node.js runtime (not Edge) due to bundle size constraints
+ * with @privy-io/node and @supabase/supabase-js dependencies.
  */
 
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
@@ -9,9 +12,6 @@ import { withErrorHandling } from '@/lib/api-middleware'
 import { OptimizedNotificationService } from '@/lib/notifications-optimized'
 import { createServiceClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
-
-export const runtime = 'edge'
-export const preferredRegion = 'iad1'
 
 /**
  * PATCH - Mark notification as read
