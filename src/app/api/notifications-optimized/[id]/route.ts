@@ -63,9 +63,6 @@ export const DELETE = withPermission('authenticated')(
       )
     }
 
-    // Invalidate cache
-    await OptimizedNotificationService.invalidateUserCache(userId)
-
     return new NextResponse(null, { status: 204 })
   })
 )

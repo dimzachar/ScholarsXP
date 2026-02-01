@@ -179,9 +179,6 @@ export default function NotificationCenterOptimized() {
                   <div className={`flex items-center justify-between ${isMobile ? 'mt-2' : ''}`}>
                     <CardDescription className={isMobile ? 'text-xs' : ''}>
                       {unreadCount} unread
-                      {filteredNotifications.length === 0 && unreadCount > 0 && (
-                        <span className="text-destructive ml-2">(ghost notification)</span>
-                      )}
                     </CardDescription>
                     <div className="flex gap-1">
                       <Button
@@ -195,6 +192,8 @@ export default function NotificationCenterOptimized() {
                     </div>
                   </div>
                 )}
+                
+
                 
 
               </CardHeader>

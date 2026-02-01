@@ -33,6 +33,11 @@ export async function createNotification(
   message: string,
   data?: any
 ): Promise<Notification> {
+  // STRICT: Reject ghost notifications
+  if (!title?.trim() && !message?.trim()) {
+    throw new Error('Cannot create notification without title or message')
+  }
+  
   try {
     // Use service client for server-side writes to bypass RLS safely
     const service = createServiceClient()

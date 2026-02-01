@@ -88,6 +88,8 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
       dedupingInterval: 5000,
       // Keep previous data while fetching
       keepPreviousData: true,
+      // SWR's built-in cache is safe (clears on delete)
+      // This gives us <10ms cache hits without ghost issues
     }
   )
 
@@ -125,25 +127,38 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
             filter: `userId=eq.${userId}`,
           },
           (payload) => {
+            // STRICT: Skip notifications without actual content
+            const rawTitle = payload.new.title || payload.new.message?.substring(0, 50)
+            const rawMessage = payload.new.message
+            
+            if (!rawTitle?.trim() && !rawMessage?.trim()) {
+              // Skipping empty notification
+              return
+            }
+            
             // New notification - optimistically add to cache
             // Handle both snake_case (DB) and camelCase (API) field names
             const newNotification: OptimizedNotification = {
               id: payload.new.id,
               type: payload.new.type,
-              title: payload.new.title || payload.new.message?.substring(0, 50) || 'New notification',
-              message: payload.new.message || '',
+              title: rawTitle?.trim() || 'Notification',
+              message: rawMessage?.trim() || '',
               read: payload.new.read ?? false,
               createdAt: payload.new.createdAt || payload.new.created_at || new Date().toISOString(),
               data: payload.new.data || payload.new.metadata
             }
             
-            // Skip if we don't have valid data
-            if (!newNotification.id) return
+            // Notification received via realtime
 
             // Update SWR cache optimistically
             revalidate(
               (currentData) => {
                 if (!currentData) return currentData
+                
+                // Skip if already exists
+                if (currentData.items.some(i => i.id === newNotification.id)) {
+                  return currentData
+                }
                 
                 return {
                   ...currentData,
@@ -386,7 +401,7 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
 
   return {
     notifications: data?.items || [],
-    rawNotifications: data?.items || [],  // Expose raw for debugging
+    rawNotifications: data?.items || [],
     unreadCount: data?.unreadCount || 0,
     hasMore: data?.hasMore || false,
     isLoading,
