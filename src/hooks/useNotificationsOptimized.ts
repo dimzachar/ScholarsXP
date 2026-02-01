@@ -69,7 +69,8 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
   const channelRef = useRef<RealtimeChannel | null>(null)
   
   // SWR key - changes when we need to force refresh
-  const [swrKey, setSwrKey] = useState('api/notifications-optimized?limit=20')
+  // v2: Added filter for empty notifications
+  const [swrKey, setSwrKey] = useState('api/notifications-optimized?limit=20&v=2')
   
   // Main data fetching with SWR
   const { data, error, isLoading, isValidating, mutate: revalidate } = useSWR<NotificationSyncResult>(
@@ -125,15 +126,19 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
           },
           (payload) => {
             // New notification - optimistically add to cache
+            // Handle both snake_case (DB) and camelCase (API) field names
             const newNotification: OptimizedNotification = {
               id: payload.new.id,
               type: payload.new.type,
-              title: payload.new.title,
-              message: payload.new.message,
-              read: payload.new.read,
-              createdAt: payload.new.createdAt,
-              data: payload.new.data
+              title: payload.new.title || payload.new.message?.substring(0, 50) || 'New notification',
+              message: payload.new.message || '',
+              read: payload.new.read ?? false,
+              createdAt: payload.new.createdAt || payload.new.created_at || new Date().toISOString(),
+              data: payload.new.data || payload.new.metadata
             }
+            
+            // Skip if we don't have valid data
+            if (!newNotification.id) return
 
             // Update SWR cache optimistically
             revalidate(
@@ -161,13 +166,15 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
           },
           (payload) => {
             // Notification updated - update cache
+            const readValue = payload.new.read ?? payload.new.is_read
+            
             revalidate(
               (currentData) => {
                 if (!currentData) return currentData
                 
                 const updatedItems = currentData.items.map(item => 
                   item.id === payload.new.id 
-                    ? { ...item, read: payload.new.read }
+                    ? { ...item, read: readValue ?? item.read }
                     : item
                 )
                 
@@ -232,7 +239,7 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
   const loadMore = useCallback(async () => {
     if (!data?.hasMore || !data.nextCursor) return
     
-    const nextKey = `api/notifications-optimized?limit=20&cursor=${encodeURIComponent(data.nextCursor)}`
+    const nextKey = `api/notifications-optimized?limit=20&cursor=${encodeURIComponent(data.nextCursor)}&v=2`
     
     const result = await fetcher(nextKey)
     
@@ -259,7 +266,7 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
     }
     
     // Incremental sync - only fetch since last sync
-    const incrementalKey = `api/notifications-optimized?limit=50&since=${encodeURIComponent(lastSyncRef.current)}`
+    const incrementalKey = `api/notifications-optimized?limit=50&since=${encodeURIComponent(lastSyncRef.current)}&v=2`
     
     try {
       const result = await fetcher(incrementalKey)
@@ -379,6 +386,7 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
 
   return {
     notifications: data?.items || [],
+    rawNotifications: data?.items || [],  // Expose raw for debugging
     unreadCount: data?.unreadCount || 0,
     hasMore: data?.hasMore || false,
     isLoading,
@@ -400,7 +408,7 @@ export function useUnreadCount() {
   const { authenticatedFetch } = useAuthenticatedFetch()
   
   const { data, error } = useSWR(
-    'api/notifications-optimized?action=count',
+    'api/notifications-optimized?action=count&v=2',
     async (url) => {
       const response = await authenticatedFetch(url)
       const body = await response.json()

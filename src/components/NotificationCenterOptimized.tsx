@@ -53,6 +53,7 @@ export default function NotificationCenterOptimized() {
   // Use full hook only when panel is open
   const {
     notifications,
+    rawNotifications,
     unreadCount,
     hasMore,
     isLoading,
@@ -65,6 +66,11 @@ export default function NotificationCenterOptimized() {
   } = useNotificationsOptimized({
     disableRealtime: false  // Enable realtime updates
   })
+
+  // Filter out invalid/empty notifications for display
+  const filteredNotifications = rawNotifications.filter(n => 
+    n.id && (n.title?.trim() || n.message?.trim())
+  )
 
   const isMobile = responsiveLayout?.isMobile ?? false
 
@@ -173,17 +179,24 @@ export default function NotificationCenterOptimized() {
                   <div className={`flex items-center justify-between ${isMobile ? 'mt-2' : ''}`}>
                     <CardDescription className={isMobile ? 'text-xs' : ''}>
                       {unreadCount} unread
+                      {filteredNotifications.length === 0 && unreadCount > 0 && (
+                        <span className="text-destructive ml-2">(ghost notification)</span>
+                      )}
                     </CardDescription>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={markAllAsRead}
-                      className="text-xs h-7 px-2"
-                    >
-                      Mark all read
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={markAllAsRead}
+                        className="text-xs h-7 px-2"
+                      >
+                        Mark all read
+                      </Button>
+                    </div>
                   </div>
                 )}
+                
+
               </CardHeader>
 
               <CardContent className="p-0">
@@ -192,14 +205,14 @@ export default function NotificationCenterOptimized() {
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
                     <p className="text-muted-foreground mt-2 text-sm">Loading...</p>
                   </div>
-                ) : notifications.length === 0 ? (
+                ) : filteredNotifications.length === 0 ? (
                   <div className={`text-center ${isMobile ? 'p-4' : 'p-6'}`}>
                     <Bell className="text-muted-foreground mx-auto mb-2 h-8 w-8" />
                     <p className="text-muted-foreground text-sm">No notifications</p>
                   </div>
                 ) : (
                   <div className={`overflow-y-auto ${isMobile ? 'max-h-[50vh]' : 'max-h-96'}`}>
-                    {notifications.map((notification, index) => (
+                    {filteredNotifications.map((notification, index) => (
                       <div key={notification.id}>
                         <div
                           className={`hover:bg-accent cursor-pointer transition-colors ${
@@ -262,11 +275,11 @@ export default function NotificationCenterOptimized() {
                           </div>
                         </div>
                         
-                        {index < notifications.length - 1 && <Separator />}
+                        {index < filteredNotifications.length - 1 && <Separator />}
                       </div>
                     ))}
                     
-                    {hasMore && (
+                    {hasMore && filteredNotifications.length > 0 && (
                       <div className="p-3 text-center">
                         <Button
                           variant="ghost"

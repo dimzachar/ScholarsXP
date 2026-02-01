@@ -157,6 +157,7 @@ export class OptimizedNotificationService {
         }
 
         const result = count || 0
+        console.log('[Notifications] Unread count for user:', userId, '=', result)
         
         // Cache for 30 seconds
         await multiLayerCache.set(cacheKey, result, TTL.unreadCount)
@@ -318,9 +319,10 @@ export class OptimizedNotificationService {
       ? items[items.length - 1].createdAt 
       : undefined
 
-    // Get unread count from cache or compute from results
-    const unreadCount = items.filter(n => !n.read).length + 
-      (cursor ? 0 : await this.getUnreadCount(userId))  // Only query count for first page
+    // Get unread count - for first page use DB count, for pagination use items count
+    const unreadCount = cursor 
+      ? items.filter(n => !n.read).length  // For pagination, just count visible items
+      : await this.getUnreadCount(userId)  // For first page, use accurate DB count
 
     const result: NotificationSyncResult = {
       items,
