@@ -35,7 +35,7 @@ next-env.d.ts
 .jest/
 test-reports/
 __tests__/
-
+_test_*
 # Test files in src (local development tests)
 src/**/*.test.ts
 src/**/*.test.tsx
