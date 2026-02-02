@@ -316,23 +316,20 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
 
   // Mark as read (optimistic)
   const markAsRead = useCallback(async (notificationId: string) => {
-    // Optimistic update
-    revalidate(
-      (currentData) => {
-        if (!currentData) return currentData
-        
-        const updatedItems = currentData.items.map(item =>
-          item.id === notificationId ? { ...item, read: true } : item
-        )
-        
-        return {
-          ...currentData,
-          items: updatedItems,
-          unreadCount: Math.max(0, currentData.unreadCount - 1)
-        }
-      },
-      { revalidate: false }
-    )
+    // Store current data for potential rollback
+    const previousData = data
+    
+    // Optimistic update - update cache immediately
+    const optimisticData = data ? {
+      ...data,
+      items: data.items.map(item =>
+        item.id === notificationId ? { ...item, read: true } : item
+      ),
+      unreadCount: Math.max(0, data.unreadCount - 1)
+    } : data
+    
+    // Update SWR cache immediately (no revalidation)
+    revalidate(optimisticData, { revalidate: false })
     
     // Background API call
     try {
@@ -340,26 +337,27 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
         method: 'PATCH'
       })
     } catch (error) {
-      // Revert on error by revalidating
-      await revalidate()
+      // Revert on error
+      if (previousData) {
+        revalidate(previousData, { revalidate: false })
+      }
     }
-  }, [authenticatedFetch, revalidate])
+  }, [authenticatedFetch, revalidate, data])
 
   // Mark all as read (optimistic)
   const markAllAsRead = useCallback(async () => {
-    // Optimistic update
-    revalidate(
-      (currentData) => {
-        if (!currentData) return currentData
-        
-        return {
-          ...currentData,
-          items: currentData.items.map(item => ({ ...item, read: true })),
-          unreadCount: 0
-        }
-      },
-      { revalidate: false }
-    )
+    // Store current data for potential rollback
+    const previousData = data
+    
+    // Optimistic update - update cache immediately
+    const optimisticData = data ? {
+      ...data,
+      items: data.items.map(item => ({ ...item, read: true })),
+      unreadCount: 0
+    } : data
+    
+    // Update SWR cache immediately (no revalidation)
+    revalidate(optimisticData, { revalidate: false })
     
     // Background API call
     try {
@@ -367,27 +365,28 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
         method: 'POST'
       })
     } catch (error) {
-      await revalidate()
+      // Revert on error
+      if (previousData) {
+        revalidate(previousData, { revalidate: false })
+      }
     }
-  }, [authenticatedFetch, revalidate])
+  }, [authenticatedFetch, revalidate, data])
 
   // Delete notification (optimistic)
   const deleteNotification = useCallback(async (notificationId: string) => {
-    // Optimistic update
-    revalidate(
-      (currentData) => {
-        if (!currentData) return currentData
-        
-        const filteredItems = currentData.items.filter(i => i.id !== notificationId)
-        
-        return {
-          ...currentData,
-          items: filteredItems,
-          unreadCount: filteredItems.filter(i => !i.read).length
-        }
-      },
-      { revalidate: false }
-    )
+    // Store current data for potential rollback
+    const previousData = data
+    
+    // Optimistic update - update cache immediately
+    const filteredItems = data ? data.items.filter(i => i.id !== notificationId) : []
+    const optimisticData = data ? {
+      ...data,
+      items: filteredItems,
+      unreadCount: filteredItems.filter(i => !i.read).length
+    } : data
+    
+    // Update SWR cache immediately (no revalidation)
+    revalidate(optimisticData, { revalidate: false })
     
     // Background API call
     try {
@@ -395,9 +394,12 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
         method: 'DELETE'
       })
     } catch (error) {
-      await revalidate()
+      // Revert on error
+      if (previousData) {
+        revalidate(previousData, { revalidate: false })
+      }
     }
-  }, [authenticatedFetch, revalidate])
+  }, [authenticatedFetch, revalidate, data])
 
   return {
     notifications: data?.items || [],
