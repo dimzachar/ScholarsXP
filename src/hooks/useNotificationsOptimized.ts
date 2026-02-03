@@ -401,6 +401,30 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
     }
   }, [authenticatedFetch, revalidate, data])
 
+  // Delete all notifications (optimistic)
+  const deleteAll = useCallback(async () => {
+    const previousData = data
+    
+    const optimisticData = data ? {
+      ...data,
+      items: [],
+      unreadCount: 0,
+      hasMore: false
+    } : data
+    
+    revalidate(optimisticData, { revalidate: false })
+    
+    try {
+      await authenticatedFetch('/api/notifications-optimized/delete-all', {
+        method: 'POST'
+      })
+    } catch (error) {
+      if (previousData) {
+        revalidate(previousData, { revalidate: false })
+      }
+    }
+  }, [authenticatedFetch, revalidate, data])
+
   return {
     notifications: data?.items || [],
     rawNotifications: data?.items || [],
@@ -413,7 +437,8 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
     loadMore,
     markAsRead,
     markAllAsRead,
-    deleteNotification
+    deleteNotification,
+    deleteAll
   }
 }
 

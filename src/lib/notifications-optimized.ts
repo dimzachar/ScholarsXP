@@ -114,6 +114,24 @@ export class OptimizedNotificationService {
   }
 
   /**
+   * Delete all notifications for a user
+   */
+  static async deleteAll(userId: string): Promise<number> {
+    const client = createServiceClient()
+    const { error, count } = await client
+      .from('notifications')
+      .delete({ count: 'exact' })
+      .eq('userId', userId)
+
+    if (error) {
+      console.error('Error deleting all notifications:', error)
+      return 0
+    }
+
+    return count || 0
+  }
+
+  /**
    * Create notification
    * DISABLED: Cache was causing ghost notifications
    */

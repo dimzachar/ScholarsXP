@@ -62,7 +62,8 @@ export default function NotificationCenterOptimized() {
     loadMore,
     markAsRead,
     markAllAsRead,
-    deleteNotification
+    deleteNotification,
+    deleteAll
   } = useNotificationsOptimized({
     disableRealtime: false  // Enable realtime updates
   })
@@ -175,20 +176,32 @@ export default function NotificationCenterOptimized() {
                   </div>
                 </div>
                 
-                {unreadCount > 0 && (
+                {(unreadCount > 0 || filteredNotifications.length > 0) && (
                   <div className={`flex items-center justify-between ${isMobile ? 'mt-2' : ''}`}>
                     <CardDescription className={isMobile ? 'text-xs' : ''}>
-                      {unreadCount} unread
+                      {unreadCount > 0 ? `${unreadCount} unread` : `${filteredNotifications.length} total`}
                     </CardDescription>
                     <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={markAllAsRead}
-                        className="text-xs h-7 px-2"
-                      >
-                        Mark all read
-                      </Button>
+                      {unreadCount > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={markAllAsRead}
+                          className="text-xs h-7 px-2"
+                        >
+                          Mark all read
+                        </Button>
+                      )}
+                      {filteredNotifications.length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={deleteAll}
+                          className="text-xs h-7 px-2 text-destructive hover:text-destructive"
+                        >
+                          Delete all
+                        </Button>
+                      )}
                     </div>
                   </div>
                 )}
