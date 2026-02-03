@@ -64,6 +64,13 @@ export const GET = withPermission('authenticated')(
           since
         })
 
+        // console.log('🔔 [API] Sync result:', { 
+        //   userId: userId.substring(0, 8) + '...', 
+        //   itemCount: result.items.length, 
+        //   unreadCount: result.unreadCount,
+        //   hasMore: result.hasMore 
+        // })
+
         // Generate ETag for conditional requests
         const etag = generateNotificationETag(userId, result.syncedAt)
         

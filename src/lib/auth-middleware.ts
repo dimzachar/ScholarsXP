@@ -130,26 +130,36 @@ export function createRoleBasedHandler() {
             const privyUserId = await getVerifiedPrivyUserId(request)
             
             if (!privyUserId) {
-              return NextResponse.json(
+              const response = NextResponse.json(
                 { error: 'Authentication required - please sign in' },
                 { status: 401 }
               )
+              // Add cache headers even for 401 responses
+              response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+              response.headers.set('Pragma', 'no-cache')
+              response.headers.set('Expires', '0')
+              return response
             }
 
             // Get user profile by Privy ID
             const userProfile = await getUserProfileByPrivyId(privyUserId)
             
             if (!userProfile) {
-              return NextResponse.json(
+              const response = NextResponse.json(
                 { error: 'User not found - please complete sign in' },
                 { status: 401 }
               )
+              // Add cache headers even for 401 responses
+              response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+              response.headers.set('Pragma', 'no-cache')
+              response.headers.set('Expires', '0')
+              return response
             }
 
             // Check permission using normalized role
             const userRole = normalizeRole(userProfile.role)
             if (!hasPermission(userRole, permission)) {
-              return NextResponse.json(
+              const response = NextResponse.json(
                 {
                   error: 'Insufficient permissions',
                   required: permission,
@@ -157,6 +167,11 @@ export function createRoleBasedHandler() {
                 },
                 { status: 403 }
               )
+              // Add cache headers even for 403 responses
+              response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+              response.headers.set('Pragma', 'no-cache')
+              response.headers.set('Expires', '0')
+              return response
             }
 
             // Create authenticated request

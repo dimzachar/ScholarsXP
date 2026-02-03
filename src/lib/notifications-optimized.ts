@@ -60,24 +60,29 @@ export class OptimizedNotificationService {
 
   /**
    * Get ONLY unread count - optimized for badge display
-   * DISABLED: Cache was causing ghost notifications
+   * Uses exact count for accuracy
    */
   static async getUnreadCount(userId: string): Promise<number> {
     const client = createServiceClient()
     
-    // Use exact count for accuracy
-    const { count, error } = await client
-      .from('notifications')
-      .select('*', { count: 'exact', head: true })
-      .eq('userId', userId)
-      .eq('read', false)
+    try {
+      // Use exact count for accuracy
+      const { count, error } = await client
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('userId', userId)
+        .eq('read', false)
 
-    if (error) {
+      if (error) {
+        console.error('Error getting unread count:', error)
+        return 0
+      }
+
+      return count || 0
+    } catch (error) {
       console.error('Error getting unread count:', error)
       return 0
     }
-
-    return count || 0
   }
 
   /**
@@ -187,6 +192,13 @@ export class OptimizedNotificationService {
     const { cursor, limit, since } = options
     const client = createServiceClient()
 
+    console.log('🔔 [Service] Fetching from database:', { 
+      userId: userId.substring(0, 8) + '...', 
+      cursor: cursor?.substring(0, 20) + '...', 
+      since: since?.substring(0, 20) + '...', 
+      limit 
+    })
+
     // Build optimized query - ONLY select needed fields (not `*`) 
     let query = client
       .from('notifications')
@@ -209,9 +221,18 @@ export class OptimizedNotificationService {
     const { data: notifications, error } = await query
 
     if (error) {
-      console.error('Error fetching notifications:', error)
+      console.error('🔔 [Service] Error fetching notifications:', error)
       throw error
     }
+
+    console.log('🔔 [Service] Raw query result:', { 
+      count: notifications?.length || 0,
+      firstItem: notifications?.[0] ? {
+        id: notifications[0].id,
+        title: notifications[0].title?.substring(0, 30) + '...',
+        read: notifications[0].read
+      } : null
+    })
 
     const items = (notifications || []).slice(0, limit).map(n => ({
       id: n.id,
@@ -242,10 +263,12 @@ export class OptimizedNotificationService {
       syncedAt: new Date().toISOString()
     }
 
-    // DISABLED: Cache was causing ghost notifications
-    // if (!cursor && !since) {
-    //   await multiLayerCache.set(CacheKeys.recent(userId), result, TTL.recent)
-    // }
+    console.log('🔔 [Service] Final result:', { 
+      itemCount: result.items.length,
+      unreadCount: result.unreadCount,
+      hasMore: result.hasMore,
+      nextCursor: result.nextCursor?.substring(0, 20) + '...'
+    })
 
     return result
   }

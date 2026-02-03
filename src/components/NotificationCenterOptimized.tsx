@@ -10,7 +10,7 @@
 
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -58,6 +58,7 @@ export default function NotificationCenterOptimized() {
     hasMore,
     isLoading,
     isValidating,
+    error,
     refresh,
     loadMore,
     markAsRead,
@@ -67,6 +68,11 @@ export default function NotificationCenterOptimized() {
   } = useNotificationsOptimized({
     disableRealtime: false  // Enable realtime updates
   })
+
+  // Log any errors for debugging
+  if (error) {
+    console.error('🔔 [Component] Notifications error:', error)
+  }
 
   // Filter out invalid/empty notifications for display
   const filteredNotifications = rawNotifications.filter(n => 

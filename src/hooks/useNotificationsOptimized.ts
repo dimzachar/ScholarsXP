@@ -22,7 +22,7 @@ interface OptimizedNotification {
   message: string
   read: boolean
   createdAt: string
-  data?: Record<string, any>
+  data?: Record<string, unknown>
 }
 
 interface NotificationSyncResult {
@@ -52,16 +52,27 @@ const createFetcher = (authenticatedFetch: ReturnType<typeof useAuthenticatedFet
     }
     
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
+      const errorText = await response.text()
+      console.error('🔔 [Fetcher] Error response:', { status: response.status, text: errorText })
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
     
     const body = await response.json()
-    return body?.data
+    
+    // Handle both direct data and wrapped response formats
+    const data = body?.data || body
+    
+    if (!data) {
+      console.error('🔔 [Fetcher] No data in response:', body)
+      throw new Error('No data in response')
+    }
+    
+    return data
   }
 
 export function useNotificationsOptimized(options: UseNotificationsOptimizedOptions = {}) {
   const { disableRealtime = false, initialData } = options
-  const { authenticatedFetch } = useAuthenticatedFetch()
+  const { authenticatedFetch, isAuthenticated } = useAuthenticatedFetch()
   const fetcher = useRef(createFetcher(authenticatedFetch)).current
   
   // Track last sync timestamp for incremental sync
@@ -69,12 +80,12 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
   const channelRef = useRef<RealtimeChannel | null>(null)
   
   // SWR key - changes when we need to force refresh
-  // v2: Added filter for empty notifications
-  const [swrKey, setSwrKey] = useState('api/notifications-optimized?limit=20&v=2')
+  // v3: Fixed API endpoint path
+  const swrKey = '/api/notifications-optimized?limit=20&v=3'
   
   // Main data fetching with SWR
   const { data, error, isLoading, isValidating, mutate: revalidate } = useSWR<NotificationSyncResult>(
-    swrKey,
+    isAuthenticated ? swrKey : null, // Only fetch when authenticated
     fetcher,
     {
       fallbackData: initialData,
@@ -88,6 +99,9 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
       dedupingInterval: 5000,
       // Keep previous data while fetching
       keepPreviousData: true,
+      // Error retry configuration
+      errorRetryCount: 3,
+      errorRetryInterval: 1000,
       // SWR's built-in cache is safe (clears on delete)
       // This gives us <10ms cache hits without ghost issues
     }
@@ -98,146 +112,161 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
     if (data?.syncedAt) {
       lastSyncRef.current = data.syncedAt
     }
-  }, [data])
+  }, [data, error, isLoading, isValidating])
 
   // Realtime subscription
   useEffect(() => {
-    if (disableRealtime) return
+    if (disableRealtime || !isAuthenticated) {
+      return
+    }
     
     // Get user ID from current session
     const setupSubscription = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      const userId = session?.user?.id
-      
-      if (!userId) return
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const userId = session?.user?.id
+        
+        if (!userId) {
+          return
+        }
 
-      // Clean up existing subscription
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
+        // Clean up existing subscription
+        if (channelRef.current) {
+          supabase.removeChannel(channelRef.current)
+        }
+
+        const channel = supabase
+          .channel(`notifications-optimized-v3:${userId}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'notifications',
+              filter: `userId=eq.${userId}`,
+            },
+            (payload) => {
+              // STRICT: Skip notifications without actual content
+              const rawTitle = payload.new.title || payload.new.message?.substring(0, 50)
+              const rawMessage = payload.new.message
+              
+              if (!rawTitle?.trim() && !rawMessage?.trim()) {
+                return
+              }
+              
+              // New notification - optimistically add to cache
+              const newNotification: OptimizedNotification = {
+                id: payload.new.id,
+                type: payload.new.type,
+                title: rawTitle?.trim() || 'Notification',
+                message: rawMessage?.trim() || '',
+                read: payload.new.read ?? false,
+                createdAt: payload.new.createdAt || payload.new.created_at || new Date().toISOString(),
+                data: payload.new.data || payload.new.metadata
+              }
+
+              // Update SWR cache optimistically
+              revalidate(
+                (currentData: NotificationSyncResult | undefined) => {
+                  if (!currentData) {
+                    return {
+                      items: [newNotification],
+                      hasMore: false,
+                      unreadCount: newNotification.read ? 0 : 1,
+                      syncedAt: new Date().toISOString()
+                    }
+                  }
+                  
+                  // Skip if already exists
+                  if (currentData.items.some((i: OptimizedNotification) => i.id === newNotification.id)) {
+                    return currentData
+                  }
+                  
+                  return {
+                    ...currentData,
+                    items: [newNotification, ...currentData.items].slice(0, 20),
+                    unreadCount: currentData.unreadCount + (newNotification.read ? 0 : 1),
+                    syncedAt: new Date().toISOString()
+                  }
+                },
+                { revalidate: false }
+              )
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'notifications',
+              filter: `userId=eq.${userId}`,
+            },
+            (payload) => {
+              const readValue = payload.new.read ?? payload.new.is_read
+              
+              revalidate(
+                (currentData: NotificationSyncResult | undefined) => {
+                  if (!currentData) return currentData
+                  
+                  const updatedItems = currentData.items.map((item: OptimizedNotification) => 
+                    item.id === payload.new.id 
+                      ? { ...item, read: readValue ?? item.read }
+                      : item
+                  )
+                  
+                  const newUnreadCount = updatedItems.filter((i: OptimizedNotification) => !i.read).length
+                  
+                  return {
+                    ...currentData,
+                    items: updatedItems,
+                    unreadCount: newUnreadCount,
+                    syncedAt: new Date().toISOString()
+                  }
+                },
+                { revalidate: false }
+              )
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'DELETE',
+              schema: 'public',
+              table: 'notifications',
+              filter: `userId=eq.${userId}`,
+            },
+            (payload) => {
+              revalidate(
+                (currentData: NotificationSyncResult | undefined) => {
+                  if (!currentData) return currentData
+                  
+                  const filteredItems = currentData.items.filter(
+                    (item: OptimizedNotification) => item.id !== payload.old.id
+                  )
+                  
+                  return {
+                    ...currentData,
+                    items: filteredItems,
+                    unreadCount: filteredItems.filter((i: OptimizedNotification) => !i.read).length,
+                    syncedAt: new Date().toISOString()
+                  }
+                },
+                { revalidate: false }
+              )
+            }
+          )
+          .subscribe((status) => {
+            if (status === 'CHANNEL_ERROR') {
+              console.error('🔔 [Realtime] Channel error, will retry')
+            } else if (status === 'TIMED_OUT') {
+              console.error('🔔 [Realtime] Subscription timed out')
+            }
+          })
+
+        channelRef.current = channel
+      } catch (error) {
+        console.error('🔔 [Hook] Failed to setup realtime subscription:', error)
       }
-
-      const channel = supabase
-        .channel(`notifications-optimized:${userId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'notifications',
-            filter: `userId=eq.${userId}`,
-          },
-          (payload) => {
-            // STRICT: Skip notifications without actual content
-            const rawTitle = payload.new.title || payload.new.message?.substring(0, 50)
-            const rawMessage = payload.new.message
-            
-            if (!rawTitle?.trim() && !rawMessage?.trim()) {
-              // Skipping empty notification
-              return
-            }
-            
-            // New notification - optimistically add to cache
-            // Handle both snake_case (DB) and camelCase (API) field names
-            const newNotification: OptimizedNotification = {
-              id: payload.new.id,
-              type: payload.new.type,
-              title: rawTitle?.trim() || 'Notification',
-              message: rawMessage?.trim() || '',
-              read: payload.new.read ?? false,
-              createdAt: payload.new.createdAt || payload.new.created_at || new Date().toISOString(),
-              data: payload.new.data || payload.new.metadata
-            }
-            
-            // Notification received via realtime
-
-            // Update SWR cache optimistically
-            revalidate(
-              (currentData) => {
-                if (!currentData) return currentData
-                
-                // Skip if already exists
-                if (currentData.items.some(i => i.id === newNotification.id)) {
-                  return currentData
-                }
-                
-                return {
-                  ...currentData,
-                  items: [newNotification, ...currentData.items].slice(0, 20),
-                  unreadCount: currentData.unreadCount + (newNotification.read ? 0 : 1),
-                  syncedAt: new Date().toISOString()
-                }
-              },
-              { revalidate: false }  // Don't revalidate, we have the data
-            )
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'notifications',
-            filter: `userId=eq.${userId}`,
-          },
-          (payload) => {
-            // Notification updated - update cache
-            const readValue = payload.new.read ?? payload.new.is_read
-            
-            revalidate(
-              (currentData) => {
-                if (!currentData) return currentData
-                
-                const updatedItems = currentData.items.map(item => 
-                  item.id === payload.new.id 
-                    ? { ...item, read: readValue ?? item.read }
-                    : item
-                )
-                
-                const newUnreadCount = updatedItems.filter(i => !i.read).length
-                
-                return {
-                  ...currentData,
-                  items: updatedItems,
-                  unreadCount: newUnreadCount,
-                  syncedAt: new Date().toISOString()
-                }
-              },
-              { revalidate: false }
-            )
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'DELETE',
-            schema: 'public',
-            table: 'notifications',
-            filter: `userId=eq.${userId}`,
-          },
-          (payload) => {
-            // Notification deleted - remove from cache
-            revalidate(
-              (currentData) => {
-                if (!currentData) return currentData
-                
-                const filteredItems = currentData.items.filter(
-                  item => item.id !== payload.old.id
-                )
-                
-                return {
-                  ...currentData,
-                  items: filteredItems,
-                  unreadCount: filteredItems.filter(i => !i.read).length,
-                  syncedAt: new Date().toISOString()
-                }
-              },
-              { revalidate: false }
-            )
-          }
-        )
-        .subscribe()
-
-      channelRef.current = channel
     }
 
     setupSubscription()
@@ -248,13 +277,13 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
         channelRef.current = null
       }
     }
-  }, [disableRealtime, revalidate])
+  }, [disableRealtime, isAuthenticated, revalidate])
 
   // Load more (pagination)
   const loadMore = useCallback(async () => {
     if (!data?.hasMore || !data.nextCursor) return
     
-    const nextKey = `api/notifications-optimized?limit=20&cursor=${encodeURIComponent(data.nextCursor)}&v=2`
+    const nextKey = `/api/notifications-optimized?limit=20&cursor=${encodeURIComponent(data.nextCursor)}&v=3`
     
     const result = await fetcher(nextKey)
     
@@ -281,7 +310,7 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
     }
     
     // Incremental sync - only fetch since last sync
-    const incrementalKey = `api/notifications-optimized?limit=50&since=${encodeURIComponent(lastSyncRef.current)}&v=2`
+    const incrementalKey = `/api/notifications-optimized?limit=50&since=${encodeURIComponent(lastSyncRef.current)}&v=3`
     
     try {
       const result = await fetcher(incrementalKey)
@@ -316,31 +345,38 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
 
   // Mark as read (optimistic)
   const markAsRead = useCallback(async (notificationId: string) => {
+    if (!data) return
+    
     // Store current data for potential rollback
     const previousData = data
     
     // Optimistic update - update cache immediately
-    const optimisticData = data ? {
+    const optimisticData = {
       ...data,
       items: data.items.map(item =>
         item.id === notificationId ? { ...item, read: true } : item
       ),
       unreadCount: Math.max(0, data.unreadCount - 1)
-    } : data
+    }
     
     // Update SWR cache immediately (no revalidation)
     revalidate(optimisticData, { revalidate: false })
     
     // Background API call
     try {
-      await authenticatedFetch(`/api/notifications-optimized/${notificationId}`, {
+      const response = await authenticatedFetch(`/api/notifications-optimized/${notificationId}`, {
         method: 'PATCH'
       })
-    } catch (error) {
-      // Revert on error
-      if (previousData) {
+      
+      if (!response.ok) {
+        console.error('🔔 [Hook] Mark as read failed, reverting:', response.status)
+        // Revert on error
         revalidate(previousData, { revalidate: false })
       }
+    } catch (error) {
+      console.error('🔔 [Hook] Mark as read error, reverting:', error)
+      // Revert on error
+      revalidate(previousData, { revalidate: false })
     }
   }, [authenticatedFetch, revalidate, data])
 
@@ -374,54 +410,67 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
 
   // Delete notification (optimistic)
   const deleteNotification = useCallback(async (notificationId: string) => {
+    if (!data) return
+    
     // Store current data for potential rollback
     const previousData = data
     
     // Optimistic update - update cache immediately
-    const filteredItems = data ? data.items.filter(i => i.id !== notificationId) : []
-    const optimisticData = data ? {
+    const filteredItems = data.items.filter(i => i.id !== notificationId)
+    const optimisticData = {
       ...data,
       items: filteredItems,
       unreadCount: filteredItems.filter(i => !i.read).length
-    } : data
+    }
     
     // Update SWR cache immediately (no revalidation)
     revalidate(optimisticData, { revalidate: false })
     
     // Background API call
     try {
-      await authenticatedFetch(`/api/notifications-optimized/${notificationId}`, {
+      const response = await authenticatedFetch(`/api/notifications-optimized/${notificationId}`, {
         method: 'DELETE'
       })
-    } catch (error) {
-      // Revert on error
-      if (previousData) {
+      
+      if (!response.ok) {
+        console.error('🔔 [Hook] Delete failed, reverting:', response.status)
+        // Revert on error
         revalidate(previousData, { revalidate: false })
       }
+    } catch (error) {
+      console.error('🔔 [Hook] Delete error, reverting:', error)
+      // Revert on error
+      revalidate(previousData, { revalidate: false })
     }
   }, [authenticatedFetch, revalidate, data])
 
   // Delete all notifications (optimistic)
   const deleteAll = useCallback(async () => {
+    if (!data) return
+    
     const previousData = data
     
-    const optimisticData = data ? {
+    const optimisticData = {
       ...data,
       items: [],
       unreadCount: 0,
       hasMore: false
-    } : data
+    }
     
     revalidate(optimisticData, { revalidate: false })
     
     try {
-      await authenticatedFetch('/api/notifications-optimized/delete-all', {
+      const response = await authenticatedFetch('/api/notifications-optimized/delete-all', {
         method: 'POST'
       })
-    } catch (error) {
-      if (previousData) {
+      
+      if (!response.ok) {
+        console.error('🔔 [Hook] Delete all failed, reverting:', response.status)
         revalidate(previousData, { revalidate: false })
       }
+    } catch (error) {
+      console.error('🔔 [Hook] Delete all error, reverting:', error)
+      revalidate(previousData, { revalidate: false })
     }
   }, [authenticatedFetch, revalidate, data])
 
@@ -447,14 +496,21 @@ export function useNotificationsOptimized(options: UseNotificationsOptimizedOpti
  * Uses separate SWR key for badge/indicator
  */
 export function useUnreadCount() {
-  const { authenticatedFetch } = useAuthenticatedFetch()
+  const { authenticatedFetch, isAuthenticated } = useAuthenticatedFetch()
   
   const { data, error } = useSWR(
-    'api/notifications-optimized?action=count&v=2',
+    isAuthenticated ? '/api/notifications-optimized?action=count&v=3' : null, // Only fetch when authenticated
     async (url) => {
       const response = await authenticatedFetch(url)
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
       const body = await response.json()
-      return body?.data?.unreadCount as number
+      const data = body?.data || body
+      
+      return data?.unreadCount as number
     },
     {
       // Revalidate every 30 seconds for badge
