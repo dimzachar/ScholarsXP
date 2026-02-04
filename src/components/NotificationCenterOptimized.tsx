@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { useNotificationsOptimized, useUnreadCount } from '@/hooks/useNotificationsOptimized'
+import { useNotificationsOptimized } from '@/hooks/useNotificationsOptimized'
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout'
 import {
   Bell,
@@ -47,10 +47,7 @@ export default function NotificationCenterOptimized() {
     }
   }, [isOpen])
 
-  // Use lightweight hook for badge (only unread count)
-  const { unreadCount: badgeCount } = useUnreadCount()
-  
-  // Use full hook only when panel is open
+  // Use full hook (always active for realtime updates)
   const {
     notifications,
     rawNotifications,
@@ -68,6 +65,10 @@ export default function NotificationCenterOptimized() {
   } = useNotificationsOptimized({
     disableRealtime: false  // Enable realtime updates
   })
+  
+  // Use the SAME unreadCount from useNotificationsOptimized for the badge
+  // This ensures badge and list are ALWAYS in sync (same data source)
+  const badgeCount = unreadCount
 
   // Log any errors for debugging
   if (error) {

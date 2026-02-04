@@ -82,19 +82,11 @@ export const GET = withPermission('authenticated')(
 
         const response = createSuccessResponse(result)
         
-        // Set cache headers based on data freshness
-        const isFirstPage = !cursor && !since
-        const cacheHeaders = getNotificationCacheHeaders({
-          isPrivate: true,
-          maxAge: isFirstPage ? 30 : 0,  // Cache first page only
-          staleWhileRevalidate: 60
-        })
-        
-        Object.entries(cacheHeaders).forEach(([key, value]) => {
-          response.headers.set(key, value)
-        })
-        
-        response.headers.set('ETag', etag)
+        // DISABLE caching to prevent stale data issues
+        // Always return fresh data
+        response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+        response.headers.set('Pragma', 'no-cache')
+        response.headers.set('Expires', '0')
         
         return response
       }
