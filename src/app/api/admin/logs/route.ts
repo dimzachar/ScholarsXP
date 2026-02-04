@@ -47,21 +47,37 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
           : {}),
       }
 
-      queries.push(
-        prisma.adminAction
-          .findMany({
-            where,
-            include: { admin: { select: { id: true, username: true, role: true } } },
-            orderBy: { createdAt: 'desc' },
-            take: limit * 3, // over-fetch for merging + pagination
+      // Fetch admin actions with admin details
+      const adminActions = await prisma.adminAction.findMany({
+        where,
+        include: { admin: { select: { id: true, username: true, role: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: limit * 3,
+      })
+      
+      // For user targets, fetch user details
+      const userTargetIds = adminActions
+        .filter(a => a.targetType === 'user')
+        .map(a => a.targetId)
+      
+      const targetUsers = userTargetIds.length > 0 
+        ? await prisma.user.findMany({
+            where: { id: { in: [...new Set(userTargetIds)] } },
+            select: { id: true, username: true }
           })
-          .then((rows) =>
-            rows.map<NormalizedLogRow>((row) => {
-              const det: any = (row as any).details || {}
-              const actionLabel = row.action === 'SYSTEM_CONFIG' && det?.subAction
-                ? `SYSTEM_CONFIG:${det.subAction}`
-                : row.action
-              let summary = `${actionLabel} on ${row.targetType} ${row.targetId}`
+        : []
+      
+      const userMap = new Map(targetUsers.map(u => [u.id, u]))
+
+      queries.push(
+        Promise.resolve(
+          adminActions.map<NormalizedLogRow>((row) => {
+            const det: any = (row as any).details || {}
+            const targetUser = row.targetType === 'user' ? userMap.get(row.targetId) : null
+            const actionLabel = row.action === 'SYSTEM_CONFIG' && det?.subAction
+              ? `SYSTEM_CONFIG:${det.subAction}`
+              : row.action
+            let summary = `${actionLabel} on ${row.targetType} ${row.targetId}`
               
               // Handle different review action types with specific summaries
               if (row.action === 'SYSTEM_CONFIG') {
@@ -129,6 +145,14 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
                 summary = `Deadline reassignment: ${det.reason}`
               } else if (row.action === 'CONTENT_FLAG' && det?.subAction) {
                 summary = `Flag ${det.subAction}`
+              } else if (row.action === 'RANK_PROMOTION') {
+                // Rank promotion - show user and old -> new rank
+                const targetName = targetUser?.username || row.targetId.slice(0, 8)
+                if (det?.oldRank && det?.newRank) {
+                  summary = `${targetName}: ${det.oldRank} → ${det.newRank}`
+                } else {
+                  summary = `${targetName} rank promoted`
+                }
               }
               
               return {
@@ -136,7 +160,11 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
                 eventType: 'admin_action',
                 action: actionLabel as any,
                 actor: { id: row.adminId, name: (row as any).admin?.username, role: (row as any).admin?.role || 'ADMIN' },
-                target: { type: row.targetType, id: row.targetId },
+                target: { 
+                  type: row.targetType, 
+                  id: row.targetId,
+                  label: targetUser?.username
+                },
                 details: row.details || undefined,
                 createdAt: row.createdAt.toISOString(),
                 summary,

@@ -21,7 +21,9 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
-  Trash2
+  Trash2,
+  BarChart3,
+  Trophy
 } from 'lucide-react'
 
 interface Notification {
@@ -346,6 +348,7 @@ export default function NotificationCenter() {
         return <Users className="h-4 w-4 text-secondary-foreground" />
       case 'REVIEW_COMPLETED':
       case 'SUBMISSION_APPROVED':
+      case 'SUBMISSION_FINALIZED':
         return <CheckCircle className="h-4 w-4 text-primary" />
       case 'SUBMISSION_PROCESSING':
       case 'SUBMISSION_PROCESSED':
@@ -355,6 +358,10 @@ export default function NotificationCenter() {
         return <AlertCircle className="h-4 w-4 text-destructive" />
       case 'STREAK_ACHIEVED':
         return <Zap className="h-4 w-4 text-secondary-foreground" />
+      case 'WEEKLY_SUMMARY':
+        return <BarChart3 className="h-4 w-4 text-secondary-foreground" />
+      case 'RANK_PROMOTED':
+        return <Trophy className="h-4 w-4 text-yellow-500" />
       case 'ADMIN_MESSAGE':
         return <Bell className="h-4 w-4 text-secondary-foreground" />
       default:

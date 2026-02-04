@@ -1,5 +1,6 @@
 import { supabaseClient } from '@/lib/supabase'
 import { createServiceClient } from '@/lib/supabase-server'
+import { prisma } from '@/lib/prisma'
 
 export interface Notification {
   id: string
@@ -20,10 +21,12 @@ export enum NotificationType {
   SUBMISSION_PROCESSING = 'SUBMISSION_PROCESSING',
   SUBMISSION_APPROVED = 'SUBMISSION_APPROVED',
   SUBMISSION_REJECTED = 'SUBMISSION_REJECTED',
+  SUBMISSION_FINALIZED = 'SUBMISSION_FINALIZED',
   WEEKLY_SUMMARY = 'WEEKLY_SUMMARY',
   STREAK_ACHIEVED = 'STREAK_ACHIEVED',
   PENALTY_APPLIED = 'PENALTY_APPLIED',
-  ADMIN_MESSAGE = 'ADMIN_MESSAGE'
+  ADMIN_MESSAGE = 'ADMIN_MESSAGE',
+  RANK_PROMOTED = 'RANK_PROMOTED'
 }
 
 export async function createNotification(
@@ -311,6 +314,21 @@ export async function notifySubmissionProcessed(userId: string, submissionId: st
   )
 }
 
+export async function notifySubmissionFinalized(
+  userId: string,
+  submissionId: string,
+  finalXp: number,
+  submissionUrl?: string
+) {
+  await createNotification(
+    userId,
+    NotificationType.SUBMISSION_FINALIZED,
+    '🎉 Submission Finalized!',
+    `Congratulations! Your submission has been finalized and you've earned ${finalXp} XP!`,
+    { submissionId, finalXp, submissionUrl, status: 'FINALIZED' }
+  )
+}
+
 export async function notifyWeeklySummary(userId: string, weeklyXp: number, totalXp: number, rank?: number) {
   await createNotification(
     userId,
@@ -351,6 +369,112 @@ export async function notifyAdminMessage(userId: string, title: string, message:
     message,
     { isAdmin: true }
   )
+}
+
+export async function notifyRankPromoted(
+  userId: string,
+  oldRank: { displayName: string; tier: string | null; category: string },
+  newRank: { displayName: string; tier: string | null; category: string }
+) {
+  const tierEmojis: Record<string, string> = {
+    'Bronze': '🥉',
+    'Silver': '🥈',
+    'Gold': '🥇',
+    'Platinum': '💠',
+    'Diamond': '💎'
+  }
+
+  const categoryEmojis: Record<string, string> = {
+    'Initiate': '🌱',
+    'Apprentice': '🔥',
+    'Journeyman': '🧭',
+    'Erudite': '📚',
+    'Master': '👑'
+  }
+
+  const categoryChanged = oldRank.category !== newRank.category
+  const tierChanged = oldRank.tier !== newRank.tier
+  
+  // Determine emoji: tier emoji if available, otherwise category emoji
+  const emoji = newRank.tier 
+    ? (tierEmojis[newRank.tier] || '🏆')
+    : (categoryEmojis[newRank.category] || '🏆')
+
+  let title: string
+  let message: string
+
+  if (categoryChanged) {
+    // Discord role promotion (major milestone)
+    title = `${emoji} New Role: ${newRank.displayName}!`
+    message = `Congratulations! You've advanced from ${oldRank.displayName} to ${newRank.displayName}! You've unlocked a new Discord role!`
+  } else if (tierChanged && newRank.tier) {
+    // Tier promotion within same category
+    title = `${emoji} Tier Up: ${newRank.displayName}!`
+    message = `Congratulations! You've advanced from ${oldRank.displayName} to ${newRank.displayName}. Keep climbing!`
+  } else {
+    // Generic promotion
+    title = `${emoji} Rank Up: ${newRank.displayName}!`
+    message = `Congratulations! You've advanced from ${oldRank.displayName} to ${newRank.displayName}!`
+  }
+
+  await createNotification(
+    userId,
+    NotificationType.RANK_PROMOTED,
+    title,
+    message,
+    {
+      oldRank,
+      newRank,
+      categoryChanged,
+      tierChanged,
+      color: newRank.tier ? tierEmojis[newRank.tier] : categoryEmojis[newRank.category]
+    }
+  )
+
+  // Also log to admin actions for audit trail (system-triggered)
+  const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000001'
+  
+  // Determine if this is the first promotion (from no rank to Initiate)
+  const isFirstPromotion = !oldRank || oldRank.category === 'None' || oldRank.displayName === 'No Rank'
+  
+  try {
+    // Ensure system user exists (idempotent - safe to call multiple times)
+    await prisma.user.upsert({
+      where: { id: SYSTEM_USER_ID },
+      update: {}, // No updates needed if exists
+      create: {
+        id: SYSTEM_USER_ID,
+        username: 'system',
+        email: 'system@scholarsxp.internal',
+        role: 'ADMIN',
+        totalXp: 0,
+        currentWeekXp: 0
+      }
+    })
+    
+    await prisma.adminAction.create({
+      data: {
+        adminId: SYSTEM_USER_ID,
+        action: 'RANK_PROMOTION',
+        targetType: 'user',
+        targetId: userId,
+        details: {
+          oldRank: oldRank?.displayName || 'No Rank',
+          newRank: newRank.displayName,
+          oldCategory: oldRank?.category || 'None',
+          newCategory: newRank.category,
+          oldTier: oldRank?.tier || null,
+          newTier: newRank.tier,
+          categoryChanged: isFirstPromotion || categoryChanged, // First promotion is always a category change
+          tierChanged: tierChanged && !isFirstPromotion, // First promotion has no tier change
+          isFirstPromotion
+        }
+      }
+    })
+    console.log(`[RankPromotion] Logged admin action for user ${userId}: ${oldRank?.displayName || 'No Rank'} → ${newRank.displayName}`)
+  } catch (err) {
+    console.warn('[RankPromotion] Failed to log admin action:', err)
+  }
 }
 
 // Cleanup function for old notifications (90 days for read notifications as per requirements)

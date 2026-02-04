@@ -30,7 +30,9 @@ import {
   Clock,
   Trash2,
   RefreshCw,
-  Loader2
+  Loader2,
+  BarChart3,
+  Trophy
 } from 'lucide-react'
 
 export default function NotificationCenterOptimized() {
@@ -87,12 +89,15 @@ export default function NotificationCenterOptimized() {
       case 'XP_AWARDED': return <Zap className="h-4 w-4 text-primary" />
       case 'REVIEW_ASSIGNED': return <Users className="h-4 w-4 text-secondary-foreground" />
       case 'REVIEW_COMPLETED':
-      case 'SUBMISSION_APPROVED': return <CheckCircle className="h-4 w-4 text-primary" />
+      case 'SUBMISSION_APPROVED':
+      case 'SUBMISSION_FINALIZED': return <CheckCircle className="h-4 w-4 text-primary" />
       case 'SUBMISSION_PROCESSING':
       case 'SUBMISSION_PROCESSED': return <Clock className="h-4 w-4 text-muted-foreground" />
       case 'SUBMISSION_REJECTED':
       case 'PENALTY_APPLIED': return <AlertCircle className="h-4 w-4 text-destructive" />
       case 'STREAK_ACHIEVED': return <Zap className="h-4 w-4 text-secondary-foreground" />
+      case 'WEEKLY_SUMMARY': return <BarChart3 className="h-4 w-4 text-secondary-foreground" />
+      case 'RANK_PROMOTED': return <Trophy className="h-4 w-4 text-yellow-500" />
       case 'ADMIN_MESSAGE': return <Bell className="h-4 w-4 text-secondary-foreground" />
       default: return <Bell className="h-4 w-4 text-muted-foreground" />
     }

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { getWeekNumber } from '@/lib/utils'
+import { notifyWeeklySummary } from '@/lib/notifications'
 
 export interface WeeklyProcessingResult {
   usersProcessed: number
@@ -203,6 +204,17 @@ export async function processWeeklyReset(): Promise<WeeklyProcessingResult> {
             }
           })
         })
+
+        // Send weekly summary notification (fire and forget)
+        const userWithTotal = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: { totalXp: true }
+        })
+        if (userWithTotal) {
+          notifyWeeklySummary(user.id, weeklyStats.xpTotal, userWithTotal.totalXp).catch(err => {
+            console.warn(`Failed to send weekly summary to user ${user.id}:`, err)
+          })
+        }
 
         usersProcessed++
 

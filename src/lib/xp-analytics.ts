@@ -3,6 +3,8 @@ import { ENABLE_ACHIEVEMENTS } from '@/config/feature-flags'
 import { mapTransactionTypeToBucket } from './xp-ledger'
 import { applyTransactionToBreakdown, createEmptyBreakdown } from './xp-ledger'
 import { getWeekNumber } from '@/lib/utils'
+import { getGamifiedRank } from '@/lib/gamified-ranks'
+import { notifyRankPromoted } from '@/lib/notifications'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -428,13 +430,17 @@ export class XpAnalyticsService {
         return
       }
 
+      // Get current rank before XP change (for promotion detection)
+      const oldRank = getGamifiedRank(user.totalXp || 0)
+
       // Update totalXp and currentWeekXp
       // Note: This function always uses current week, so currentWeekXp update is correct
       // For backdated transactions (like monthly bonuses), use SQL functions instead
+      const newTotalXp = (user.totalXp || 0) + amount
       const { error: updateError } = await supabase
         .from('User')
         .update({
-          totalXp: (user.totalXp || 0) + amount,
+          totalXp: newTotalXp,
           currentWeekXp: (user.currentWeekXp || 0) + amount,
           updatedAt: new Date().toISOString()
         })
@@ -443,6 +449,20 @@ export class XpAnalyticsService {
       if (updateError) {
         console.warn('Failed to update user XP totals:', updateError)
         // Don't throw - transaction was recorded, totals can be reconciled later
+      }
+
+      // Check for rank promotion (fire and forget - don't block transaction)
+      const newRank = getGamifiedRank(newTotalXp)
+      if (newRank && newRank.displayName !== oldRank?.displayName && amount > 0) {
+        // Handle first promotion (no old rank) by passing a "no rank" placeholder
+        const oldRankData = oldRank || {
+          displayName: 'No Rank',
+          category: 'None',
+          tier: null
+        } as any
+        notifyRankPromoted(userId, oldRankData, newRank).catch(err => {
+          console.warn('Failed to send rank promotion notification:', err)
+        })
       }
     } catch (error) {
       console.error('Error in recordXpTransaction:', error)

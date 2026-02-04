@@ -17,7 +17,9 @@
     "test:race-conditions": "jest __tests__/race-condition-fix.test.ts",
     "monitor-xp": "tsx scripts/monitor-xp-consistency.ts",
     "test:analytics-optimization": "tsx scripts/test-analytics-optimization.ts",
-    "test:analytics-api": "tsx scripts/test-analytics-api.ts"
+    "test:analytics-api": "tsx scripts/test-analytics-api.ts",
+    "backfill:ranks": "tsx scripts/backfill-rank-promotions.ts",
+    "backfill:ranks:detailed": "tsx scripts/backfill-rank-promotions-detailed.ts"
   },
   "dependencies": {
     "@aptos-labs/ts-sdk": "^5.1.5",

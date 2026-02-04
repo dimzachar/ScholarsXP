@@ -2,6 +2,8 @@ import { prisma } from '@/lib/prisma'
 import { supabaseClient } from '@/lib/supabase'
 import { getWeekNumber } from '@/lib/utils'
 import { QueryCache } from '@/lib/cache/query-cache'
+import { getGamifiedRank } from '@/lib/gamified-ranks'
+import { notifyRankPromoted } from '@/lib/notifications'
 
 /**
  * XP Propagation Service
@@ -59,6 +61,9 @@ export async function propagateXpChanges(
     // Track applied diffs to communicate accurate changes
     let appliedTotalChange = xpDifference
     let affectedWeekNumber = submissionWeekNumber
+
+    // Get current rank before XP change (for promotion detection)
+    const oldRank = getGamifiedRank(submission.user.totalXp)
 
     // Execute all updates in a transaction
     await prisma.$transaction(async (tx) => {
@@ -198,6 +203,15 @@ export async function propagateXpChanges(
       // Send real-time notification
       await notifyXpChange(submission.userId, appliedTotalChange, reason)
       result.updatedEntities.notifications = true
+
+      // Check for rank promotion
+      const newTotalXp = Math.max(0, submission.user.totalXp + appliedTotalChange)
+      const newRank = getGamifiedRank(newTotalXp)
+      
+      if (newRank && oldRank && newRank.displayName !== oldRank.displayName) {
+        await notifyRankPromoted(submission.userId, oldRank, newRank)
+        console.log(`🏆 Rank promotion for ${submission.userId}: ${oldRank.displayName} → ${newRank.displayName}`)
+      }
     } catch (postError) {
       console.warn('Non-critical post-transaction updates failed:', postError)
       result.errors?.push(`Post-transaction updates: ${postError}`)

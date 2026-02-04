@@ -8,6 +8,7 @@ import { generateReviewSummary } from '@/lib/ai-summary'
 import { reliabilityService } from './reliability/reliability-service'
 import { RELIABILITY_CONFIG } from '@/config/reliability'
 import { getFormula, calculateScore } from './reliability/formulas'
+import { notifySubmissionFinalized } from '@/lib/notifications'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -541,6 +542,11 @@ export class ConsensusCalculatorService {
         const cacheInvalidation = new CacheInvalidation(multiLayerCache)
         await cacheInvalidation.invalidateOnUserAction('xp_awarded', submission.userId)
         console.log(`🗑️ Cache invalidated for user ${submission.userId} after XP award`)
+
+        // Send submission finalized notification (fire and forget)
+        notifySubmissionFinalized(submission.userId, submissionId, result.finalXp, submission.url).catch(err => {
+          console.warn('Failed to send submission finalized notification:', err)
+        })
 
       } catch (error) {
         const duration = Date.now() - startTime

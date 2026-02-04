@@ -79,6 +79,19 @@ export default function AdminLogsPage() {
   const initialSortDirParam = sp.get('sortDir')
   const initialSortDir: 'asc' | 'desc' = initialSortDirParam === 'asc' ? 'asc' : 'desc'
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(initialSortDir)
+  
+  // Action type filter (for admin_action events)
+  const [actionType, setActionType] = useState<string>(sp.get('actionType') || 'all')
+  
+  // Handle action type change - when selecting a specific action, only show admin_action events
+  const onActionTypeChange = (value: string) => {
+    setActionType(value)
+    setPage(1)
+    // If selecting a specific action type, filter to show ONLY admin_action events
+    if (value !== 'all') {
+      setSelectedTypes(['admin_action'])
+    }
+  }
 
   const dateRange = useMemo(() => {
     if (timeframe === 'all') return { dateFrom: undefined, dateTo: undefined }
@@ -100,6 +113,7 @@ export default function AdminLogsPage() {
       params.set('sortDir', sortDir)
       if (q) params.set('q', q)
       if (selectedTypes.length > 0) params.set('eventTypes', selectedTypes.join(','))
+      if (actionType && actionType !== 'all') params.set('actionTypes', actionType)
       if (dateRange.dateFrom) params.set('dateFrom', dateRange.dateFrom)
       if (dateRange.dateTo) params.set('dateTo', dateRange.dateTo)
 
@@ -116,7 +130,7 @@ export default function AdminLogsPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, limit, sortBy, sortDir, q, selectedTypes, dateRange, authenticatedFetch])
+  }, [page, limit, sortBy, sortDir, q, selectedTypes, actionType, dateRange, authenticatedFetch])
 
   useEffect(() => {
     fetchLogs()
@@ -126,12 +140,13 @@ export default function AdminLogsPage() {
     params.set('timeframe', timeframe)
     if (q) params.set('q', q)
     if (selectedTypes.length > 0) params.set('eventTypes', selectedTypes.join(','))
+    if (actionType && actionType !== 'all') params.set('actionType', actionType)
     params.set('sortBy', sortBy)
     params.set('sortDir', sortDir)
     const qs = params.toString()
     router.replace(`/admin/logs?${qs}`)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, timeframe, q, selectedTypes.join(','), sortBy, sortDir])
+    // eslint-disable-next-line react-hooks-exhaustive-deps
+  }, [page, timeframe, q, selectedTypes.join(','), actionType, sortBy, sortDir])
 
   const toggleType = (t: EventType) => {
     setPage(1)
@@ -195,6 +210,25 @@ export default function AdminLogsPage() {
                   <SelectItem value="7d">Last 7 days</SelectItem>
                   <SelectItem value="30d">Last 30 days</SelectItem>
                   <SelectItem value="all">All time</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              {/* Action Type Filter */}
+              <Select value={actionType} onValueChange={onActionTypeChange}>
+                <SelectTrigger className="w-[180px]">
+                  <Filter className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Filter by action" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Actions</SelectItem>
+                  <SelectItem value="RANK_PROMOTION">🏆 Rank Promotion</SelectItem>
+                  <SelectItem value="XP_OVERRIDE">⚡ XP Override</SelectItem>
+                  <SelectItem value="USER_ROLE_CHANGE">👤 Role Change</SelectItem>
+                  <SelectItem value="REVIEW_REASSIGN">🔄 Review Reassign</SelectItem>
+                  <SelectItem value="REVIEW_AUTO_ASSIGN">🤖 Auto Assign</SelectItem>
+                  <SelectItem value="REVIEW_MANUAL_RESHUFFLE">🔀 Manual Reshuffle</SelectItem>
+                  <SelectItem value="REVIEW_BULK_RESHUFFLE">📦 Bulk Reshuffle</SelectItem>
+                  <SelectItem value="SYSTEM_CONFIG">⚙️ System Config</SelectItem>
                 </SelectContent>
               </Select>
             </div>
