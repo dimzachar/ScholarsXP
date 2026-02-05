@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { REVIEWER_ROLES } from './roles'
+import { REVIEWER_ROLES, isAdmin } from './roles'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
