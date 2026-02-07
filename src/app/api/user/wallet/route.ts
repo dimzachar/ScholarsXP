@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
+import { withAPIOptimization } from '@/middleware/api-optimization'
 
 // Validate Movement/Aptos wallet address format (0x + 64 hex chars)
 function isValidWalletAddress(address: string): boolean {
@@ -20,7 +21,8 @@ interface UserWalletRow {
 }
 
 // GET: Retrieve user's linked wallets
-export const GET = withPermission('authenticated')(async (request: AuthenticatedRequest) => {
+export const GET = withAPIOptimization(
+  withPermission('authenticated')(async (request: AuthenticatedRequest) => {
   try {
     const userId = request.user.id
 
@@ -46,10 +48,13 @@ export const GET = withPermission('authenticated')(async (request: Authenticated
     console.error('Failed to get wallets:', error)
     return NextResponse.json({ error: 'Failed to get wallets' }, { status: 500 })
   }
-})
+  }),
+  { rateLimitType: 'api', rateLimit: true, caching: false, compression: true, performanceMonitoring: true }
+)
 
 // POST: Link a new wallet
-export const POST = withPermission('authenticated')(async (request: AuthenticatedRequest) => {
+export const POST = withAPIOptimization(
+  withPermission('authenticated')(async (request: AuthenticatedRequest) => {
   try {
     const userId = request.user.id
     const body = await request.json()
@@ -130,10 +135,13 @@ export const POST = withPermission('authenticated')(async (request: Authenticate
     console.error('Failed to link wallet:', error)
     return NextResponse.json({ error: 'Failed to link wallet' }, { status: 500 })
   }
-})
+  }),
+  { rateLimitType: 'strict', rateLimit: true, caching: false, compression: true, performanceMonitoring: true }
+)
 
 // DELETE: Unlink a wallet
-export const DELETE = withPermission('authenticated')(async (request: AuthenticatedRequest) => {
+export const DELETE = withAPIOptimization(
+  withPermission('authenticated')(async (request: AuthenticatedRequest) => {
   try {
     const userId = request.user.id
     const { searchParams } = new URL(request.url)
@@ -186,10 +194,13 @@ export const DELETE = withPermission('authenticated')(async (request: Authentica
     console.error('Failed to unlink wallet:', error)
     return NextResponse.json({ error: 'Failed to unlink wallet' }, { status: 500 })
   }
-})
+  }),
+  { rateLimitType: 'strict', rateLimit: true, caching: false, compression: true, performanceMonitoring: true }
+)
 
 // PATCH: Update wallet (set primary, update label)
-export const PATCH = withPermission('authenticated')(async (request: AuthenticatedRequest) => {
+export const PATCH = withAPIOptimization(
+  withPermission('authenticated')(async (request: AuthenticatedRequest) => {
   try {
     const userId = request.user.id
     const body = await request.json()
@@ -241,4 +252,6 @@ export const PATCH = withPermission('authenticated')(async (request: Authenticat
     console.error('Failed to update wallet:', error)
     return NextResponse.json({ error: 'Failed to update wallet' }, { status: 500 })
   }
-})
+  }),
+  { rateLimitType: 'api', rateLimit: true, caching: false, compression: true, performanceMonitoring: true }
+)
