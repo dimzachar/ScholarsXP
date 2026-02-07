@@ -1,6 +1,7 @@
 import { supabaseClient } from '@/lib/supabase'
 import { createServiceClient } from '@/lib/supabase-server'
 import { prisma } from '@/lib/prisma'
+import { notifyDiscordPromotion } from './discord-notifier'
 
 export interface Notification {
   id: string
@@ -474,6 +475,26 @@ export async function notifyRankPromoted(
     console.log(`[RankPromotion] Logged admin action for user ${userId}: ${oldRank?.displayName || 'No Rank'} → ${newRank.displayName}`)
   } catch (err) {
     console.warn('[RankPromotion] Failed to log admin action:', err)
+  }
+
+  // Send Discord notification for major role promotions only (fire and forget)
+  if (categoryChanged) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { username: true }
+    })
+    
+    if (user?.username) {
+      // Fire and forget - don't await to avoid blocking
+      notifyDiscordPromotion({
+        username: user.username,
+        oldCategory: oldRank?.category || 'None',
+        newCategory: newRank.category,
+        date: new Date()
+      }).catch(err => {
+        console.warn('[Discord] Failed to send promotion notification:', err)
+      })
+    }
   }
 }
 
