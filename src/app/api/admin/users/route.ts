@@ -1,15 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
-import { CacheKeys, CacheTTL } from '@/lib/cache'
-import { withEnhancedCache, EnhancedCacheKeys, EnhancedCacheTTL } from '@/lib/cache/enhanced-utils'
+import { withEnhancedCache, EnhancedCacheKeys } from '@/lib/cache/enhanced-utils'
 import { withAdminOptimization } from '@/middleware/api-optimization'
-import { createClient } from '@supabase/supabase-js'
 import { getWeekNumber } from '@/lib/utils'
 import { reliabilityService } from '@/lib/reliability/reliability-service'
 import { getFormula } from '@/lib/reliability/formulas'
 import { RELIABILITY_CONFIG } from '@/config/reliability'
 import { ALL_ROLES } from '@/lib/roles'
+import { getDiscordRoles, RANK_THRESHOLDS } from '@/lib/gamified-ranks'
 
 export const GET = withAdminOptimization(withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
@@ -134,17 +133,22 @@ async function fetchUserMetricsData(
     if (xpMax !== undefined) where.totalXp.lte = xpMax
   }
 
-  // Discord role filter (based on XP thresholds)
+  // Discord role filter (based on XP thresholds from canonical gamified-ranks)
   if (discordRole) {
-    const xpRanges: Record<string, { gte?: number; lte?: number; equals?: number }> = {
-      none: { equals: 0 },
-      initiate: { gte: 1, lte: 999 },
-      apprentice: { gte: 1000, lte: 17499 },
-      journeyman: { gte: 17500, lte: 48999 },
-      erudite: { gte: 49000, lte: 94499 },
-      master: { gte: 94500 }
+    const discordRoles = getDiscordRoles()
+    const roleMap: Record<string, { gte?: number; lte?: number; equals?: number }> = {
+      none: { equals: 0 }
     }
-    const range = xpRanges[discordRole]
+    
+    // Build map from canonical Discord roles
+    discordRoles.forEach(role => {
+      roleMap[role.category.toLowerCase()] = {
+        gte: role.minXp,
+        ...(role.maxXp !== Infinity ? { lte: role.maxXp } : {})
+      }
+    })
+    
+    const range = roleMap[discordRole]
     if (range) {
       where.totalXp = { ...where.totalXp, ...range }
     }
@@ -531,6 +535,43 @@ async function fetchUserMetricsData(
     return acc
   }, {} as Record<string, number>)
 
+  // Calculate Discord role counts based on XP thresholds
+  const discordRoleCounts = {
+    initiate: 0,
+    apprentice: 0,
+    journeyman: 0,
+    erudite: 0,
+    master: 0
+  }
+
+  // Count users in each Discord role tier (using canonical definitions)
+  // We need to count by full category range (base + all tiers), not just base Discord roles
+  const categoryRanges: Record<string, { min: number; max: number }> = {}
+  
+  // Build full category ranges from all ranks
+  RANK_THRESHOLDS.forEach(rank => {
+    const key = rank.category.toLowerCase()
+    if (!categoryRanges[key]) {
+      categoryRanges[key] = { min: rank.minXp, max: rank.maxXp }
+    } else {
+      categoryRanges[key].min = Math.min(categoryRanges[key].min, rank.minXp)
+      categoryRanges[key].max = Math.max(categoryRanges[key].max, rank.maxXp)
+    }
+  })
+
+  for (const [category, range] of Object.entries(categoryRanges)) {
+    const count = await prisma.user.count({
+      where: {
+        ...where,
+        totalXp: {
+          gte: range.min,
+          ...(range.max !== Infinity ? { lte: range.max } : {})
+        }
+      }
+    })
+    discordRoleCounts[category as keyof typeof discordRoleCounts] = count
+  }
+
   // Calculate pagination info
   const totalPages = Math.ceil(totalCount / limit)
   const hasNextPage = page < totalPages
@@ -557,6 +598,7 @@ async function fetchUserMetricsData(
     },
     stats: {
       roleCounts,
+      discordRoleCounts,
       totalUsers: totalCount
     }
   }

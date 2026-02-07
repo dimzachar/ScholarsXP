@@ -131,6 +131,13 @@ export default function AdminUsersPage() {
   // Stats state
   const [stats, setStats] = useState({
     roleCounts: {} as Record<string, number>,
+    discordRoleCounts: {
+      initiate: 0,
+      apprentice: 0,
+      journeyman: 0,
+      erudite: 0,
+      master: 0
+    },
     totalUsers: 0
   })
 
@@ -643,6 +650,65 @@ export default function AdminUsersPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+
+        {/* Discord Role Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+          <Card>
+            <CardContent className="p-4 text-center">
+              <Badge className="bg-slate-400/20 text-slate-500 mb-2">
+                Initiate
+              </Badge>
+              <div className="text-2xl font-bold">
+                {stats.discordRoleCounts.initiate}
+              </div>
+              <div className="text-xs text-muted-foreground">1-999 XP</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <Badge className="bg-orange-500/20 text-orange-600 mb-2">
+                Apprentice
+              </Badge>
+              <div className="text-2xl font-bold">
+                {stats.discordRoleCounts.apprentice}
+              </div>
+              <div className="text-xs text-muted-foreground">1K-17.5K XP</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <Badge className="bg-blue-500/20 text-blue-600 mb-2">
+                Journeyman
+              </Badge>
+              <div className="text-2xl font-bold">
+                {stats.discordRoleCounts.journeyman}
+              </div>
+              <div className="text-xs text-muted-foreground">17.5K-49K XP</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <Badge className="bg-violet-500/20 text-violet-600 mb-2">
+                Erudite
+              </Badge>
+              <div className="text-2xl font-bold">
+                {stats.discordRoleCounts.erudite}
+              </div>
+              <div className="text-xs text-muted-foreground">49K-94.5K XP</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <Badge className="bg-yellow-500/20 text-yellow-600 mb-2">
+                Master
+              </Badge>
+              <div className="text-2xl font-bold">
+                {stats.discordRoleCounts.master}
+              </div>
+              <div className="text-xs text-muted-foreground">94.5K+ XP</div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Filters */}
