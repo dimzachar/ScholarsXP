@@ -351,26 +351,72 @@ export class DeadlineMonitorService {
   /**
    * Check if reminder should be sent and send it
    */
+  /**
+   * Check if reminder should be sent and send it
+   */
   private async checkAndSendReminder(assignment: any, hoursUntilDeadline: number): Promise<boolean> {
-    // Check if we should send a reminder
-    const shouldRemind = this.REMINDER_INTERVALS.some(interval => {
-      return Math.abs(hoursUntilDeadline - interval) < 0.5 // Within 30 minutes of reminder time
-    })
+    // Check if we match any reminder interval
+    const matchingInterval = this.REMINDER_INTERVALS.find(interval =>
+      Math.abs(hoursUntilDeadline - interval) < 0.5
+    )
 
-    if (!shouldRemind) {
+    if (!matchingInterval) {
       return false
     }
 
-    // Check if reminder was already sent for this interval
-    const reminderKey = `reminder_${assignment.id}_${Math.round(hoursUntilDeadline)}`
+    try {
+      // Check idempotency: Have we already notified for this interval?
+      // using 'notifications' table checks if a row exists with matching metadata
+      const { data: existingNotifications, error: checkError } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('userId', assignment.reviewerId)
+        .eq('type', 'ADMIN_MESSAGE') // Reuse ADMIN_MESSAGE to avoid schema changes
+        .contains('data', {
+          assignmentId: assignment.id,
+          reminderInterval: matchingInterval
+        })
+        .limit(1)
 
-    // TODO: Implement reminder tracking to avoid duplicate reminders
-    // For now, we'll just send the reminder
+      if (checkError) {
+        console.error('Error checking existing notifications:', checkError)
+        return false // Fail safe to avoid spam
+      }
 
-    // TODO: Send actual notification
-    console.log(`📧 Reminder sent to ${assignment.reviewer.username} for assignment ${assignment.id} (${Math.round(hoursUntilDeadline)}h remaining)`)
+      if (existingNotifications && existingNotifications.length > 0) {
+        // Already sent
+        return false
+      }
 
-    return true
+      // Create notification serving as both the alert and the idempotency record
+      const { error: insertError } = await supabase
+        .from('notifications')
+        .insert({
+          userId: assignment.reviewerId,
+          type: 'ADMIN_MESSAGE',
+          title: 'Review Deadline Warning',
+          message: `You have a review due in approximately ${matchingInterval} hour${matchingInterval === 1 ? '' : 's'}.`,
+          data: {
+            assignmentId: assignment.id,
+            reminderInterval: matchingInterval,
+            reason: 'deadline_warning',
+            deadline: assignment.deadline
+          },
+          read: false
+        })
+
+      if (insertError) {
+        console.error('Failed to create reminder notification:', insertError)
+        return false
+      }
+
+      console.log(`📧 Notice created for ${assignment.reviewer.username}: ${matchingInterval}h warning (Assignment ${assignment.id})`)
+      return true
+
+    } catch (error) {
+      console.error('Error in checkAndSendReminder:', error)
+      return false
+    }
   }
 
   /**
