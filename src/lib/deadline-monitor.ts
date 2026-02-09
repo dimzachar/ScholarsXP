@@ -271,6 +271,16 @@ export class DeadlineMonitorService {
       )
 
       if (assignmentResult.success && assignmentResult.assignedReviewers.length > 0) {
+        // FIX: Update old assignment status to REASSIGNED to prevent infinite loop
+        const { error: updateError } = await supabase
+          .from('ReviewAssignment')
+          .update({ status: 'REASSIGNED' })
+          .eq('id', assignment.id)
+
+        if (updateError) {
+          console.error(`Failed to update old assignment ${assignment.id} status to REASSIGNED:`, updateError)
+        }
+
         // Log automated reassignment
         await logAdminAction({
           adminId: 'system',
