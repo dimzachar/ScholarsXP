@@ -188,67 +188,102 @@ export class DeadlineMonitorService {
    * Handle overdue assignment - mark as missed and apply progressive penalties
    */
   private async handleOverdueAssignment(assignment: any, hoursOverdue: number): Promise<void> {
-    // Mark assignment as missed
+
+    // 1. Check for Idempotency: Has a penalty already been applied for this submission?
+    // We check purely based on the existence of a 'PENALTY' transaction for this reviewer + submission
+    const { data: existingPenalty, error: checkError } = await supabase
+      .from('XpTransaction')
+      .select('id')
+      .eq('userId', assignment.reviewerId)
+      .eq('type', 'PENALTY')
+      .eq('sourceId', assignment.submissionId)
+      .maybeSingle()
+
+    if (checkError) {
+      console.error('Failed to check for existing penalty:', checkError)
+      // Safety fallback: abort to avoid potential double-penalty or missed assignment status update
+      return
+    }
+
+    let newMissedReviews = 0
+
+    // 2. Apply Penalties IF NOT EXISTS
+    if (!existingPenalty) {
+      // Get current missedReviews count
+      const { data: userData, error: fetchError } = await supabase
+        .from('User')
+        .select('missedReviews')
+        .eq('id', assignment.reviewerId)
+        .single()
+
+      if (fetchError || !userData) {
+        console.error('Failed to fetch user data for penalty:', fetchError)
+        return
+      }
+
+      const currentMissedReviews = userData.missedReviews
+      newMissedReviews = currentMissedReviews + 1
+
+      // Increment missed reviews counter (lifetime)
+      // Note: This operation is not atomic with XP record, but we check XP record for idempotency.
+      // If this succeeds but XP fails, we might double-increment next run. Acceptable trade-off vs missing penalty.
+      const { error: userError } = await supabase
+        .from('User')
+        .update({
+          missedReviews: newMissedReviews
+        })
+        .eq('id', assignment.reviewerId)
+
+      if (userError) {
+        console.error('Failed to increment missed reviews:', userError)
+        return // Abort if we can't update user stats
+      }
+
+      // Apply XP penalty (Idempotency Key)
+      try {
+        await xpAnalyticsService.recordXpTransaction(
+          assignment.reviewerId,
+          this.PENALTY_XP,
+          'PENALTY',
+          `Missed review deadline for submission ${assignment.submissionId}`,
+          assignment.submissionId
+        )
+      } catch (xpError) {
+        console.error('Failed to record XP penalty:', xpError)
+        return // Abort if we can't record the transaction (our idempotency key)
+      }
+
+      // Check and apply threshold penalties (one-time, at exact thresholds)
+      await applyMissedReviewThresholdPenalties(assignment.reviewerId, newMissedReviews)
+
+      // Ensure XP doesn't go below 0
+      await supabase
+        .from('User')
+        .update({
+          totalXp: 0,
+          currentWeekXp: 0
+        })
+        .eq('id', assignment.reviewerId)
+        .lt('totalXp', 0)
+
+      console.log(`⚠️ Penalties applied for assignment ${assignment.id} (${Math.round(hoursOverdue)}h overdue). Total missed: ${newMissedReviews}`)
+    } else {
+      console.log(`ℹ️ Penalty already exists for assignment ${assignment.id}, skipping penalty application.`)
+    }
+
+    // 3. Mark assignment as MISSED (Final Step)
+    // Only reachable if penalties succeeded OR already existed
     const { error: assignmentError } = await supabase
       .from('ReviewAssignment')
       .update({ status: 'MISSED' })
       .eq('id', assignment.id)
 
     if (assignmentError) {
-      throw new Error(`Failed to mark assignment as missed: ${assignmentError.message}`)
+      console.error(`Failed to mark assignment ${assignment.id} as missed:`, assignmentError)
+      // Retry on next run is safe due to idempotency check
+    } else {
+      console.log(`✅ Assignment ${assignment.id} successfully marked as MISSED.`)
     }
-
-    // Get current missedReviews count BEFORE incrementing
-    const { data: userData, error: fetchError } = await supabase
-      .from('User')
-      .select('missedReviews')
-      .eq('id', assignment.reviewerId)
-      .single()
-
-    if (fetchError || !userData) {
-      console.error('Failed to fetch user data:', fetchError)
-      return
-    }
-
-    const currentMissedReviews = userData.missedReviews
-    const newMissedReviews = currentMissedReviews + 1
-
-    // Increment missed reviews counter (lifetime, never resets)
-    const { error: userError } = await supabase
-      .from('User')
-      .update({
-        missedReviews: newMissedReviews
-      })
-      .eq('id', assignment.reviewerId)
-
-    if (userError) {
-      console.error('Failed to increment missed reviews:', userError)
-    }
-
-    // Always apply -10 XP penalty for missing a deadline
-    await xpAnalyticsService.recordXpTransaction(
-      assignment.reviewerId,
-      this.PENALTY_XP,
-      'PENALTY',
-      `Missed review deadline for submission ${assignment.submissionId}`,
-      assignment.submissionId
-    )
-
-    // Check and apply threshold penalties (one-time, at exact thresholds)
-    // Using the exported function to ensure consistent behavior across modules
-    await applyMissedReviewThresholdPenalties(assignment.reviewerId, newMissedReviews)
-
-    // Ensure XP doesn't go below 0
-    await supabase
-      .from('User')
-      .update({
-        totalXp: 0,
-        currentWeekXp: 0
-      })
-      .eq('id', assignment.reviewerId)
-      .lt('totalXp', 0)
-
-    console.log(`⚠️ Assignment ${assignment.id} marked as missed (${Math.round(hoursOverdue)}h overdue), penalty applied. Total missed: ${newMissedReviews}`)
   }
 
   // Private method applyThresholdPenalties removed - use exported applyMissedReviewThresholdPenalties instead
