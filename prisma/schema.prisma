@@ -16,7 +16,9 @@ model User {
   totalXp            Int          @default(0)
   currentWeekXp      Int          @default(0)
   streakWeeks        Int          @default(0)
-  missedReviews      Int          @default(0)
+  missedReviews      Int          @default(0)  // Lifetime counter - NEVER resets
+  reviewPausedUntil  DateTime?                 // Temporary pause end date
+  reviewPausedPermanently Boolean @default(false) // Permanent ban flag
   profileImageUrl    String?
   bio                String?
   joinedAt           DateTime     @default(now())

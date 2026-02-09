@@ -131,6 +131,8 @@ export class ReviewerPoolService {
             role,
             totalXp,
             missedReviews,
+            reviewPausedUntil,
+            reviewPausedPermanently,
             lastActiveAt,
             preferences
           `)
@@ -188,9 +190,12 @@ export class ReviewerPoolService {
             return false
           }
 
-          // Filter by missed reviews (exclude users with too many missed reviews)
-          if (candidate.missedReviews > 3) {
-            return false
+          // Filter by pause status (exclude paused/banned users)
+          if (candidate.reviewPausedPermanently) {
+            return false // Permanently banned
+          }
+          if (candidate.reviewPausedUntil && new Date(candidate.reviewPausedUntil) > new Date()) {
+            return false // Temporarily paused
           }
 
           // Filter by minimum XP (ensure reviewer has some experience)
@@ -341,7 +346,7 @@ export class ReviewerPoolService {
 
     // Add 48 hours
     deadline.setHours(deadline.getHours() + 48)
-    
+
     // If deadline falls on weekend, extend to Monday
     const dayOfWeek = deadline.getDay()
     if (dayOfWeek === 0) { // Sunday
@@ -349,7 +354,7 @@ export class ReviewerPoolService {
     } else if (dayOfWeek === 6) { // Saturday
       deadline.setDate(deadline.getDate() + 2) // Move to Monday
     }
-    
+
     return deadline
   }
 
@@ -423,7 +428,7 @@ export class ReviewerPoolService {
     // Get reviewer details
     const { data: reviewer } = await supabase
       .from('User')
-      .select('role, totalXp, missedReviews, preferences')
+      .select('role, totalXp, reviewPausedUntil, reviewPausedPermanently, preferences')
       .eq('id', reviewerId)
       .single()
 
@@ -445,15 +450,18 @@ export class ReviewerPoolService {
       return { canAssign: false, reason: 'Insufficient experience (minimum 50 XP required)' }
     }
 
-    // Check missed reviews
-    if (reviewer.missedReviews > 3) {
-      return { canAssign: false, reason: 'Too many missed reviews' }
+    // Check pause status
+    if (reviewer.reviewPausedPermanently) {
+      return { canAssign: false, reason: 'Reviewer is permanently banned from reviewing' }
+    }
+    if (reviewer.reviewPausedUntil && new Date(reviewer.reviewPausedUntil) > new Date()) {
+      return { canAssign: false, reason: 'Reviewer is temporarily paused from reviewing' }
     }
 
     // Check workload
     const workload = await this.getReviewerWorkload(reviewerId)
     const maxAssignments = options.maxActiveAssignments || this.MAX_ACTIVE_ASSIGNMENTS
-    
+
     if (workload.activeAssignments >= maxAssignments) {
       return { canAssign: false, reason: 'Reviewer has too many active assignments' }
     }

@@ -88,7 +88,7 @@ export class DeadlineMonitorService {
       for (const assignment of assignments) {
         try {
           result.processed++
-          
+
           const deadline = new Date(assignment.deadline)
           const hoursUntilDeadline = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60)
 
@@ -96,7 +96,7 @@ export class DeadlineMonitorService {
           if (hoursUntilDeadline <= 0) {
             await this.handleOverdueAssignment(assignment, Math.abs(hoursUntilDeadline))
             result.penalties++
-            
+
             // Check if we should reassign
             if (Math.abs(hoursUntilDeadline) >= this.REASSIGNMENT_DELAY) {
               const reassigned = await this.handleReassignment(assignment)
@@ -145,11 +145,11 @@ export class DeadlineMonitorService {
       }
 
       const now = new Date()
-      
+
       return assignments.map(assignment => {
         const deadline = new Date(assignment.deadline)
         const hoursRemaining = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60)
-        
+
         let status: 'upcoming' | 'urgent' | 'overdue'
         if (hoursRemaining <= 0) {
           status = 'overdue'
@@ -176,7 +176,7 @@ export class DeadlineMonitorService {
   }
 
   /**
-   * Handle overdue assignment - mark as missed and apply penalty
+   * Handle overdue assignment - mark as missed and apply progressive penalties
    */
   private async handleOverdueAssignment(assignment: any, hoursOverdue: number): Promise<void> {
     // Mark assignment as missed
@@ -189,11 +189,26 @@ export class DeadlineMonitorService {
       throw new Error(`Failed to mark assignment as missed: ${assignmentError.message}`)
     }
 
-    // Increment missed reviews counter
+    // Get current missedReviews count BEFORE incrementing
+    const { data: userData, error: fetchError } = await supabase
+      .from('User')
+      .select('missedReviews')
+      .eq('id', assignment.reviewerId)
+      .single()
+
+    if (fetchError || !userData) {
+      console.error('Failed to fetch user data:', fetchError)
+      return
+    }
+
+    const currentMissedReviews = userData.missedReviews
+    const newMissedReviews = currentMissedReviews + 1
+
+    // Increment missed reviews counter (lifetime, never resets)
     const { error: userError } = await supabase
       .from('User')
       .update({
-        missedReviews: supabase.sql`"missedReviews" + 1`
+        missedReviews: newMissedReviews
       })
       .eq('id', assignment.reviewerId)
 
@@ -201,7 +216,7 @@ export class DeadlineMonitorService {
       console.error('Failed to increment missed reviews:', userError)
     }
 
-    // Record XP transaction - this also updates User.totalXp and currentWeekXp
+    // Always apply -10 XP penalty for missing a deadline
     await xpAnalyticsService.recordXpTransaction(
       assignment.reviewerId,
       this.PENALTY_XP,
@@ -209,6 +224,10 @@ export class DeadlineMonitorService {
       `Missed review deadline for submission ${assignment.submissionId}`,
       assignment.submissionId
     )
+
+    // Check and apply threshold penalties (one-time, at exact thresholds)
+    // Using the exported function to ensure consistent behavior across modules
+    await applyMissedReviewThresholdPenalties(assignment.reviewerId, newMissedReviews)
 
     // Ensure XP doesn't go below 0
     await supabase
@@ -220,10 +239,10 @@ export class DeadlineMonitorService {
       .eq('id', assignment.reviewerId)
       .lt('totalXp', 0)
 
-    // TODO: Send notification to reviewer about missed deadline and penalty
-
-    console.log(`⚠️ Assignment ${assignment.id} marked as missed (${Math.round(hoursOverdue)}h overdue), penalty applied`)
+    console.log(`⚠️ Assignment ${assignment.id} marked as missed (${Math.round(hoursOverdue)}h overdue), penalty applied. Total missed: ${newMissedReviews}`)
   }
+
+  // Private method applyThresholdPenalties removed - use exported applyMissedReviewThresholdPenalties instead
 
   /**
    * Handle reassignment of missed review
@@ -260,7 +279,7 @@ export class DeadlineMonitorService {
             timestamp: new Date().toISOString()
           }
         })
-        
+
         // TODO: Send notification about reassignment
         console.log(`🔄 Reassigned submission ${assignment.submissionId} to new reviewer`)
         return true
@@ -290,7 +309,7 @@ export class DeadlineMonitorService {
 
     // Check if reminder was already sent for this interval
     const reminderKey = `reminder_${assignment.id}_${Math.round(hoursUntilDeadline)}`
-    
+
     // TODO: Implement reminder tracking to avoid duplicate reminders
     // For now, we'll just send the reminder
 
@@ -324,7 +343,7 @@ export class DeadlineMonitorService {
       }
 
       const now = new Date()
-      
+
       return assignments.filter(assignment => {
         const deadline = new Date(assignment.deadline)
         const hoursUntilDeadline = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60)
@@ -379,3 +398,68 @@ export class DeadlineMonitorService {
 
 // Export singleton instance
 export const deadlineMonitorService = new DeadlineMonitorService()
+
+/**
+ * Exported utility function to apply threshold penalties
+ * Can be called from other modules (e.g., reshuffle routes) when missedReviews is incremented
+ */
+export async function applyMissedReviewThresholdPenalties(reviewerId: string, newMissedReviews: number): Promise<void> {
+  const now = new Date()
+
+  // First strike: 4 missed reviews = 2-week pause + -100 XP
+  if (newMissedReviews === 4) {
+    const pauseUntil = new Date(now)
+    pauseUntil.setDate(now.getDate() + 14) // Add 14 days (2 weeks)
+
+    await supabase
+      .from('User')
+      .update({ reviewPausedUntil: pauseUntil.toISOString() })
+      .eq('id', reviewerId)
+
+    await xpAnalyticsService.recordXpTransaction(
+      reviewerId,
+      -100,
+      'PENALTY',
+      'First strike: 4 missed reviews - 2 week pause from reviewing'
+    )
+
+    console.log(`🚫 First strike for ${reviewerId}: 2-week pause + -100 XP (4 total misses)`)
+  }
+
+  // Second strike: 7 missed reviews = 4-week pause + -200 XP
+  if (newMissedReviews === 7) {
+    const pauseUntil = new Date(now)
+    pauseUntil.setDate(now.getDate() + 28) // Add 28 days (4 weeks)
+
+    await supabase
+      .from('User')
+      .update({ reviewPausedUntil: pauseUntil.toISOString() })
+      .eq('id', reviewerId)
+
+    await xpAnalyticsService.recordXpTransaction(
+      reviewerId,
+      -200,
+      'PENALTY',
+      'Second strike: 7 missed reviews - 4 week pause from reviewing'
+    )
+
+    console.log(`🚫🚫 Second strike for ${reviewerId}: 4-week pause + -200 XP (7 total misses)`)
+  }
+
+  // Permanent ban: 10+ missed reviews = permanent ban + -500 XP
+  if (newMissedReviews === 10) {
+    await supabase
+      .from('User')
+      .update({ reviewPausedPermanently: true })
+      .eq('id', reviewerId)
+
+    await xpAnalyticsService.recordXpTransaction(
+      reviewerId,
+      -500,
+      'PENALTY',
+      'Permanent ban: 10 missed reviews - permanently excluded from reviewing'
+    )
+
+    console.log(`⛔ Permanent ban for ${reviewerId}: -500 XP (10 total misses)`)
+  }
+}

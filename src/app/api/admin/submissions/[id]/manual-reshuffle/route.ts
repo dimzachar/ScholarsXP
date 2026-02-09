@@ -7,6 +7,7 @@ import { logAdminAction } from '@/lib/audit-log'
 import { prisma } from '@/lib/prisma'
 import { xpAnalyticsService } from '@/lib/xp-analytics'
 import { notifyReviewAssigned } from '@/lib/notifications'
+import { applyMissedReviewThresholdPenalties } from '@/lib/deadline-monitor'
 
 const MISSED_REVIEW_PENALTY = -10
 
@@ -79,9 +80,9 @@ export const POST = withPermission('admin_access')(async (
     for (const assignmentId of assignmentsToReshuffle) {
       try {
         const result = await reshuffleSingleAssignment(supabase, assignmentId, reason)
-        
+
         console.log(`Reshuffle result for assignment ${assignmentId}:`, result)
-        
+
         results.push({
           assignmentId,
           success: result.success,
@@ -146,7 +147,7 @@ export const POST = withPermission('admin_access')(async (
 async function reshuffleSingleAssignment(supabase: any, assignmentId: string, reason: string) {
   try {
     console.log(`Starting reshuffle for assignment ${assignmentId}`)
-    
+
     // Get current assignment details
     const { data: assignment, error: fetchError } = await supabase
       .from('ReviewAssignment')
@@ -204,6 +205,9 @@ async function reshuffleSingleAssignment(supabase: any, assignmentId: string, re
 
           if (updateError) {
             console.error(`Failed to increment missedReviews:`, updateError)
+          } else {
+            // Apply threshold penalties if applicable
+            await applyMissedReviewThresholdPenalties(assignment.reviewerId, currentMissed + 1)
           }
         }
 

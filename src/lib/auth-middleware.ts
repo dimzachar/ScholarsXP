@@ -8,11 +8,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyPrivyToken, extractBearerToken } from './privy-server'
-import { 
-  UserRole, 
-  Permission, 
-  hasPermission, 
-  normalizeRole, 
+import {
+  UserRole,
+  Permission,
+  hasPermission,
+  normalizeRole,
   isValidRole,
   hasRoleOrHigher,
   ROLE_HIERARCHY
@@ -123,12 +123,12 @@ async function getVerifiedPrivyUserId(request: NextRequest): Promise<string | nu
 export function createRoleBasedHandler() {
   return {
     withPermission: (permission: Permission) => {
-      return (handler: (request: AuthenticatedRequest, context?: unknown) => Promise<NextResponse>) => {
-        return async (request: NextRequest, context?: unknown) => {
+      return (handler: (request: AuthenticatedRequest, context?: any) => Promise<NextResponse>) => {
+        return async (request: NextRequest, context?: any) => {
           try {
             // Verify Privy token and get user ID
             const privyUserId = await getVerifiedPrivyUserId(request)
-            
+
             if (!privyUserId) {
               const response = NextResponse.json(
                 { error: 'Authentication required - please sign in' },
@@ -143,7 +143,7 @@ export function createRoleBasedHandler() {
 
             // Get user profile by Privy ID
             const userProfile = await getUserProfileByPrivyId(privyUserId)
-            
+
             if (!userProfile) {
               const response = NextResponse.json(
                 { error: 'User not found - please complete sign in' },
@@ -206,12 +206,12 @@ export function createRoleBasedHandler() {
     },
 
     withRole: (requiredRole: UserRole) => {
-      return (handler: (request: AuthenticatedRequest, context?: unknown) => Promise<NextResponse>) => {
-        return async (request: NextRequest, context?: unknown) => {
+      return (handler: (request: AuthenticatedRequest, context?: any) => Promise<NextResponse>) => {
+        return async (request: NextRequest, context?: any) => {
           try {
             // Verify Privy token and get user ID
             const privyUserId = await getVerifiedPrivyUserId(request)
-            
+
             if (!privyUserId) {
               return NextResponse.json(
                 { error: 'Authentication required - please sign in' },
@@ -221,21 +221,21 @@ export function createRoleBasedHandler() {
 
             // Get user profile by Privy ID
             const userProfile = await getUserProfileByPrivyId(privyUserId)
-            
+
             if (!userProfile) {
               return NextResponse.json(
                 { error: 'User not found - please complete sign in' },
                 { status: 401 }
               )
             }
-            
+
             // Check role using hierarchy (admin/developer can access everything)
             const userRole = normalizeRole(userProfile.role)
             const hasAccess = hasRoleOrHigher(userRole, requiredRole)
 
             if (!hasAccess) {
               return NextResponse.json(
-                { 
+                {
                   error: 'Insufficient role',
                   required: requiredRole,
                   userRole: userProfile.role
@@ -276,12 +276,12 @@ export function createRoleBasedHandler() {
     },
 
     // Simple auth check without role/permission requirements
-    withAuth: (handler: (request: AuthenticatedRequest, context?: unknown) => Promise<NextResponse>) => {
-      return async (request: NextRequest, context?: unknown) => {
+    withAuth: (handler: (request: AuthenticatedRequest, context?: any) => Promise<NextResponse>) => {
+      return async (request: NextRequest, context?: any) => {
         try {
           // Verify Privy token and get user ID
           const privyUserId = await getVerifiedPrivyUserId(request)
-          
+
           if (!privyUserId) {
             return NextResponse.json(
               { error: 'Authentication required - please sign in' },
@@ -291,7 +291,7 @@ export function createRoleBasedHandler() {
 
           // Get user profile by Privy ID
           const userProfile = await getUserProfileByPrivyId(privyUserId)
-          
+
           if (!userProfile) {
             return NextResponse.json(
               { error: 'User not found - please complete sign in' },

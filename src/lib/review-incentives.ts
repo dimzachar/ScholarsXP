@@ -90,7 +90,8 @@ export class ReviewIncentivesService {
       }
 
       // Calculate streak bonus
-      const streakBonus = await this.calculateStreakBonus(reviewerId)
+      // DISABLED: Streaks are not currently active
+      const streakBonus = 0 // await this.calculateStreakBonus(reviewerId)
       reward.streakBonus = streakBonus
 
       // Calculate totals

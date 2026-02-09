@@ -6,6 +6,7 @@ import { reviewerPoolService } from '@/lib/reviewer-pool'
 import { logAdminAction } from '@/lib/audit-log'
 import { xpAnalyticsService } from '@/lib/xp-analytics'
 import { notifyReviewAssigned } from '@/lib/notifications'
+import { applyMissedReviewThresholdPenalties } from '@/lib/deadline-monitor'
 
 const MISSED_REVIEW_PENALTY = -10
 
@@ -80,6 +81,9 @@ async function reshuffleSingleAssignment(supabase: any, assignmentId: string, re
 
           if (updateError) {
             console.error(`Failed to increment missedReviews:`, updateError)
+          } else {
+            // Apply threshold penalties if applicable
+            await applyMissedReviewThresholdPenalties(assignment.reviewerId, currentMissed + 1)
           }
         }
 
@@ -272,9 +276,9 @@ export const POST = withPermission('admin_access')(async (
     for (const assignment of assignmentsToReshuffle) {
       try {
         const result = await reshuffleSingleAssignment(supabase, assignment.id, reason)
-        
+
         console.log(`Bulk reshuffle result for assignment ${assignment.id}:`, result)
-        
+
         results.push({
           assignmentId: assignment.id,
           reviewerId: assignment.reviewerId,
@@ -340,7 +344,7 @@ export const POST = withPermission('admin_access')(async (
 
     return NextResponse.json({
       success: true,
-      message: dryRun 
+      message: dryRun
         ? `Bulk reshuffle dry-run completed. Would reshuffle ${assignmentsToReshuffle.length} assignments.`
         : `Successfully processed ${assignmentsToReshuffle.length} assignments, reshuffled ${reshuffledCount}.`,
       dryRun,
