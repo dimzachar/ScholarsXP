@@ -393,8 +393,8 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
               subAction: 'STATUS_CHANGE',
               newStatus: normalized,
               reason: data.reason,
-              ...(normalized === 'REJECTED' && { 
-                pendingAssignmentsCleaned: deletedAssignmentsCount 
+              ...(normalized === 'REJECTED' && {
+                pendingAssignmentsCleaned: deletedAssignmentsCount
               })
             }
           }
@@ -686,6 +686,7 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
         }
         break
 
+      /* 
       case 'reassignReview':
         // Find pending assignment
         const assignment = await prisma.reviewAssignment.findFirst({
@@ -749,6 +750,7 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
 
         result = { message: 'Review reassigned successfully' }
         break
+      */
 
       default:
         return NextResponse.json(
