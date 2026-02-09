@@ -46,7 +46,8 @@ export class DeadlineMonitorService {
     }
 
     try {
-      // Get all pending and in-progress assignments
+      // Get all pending, in-progress AND missed assignments
+      // We need MISSED assignments to check if they've been missed long enough to trigger a reshuffle
       const { data: assignments, error } = await supabase
         .from('ReviewAssignment')
         .select(`
@@ -71,7 +72,7 @@ export class DeadlineMonitorService {
             missedReviews
           )
         `)
-        .in('status', ['PENDING', 'IN_PROGRESS'])
+        .in('status', ['PENDING', 'IN_PROGRESS', 'MISSED'])
         .order('deadline', { ascending: true })
 
       if (error) {
@@ -91,21 +92,29 @@ export class DeadlineMonitorService {
 
           const deadline = new Date(assignment.deadline)
           const hoursUntilDeadline = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60)
+          const isOverdue = hoursUntilDeadline <= 0
 
-          // Check if deadline has passed
-          if (hoursUntilDeadline <= 0) {
-            await this.handleOverdueAssignment(assignment, Math.abs(hoursUntilDeadline))
-            result.penalties++
-
-            // Check if we should reassign
+          // Case 1: Already MISSED - check for reshuffle only
+          if (assignment.status === 'MISSED') {
+            // If it's been missed for > REASSIGNMENT_DELAY hours, trigger reshuffle
             if (Math.abs(hoursUntilDeadline) >= this.REASSIGNMENT_DELAY) {
-              const reassigned = await this.handleReassignment(assignment)
-              if (reassigned) {
+              const reshuffled = await this.handleReassignment(assignment)
+              if (reshuffled) {
                 result.reassignments++
               }
             }
+            continue // Skip the rest for MISSED items
+          }
+
+          // Case 2: PENDING/IN_PROGRESS and Deadline Passed
+          if (isOverdue) {
+            await this.handleOverdueAssignment(assignment, Math.abs(hoursUntilDeadline))
+            result.penalties++
+
+            // Note: We don't check for reshuffle immediately here because REASSIGNMENT_DELAY is 24h
+            // The assignment is now MISSED, and will be picked up by Case 1 in future runs
           } else {
-            // Check if we should send reminders
+            // Case 3: Upcoming Deadline - Check for reminders
             const reminderSent = await this.checkAndSendReminder(assignment, hoursUntilDeadline)
             if (reminderSent) {
               result.reminders++
@@ -118,7 +127,7 @@ export class DeadlineMonitorService {
         }
       }
 
-      console.log(`📊 Deadline monitoring complete: ${result.processed} processed, ${result.reminders} reminders, ${result.reassignments} reassignments, ${result.penalties} penalties`)
+      console.log(`📊 Deadline monitoring complete: ${result.processed} processed, ${result.reminders} reminders, ${result.reassignments} resuffles, ${result.penalties} penalties`)
 
       return result
 
