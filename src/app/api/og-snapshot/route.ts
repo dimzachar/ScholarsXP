@@ -13,9 +13,12 @@ function isValidHttpUrl(raw: string): URL | null {
 }
 
 function extractMeta(html: string, key: string, attr: 'property' | 'name' = 'property'): string | undefined {
-  const regex = new RegExp(`<meta[^>]*${attr}=["']${key}["'][^>]*content=["']([^"']+)["'][^>]*>`, 'i')
-  const m = html.match(regex)
-  return m?.[1]
+  // Try both orders: attr="key" content="value" and content="value" attr="key"
+  const regex1 = new RegExp(`<meta[^>]*${attr}=["']${key}["'][^>]*content=["']([^"']+)["'][^>]*>`, 'i')
+  const regex2 = new RegExp(`<meta[^>]*content=["']([^"']+)["'][^>]*${attr}=["']${key}["'][^>]*>`, 'i')
+  const m1 = html.match(regex1)
+  const m2 = html.match(regex2)
+  return m1?.[1] || m2?.[1]
 }
 
 function extractTitle(html: string): string | undefined {
@@ -119,6 +122,17 @@ export async function GET(req: Request) {
     const title = (extractMeta(html, 'og:title') || extractTitle(html))?.trim()
     const description = extractDescription(html)
     const image = extractImage(html, target)
+
+    // Debug logging for Medium specifically
+    if (target.hostname.includes('medium.com') && process.env.NODE_ENV === 'development') {
+      console.log('Medium OG extraction:', {
+        url: target.toString(),
+        hasOgImage: html.includes('og:image'),
+        hasTwitterImage: html.includes('twitter:image'),
+        extractedImage: image,
+        title,
+      })
+    }
 
     return NextResponse.json(
       {

@@ -325,25 +325,40 @@ export default function FeaturedEmbed({ url }: Props) {
   if (platform === 'Medium') {
     const [data, setData] = useState<{ title?: string; description?: string; image?: string } | null>(null)
     const [loaded, setLoaded] = useState(false)
+    const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
       let cancelled = false
       const run = async () => {
         try {
           const res = await fetch(`/api/og-snapshot?url=${encodeURIComponent(url)}`)
-          if (!res.ok) throw new Error('og fetch failed')
+          if (!res.ok) {
+            setError(`API returned ${res.status}`)
+            throw new Error('og fetch failed')
+          }
           const json = await res.json()
           if (!cancelled) {
+            // Debug: log what we received
+            if (process.env.NODE_ENV === 'development') {
+              console.log('Medium OG data:', { url, image: json.image, title: json.title })
+            }
             setData(json)
             setLoaded(true)
           }
-        } catch {
-          if (!cancelled) setLoaded(true)
+        } catch (err) {
+          if (!cancelled) {
+            setLoaded(true)
+            if (process.env.NODE_ENV === 'development') {
+              console.error('Medium OG fetch error:', err)
+            }
+          }
         }
       }
       run()
       return () => { cancelled = true }
     }, [url])
+
+    const safeImage = sanitizeImageUrl(data?.image)
 
     return (
       <a
@@ -352,13 +367,27 @@ export default function FeaturedEmbed({ url }: Props) {
         rel="noopener noreferrer"
         className="block overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary/40"
       >
-        {sanitizeImageUrl(data?.image) ? (
+        {safeImage ? (
            
           // deepcode ignore DOMXSS: URL from /api/og-snapshot which validates input URL via security checks. Additional sanitization via sanitizeImageUrl blocks non-http(s) protocols.
-          <img src={sanitizeImageUrl(data.image)!} alt={data.title || 'cover'} className="w-full h-56 object-cover" />
-        ) : (
-          <div className="w-full h-40 bg-muted" />
-        )}
+          <img 
+            src={safeImage} 
+            alt={data?.title || 'cover'} 
+            className="w-full h-56 object-cover"
+            onError={(e) => {
+              if (process.env.NODE_ENV === 'development') {
+                console.error('Medium image failed to load:', safeImage)
+              }
+              // Hide broken image
+              e.currentTarget.style.display = 'none'
+            }}
+          />
+        ) : loaded ? (
+          // Only show placeholder after data is loaded and no image found
+          <div className="w-full h-40 bg-muted flex items-center justify-center text-xs text-muted-foreground">
+            {error || 'No preview available'}
+          </div>
+        ) : null}
         <div className="p-3 space-y-1">
           <div className="text-sm text-muted-foreground">medium.com</div>
           <div className="font-semibold leading-snug text-base">{data?.title || 'Medium article'}</div>
