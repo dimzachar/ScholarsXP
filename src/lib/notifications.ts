@@ -396,6 +396,12 @@ export async function notifyRankPromoted(
   const categoryChanged = oldRank.category !== newRank.category
   const tierChanged = oldRank.tier !== newRank.tier
   
+  // Determine if this is a promotion or demotion by comparing rank order
+  const { RANK_THRESHOLDS } = await import('@/lib/gamified-ranks')
+  const oldRankIndex = RANK_THRESHOLDS.findIndex(r => r.displayName === oldRank.displayName)
+  const newRankIndex = RANK_THRESHOLDS.findIndex(r => r.displayName === newRank.displayName)
+  const isDemotion = newRankIndex < oldRankIndex
+  
   // Determine emoji: tier emoji if available, otherwise category emoji
   const emoji = newRank.tier 
     ? (tierEmojis[newRank.tier] || '🏆')
@@ -404,7 +410,11 @@ export async function notifyRankPromoted(
   let title: string
   let message: string
 
-  if (categoryChanged) {
+  if (isDemotion) {
+    // Rank demotion
+    title = `⚠️ Rank Change: ${newRank.displayName}`
+    message = `Your rank has changed from ${oldRank.displayName} to ${newRank.displayName} due to XP adjustment.`
+  } else if (categoryChanged) {
     // Discord role promotion (major milestone)
     title = `${emoji} New Role: ${newRank.displayName}!`
     message = `Congratulations! You've advanced from ${oldRank.displayName} to ${newRank.displayName}! You've unlocked a new Discord role!`
@@ -420,7 +430,7 @@ export async function notifyRankPromoted(
 
   await createNotification(
     userId,
-    NotificationType.RANK_PROMOTED,
+    isDemotion ? NotificationType.ADMIN_MESSAGE : NotificationType.RANK_PROMOTED,
     title,
     message,
     {
@@ -428,6 +438,7 @@ export async function notifyRankPromoted(
       newRank,
       categoryChanged,
       tierChanged,
+      isDemotion,
       color: newRank.tier ? tierEmojis[newRank.tier] : categoryEmojis[newRank.category]
     }
   )
@@ -468,16 +479,17 @@ export async function notifyRankPromoted(
           newTier: newRank.tier,
           categoryChanged: isFirstPromotion || categoryChanged, // First promotion is always a category change
           tierChanged: tierChanged && !isFirstPromotion, // First promotion has no tier change
-          isFirstPromotion
+          isFirstPromotion,
+          isDemotion
         }
       }
     })
-    console.log(`[RankPromotion] Logged admin action for user ${userId}: ${oldRank?.displayName || 'No Rank'} → ${newRank.displayName}`)
+    console.log(`[Rank${isDemotion ? 'Demotion' : 'Promotion'}] Logged admin action for user ${userId}: ${oldRank?.displayName || 'No Rank'} → ${newRank.displayName}`)
   } catch (err) {
-    console.warn('[RankPromotion] Failed to log admin action:', err)
+    console.warn(`[Rank${isDemotion ? 'Demotion' : 'Promotion'}] Failed to log admin action:`, err)
   }
 
-  // Send Discord notification for major role promotions only (fire and forget)
+  // Send Discord notification for major role changes only (fire and forget)
   if (categoryChanged) {
     const user = await prisma.user.findUnique({
       where: { id: userId },

@@ -63,8 +63,7 @@ export const GET = withPermission('admin_access')(
       }
     }
     
-    // Build where clause - only category changes (main role promotions)
-    // Use raw query for JSON filtering since Prisma's JSON filter syntax varies
+    // Build where clause - promotions and demotions (both use RANK_PROMOTION action)
     let whereClause: any = {
       action: 'RANK_PROMOTION'
     }
@@ -94,9 +93,9 @@ export const GET = withPermission('admin_access')(
       }
     }
     
-    // Fetch promotions with user details
-    // First get all rank promotions, then filter for category changes in memory
-    const allPromotions = await prisma.adminAction.findMany({
+    // Fetch promotions and demotions with user details
+    // First get all rank changes (RANK_PROMOTION includes demotions via isDemotion flag)
+    const allRankChanges = await prisma.adminAction.findMany({
       where: whereClause,
       orderBy: { createdAt: 'desc' },
       include: {
@@ -110,10 +109,21 @@ export const GET = withPermission('admin_access')(
       }
     })
     
-    // Filter for category changes (main role promotions only)
-    const promotions = allPromotions.filter(p => {
+    // Filter for category changes (main role promotions/demotions only)
+    const promotions = allRankChanges.filter(p => {
       const details = p.details as any
       return details?.categoryChanged === true
+    })
+    
+    // Sort by createdAt desc, then by xpAtPromotion desc (for same timestamp)
+    promotions.sort((a, b) => {
+      const dateCompare = b.createdAt.getTime() - a.createdAt.getTime()
+      if (dateCompare !== 0) return dateCompare
+      
+      // Same timestamp - sort by XP (higher XP = happened first)
+      const aDetails = a.details as any
+      const bDetails = b.details as any
+      return (bDetails?.xpAtPromotion || 0) - (aDetails?.xpAtPromotion || 0)
     })
     
     const total = promotions.length
@@ -155,7 +165,8 @@ export const GET = withPermission('admin_access')(
           newCategory: details?.newCategory || 'Unknown',
           xpAtPromotion: details?.xpAtPromotion || 0
         },
-        isBackfill: details?.isBackfill || false
+        isBackfill: details?.isBackfill || false,
+        isDemotion: details?.isDemotion || false
       }
     })
     

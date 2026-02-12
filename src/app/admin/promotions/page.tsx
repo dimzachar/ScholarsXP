@@ -40,6 +40,7 @@ interface Promotion {
     xpAtPromotion: number
   }
   isBackfill: boolean
+  isDemotion: boolean
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -266,9 +267,9 @@ export default function AdminPromotionsPage() {
           {/* Promotions Table */}
           <Card>
             <CardHeader>
-              <CardTitle>Promotion History</CardTitle>
+              <CardTitle>Promotion & Demotion History</CardTitle>
               <CardDescription>
-                Main Discord role promotions (category changes only)
+                Main Discord role changes (category changes only)
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -280,20 +281,21 @@ export default function AdminPromotionsPage() {
                       <TableHead>User</TableHead>
                       <TableHead>Promotion</TableHead>
                       <TableHead>XP at Promotion</TableHead>
+                      <TableHead>Current XP</TableHead>
                       <TableHead>Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8">
+                        <TableCell colSpan={6} className="text-center py-8">
                           <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2" />
                           <p className="text-muted-foreground">Loading promotions...</p>
                         </TableCell>
                       </TableRow>
                     ) : items.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                           <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
                           <p>No promotions found for current filters.</p>
                         </TableCell>
@@ -345,8 +347,23 @@ export default function AdminPromotionsPage() {
                             <span className="text-xs text-muted-foreground ml-1">XP</span>
                           </TableCell>
                           <TableCell>
+                            <span className="font-mono">{promo.user.totalXp.toLocaleString()}</span>
+                            <span className="text-xs text-muted-foreground ml-1">XP</span>
+                            {promo.user.totalXp > promo.promotion.xpAtPromotion ? (
+                              <div className="text-xs text-green-600 mt-0.5">
+                                +{(promo.user.totalXp - promo.promotion.xpAtPromotion).toLocaleString()}
+                              </div>
+                            ) : promo.user.totalXp < promo.promotion.xpAtPromotion ? (
+                              <div className="text-xs text-red-600 font-semibold mt-0.5">
+                                ⚠️ -{(promo.promotion.xpAtPromotion - promo.user.totalXp).toLocaleString()} (Anomaly)
+                              </div>
+                            ) : null}
+                          </TableCell>
+                          <TableCell>
                             {promo.isBackfill ? (
                               <Badge variant="outline" className="text-xs">Backfilled</Badge>
+                            ) : promo.isDemotion ? (
+                              <Badge variant="destructive" className="text-xs">Demotion</Badge>
                             ) : (
                               <Badge variant="default" className="text-xs bg-green-600">Live</Badge>
                             )}
