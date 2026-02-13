@@ -145,6 +145,17 @@ export function PrivyAuthSyncProvider({ children }: PrivyAuthSyncProviderProps) 
         
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}))
+          
+          // Silently handle database outages - don't throw, just log and continue
+          if (response.status === 503 || response.status === 500) {
+            console.warn('Database temporarily unavailable, continuing with limited functionality')
+            syncInProgressRef.current = false
+            setIsSyncing(false)
+            setIsLoading(false)
+            setSyncError(new Error('Database temporarily unavailable'))
+            return
+          }
+          
           throw new Error(errorData.error || `Sync failed: ${response.status}`)
         }
         
