@@ -10,11 +10,13 @@ interface PromotionData {
   oldCategory: string
   newCategory: string
   date: Date
+  isDemotion?: boolean
 }
 
 /**
- * Sends a promotion notification to Discord
+ * Sends a promotion or demotion notification to Discord
  * Format: "Date @username has been promoted: Initiate -> Apprentice"
+ * Format: "Date @username has been demoted: Apprentice -> Initiate"
  */
 export async function notifyDiscordPromotion(data: PromotionData): Promise<void> {
   const webhookUrl = process.env.DISCORD_WEBHOOK_URL
@@ -31,7 +33,8 @@ export async function notifyDiscordPromotion(data: PromotionData): Promise<void>
       day: 'numeric'
     })
 
-    const message = `${formattedDate} @${data.username} has been promoted: ${data.oldCategory} -> ${data.newCategory}`
+    const action = data.isDemotion ? 'demoted' : 'promoted'
+    const message = `${formattedDate} @${data.username} has been ${action}: ${data.oldCategory} -> ${data.newCategory}`
 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
@@ -46,7 +49,7 @@ export async function notifyDiscordPromotion(data: PromotionData): Promise<void>
     })
 
     clearTimeout(timeoutId)
-    console.log(`[Discord] Sent promotion notification for ${data.username}`)
+    console.log(`[Discord] Sent ${action} notification for ${data.username}`)
   } catch (error) {
     console.error('[Discord] Failed to send webhook:', error)
     // Don't throw - webhook failures shouldn't break the promotion flow

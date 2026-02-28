@@ -477,6 +477,13 @@ export class ConsensusCalculatorService {
 
         // 4. Update user's total XP and recalculate current week XP
         const recalculatedWeekXp = await recalculateCurrentWeekXp(tx, submission.userId)
+        
+        // Get user's current XP BEFORE update to check for rank promotion
+        const userBeforeUpdate = await tx.user.findUnique({
+          where: { id: submission.userId },
+          select: { totalXp: true }
+        })
+        
         await tx.user.update({
           where: { id: submission.userId },
           data: {
@@ -484,6 +491,67 @@ export class ConsensusCalculatorService {
             currentWeekXp: recalculatedWeekXp
           }
         })
+        
+        // Check for rank promotion after XP update
+        if (userBeforeUpdate) {
+          const { getGamifiedRank } = await import('@/lib/gamified-ranks')
+          const oldTotalXp = userBeforeUpdate.totalXp
+          const newTotalXp = oldTotalXp + result.finalXp
+          const oldRank = getGamifiedRank(oldTotalXp)
+          const newRank = getGamifiedRank(newTotalXp)
+          
+          // Log promotion if rank changed
+          if (newRank && oldRank && newRank.displayName !== oldRank.displayName) {
+            const categoryChanged = oldRank.category !== newRank.category
+            
+            await tx.adminAction.create({
+              data: {
+                adminId: submission.userId, // System-triggered
+                action: 'RANK_PROMOTION',
+                targetType: 'user',
+                targetId: submission.userId,
+                details: {
+                  oldRank: oldRank.displayName,
+                  newRank: newRank.displayName,
+                  oldCategory: oldRank.category,
+                  newCategory: newRank.category,
+                  xpAtPromotion: newTotalXp,
+                  categoryChanged,
+                  isDemotion: false,
+                  isBackfill: false,
+                  triggeredBy: 'submission_finalization',
+                  submissionId
+                }
+              }
+            })
+            
+            console.log(`🏆 Rank ${categoryChanged ? 'promotion' : 'advancement'}: ${oldRank.displayName} → ${newRank.displayName} for user ${submission.userId}`)
+          } else if (newRank && !oldRank) {
+            // First rank (0 XP → Initiate)
+            await tx.adminAction.create({
+              data: {
+                adminId: submission.userId,
+                action: 'RANK_PROMOTION',
+                targetType: 'user',
+                targetId: submission.userId,
+                details: {
+                  oldRank: 'No Rank',
+                  newRank: newRank.displayName,
+                  oldCategory: 'None',
+                  newCategory: newRank.category,
+                  xpAtPromotion: newTotalXp,
+                  categoryChanged: true,
+                  isDemotion: false,
+                  isBackfill: false,
+                  triggeredBy: 'submission_finalization',
+                  submissionId
+                }
+              }
+            })
+            
+            console.log(`🏆 First rank achieved: ${newRank.displayName} for user ${submission.userId}`)
+          }
+        }
 
         // 5. Update weekly stats (atomic upsert)
         const currentWeek = getWeekNumber(new Date())
