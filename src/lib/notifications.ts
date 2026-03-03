@@ -375,7 +375,8 @@ export async function notifyAdminMessage(userId: string, title: string, message:
 export async function notifyRankPromoted(
   userId: string,
   oldRank: { displayName: string; tier: string | null; category: string },
-  newRank: { displayName: string; tier: string | null; category: string }
+  newRank: { displayName: string; tier: string | null; category: string },
+  xpAtPromotion: number
 ) {
   const tierEmojis: Record<string, string> = {
     'Bronze': '🥉',
@@ -480,7 +481,8 @@ export async function notifyRankPromoted(
           categoryChanged: isFirstPromotion || categoryChanged, // First promotion is always a category change
           tierChanged: tierChanged && !isFirstPromotion, // First promotion has no tier change
           isFirstPromotion,
-          isDemotion
+          isDemotion,
+          xpAtPromotion
         }
       }
     })

@@ -461,41 +461,10 @@ export class XpAnalyticsService {
           tier: null
         } as any
         
-        // Send notification (async, non-blocking)
-        Promise.resolve(notifyRankPromoted(userId, oldRankData, newRank)).catch((err: any) => {
+        // Send notification and log admin action (async, non-blocking)
+        Promise.resolve(notifyRankPromoted(userId, oldRankData, newRank, newTotalXp)).catch((err: any) => {
           console.warn('Failed to send rank promotion notification:', err)
         })
-        
-        // Log promotion to AdminAction table (async, non-blocking)
-        const categoryChanged = oldRankData.category !== newRank.category
-        const logPromotion = async () => {
-          try {
-            await supabase
-              .from('AdminAction')
-              .insert({
-                adminId: userId,
-                action: 'RANK_PROMOTION',
-                targetType: 'user',
-                targetId: userId,
-                details: {
-                  oldRank: oldRankData.displayName,
-                  newRank: newRank.displayName,
-                  oldCategory: oldRankData.category,
-                  newCategory: newRank.category,
-                  xpAtPromotion: newTotalXp,
-                  categoryChanged,
-                  isDemotion: false,
-                  isBackfill: false,
-                  triggeredBy: 'xp_transaction',
-                  transactionType: type
-                }
-              })
-            console.log(`🏆 Rank ${categoryChanged ? 'promotion' : 'advancement'} logged: ${oldRankData.displayName} → ${newRank.displayName} for user ${userId}`)
-          } catch (err) {
-            console.warn('Failed to log rank promotion to AdminAction:', err)
-          }
-        }
-        void logPromotion()
       }
     } catch (error) {
       console.error('Error in recordXpTransaction:', error)

@@ -209,7 +209,7 @@ export async function propagateXpChanges(
       const newRank = getGamifiedRank(newTotalXp)
       
       if (newRank && oldRank && newRank.displayName !== oldRank.displayName) {
-        await notifyRankPromoted(submission.userId, oldRank, newRank)
+        await notifyRankPromoted(submission.userId, oldRank, newRank, newTotalXp)
         console.log(`🏆 Rank promotion for ${submission.userId}: ${oldRank.displayName} → ${newRank.displayName}`)
       }
     } catch (postError) {
