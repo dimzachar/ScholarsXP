@@ -35,7 +35,10 @@ export async function topUpMonthlyWinnerXpJS(month: string, supabaseAdmin: Supab
         .or(`type.eq.MONTHLY_WINNER_BONUS,description.ilike.%${month}%`)
         .limit(1)
 
-      if (txErr) continue
+      if (txErr) {
+        console.error(`[topUpMonthlyWinnerXpJS] Error checking existing TX for user ${w.userId}:`, txErr)
+        continue
+      }
       const hasTx = Array.isArray(txExists) && txExists.length > 0
       if (!hasTx) {
         // Try to insert transaction (best-effort)
@@ -47,6 +50,12 @@ export async function topUpMonthlyWinnerXpJS(month: string, supabaseAdmin: Supab
           weekNumber: getWeekNumber(awardTs),
           createdAt: awardTs.toISOString()
         })
+        
+        if (txInsert.error) {
+          console.error(`[topUpMonthlyWinnerXpJS] Failed to insert XP transaction for user ${w.userId}:`, txInsert.error)
+          continue
+        }
+        
         // Best-effort: bump currentWeekXp only when we added the missing TX
         try {
           const { data: userRows } = await supabaseAdmin
@@ -64,8 +73,10 @@ export async function topUpMonthlyWinnerXpJS(month: string, supabaseAdmin: Supab
               })
               .eq('id', w.userId)
           }
-        } catch {}
-        if (!txInsert.error) inserted++
+        } catch (err) {
+          console.error(`[topUpMonthlyWinnerXpJS] Error updating currentWeekXp for user ${w.userId}:`, err)
+        }
+        inserted++
       }
 
       // Always reconcile totalXp to sum of transactions (idempotent)
@@ -87,10 +98,13 @@ export async function topUpMonthlyWinnerXpJS(month: string, supabaseAdmin: Supab
             .update({ totalXp: calc, updatedAt: new Date().toISOString() })
             .eq('id', w.userId)
         }
-      } catch {}
+      } catch (err) {
+        console.error(`[topUpMonthlyWinnerXpJS] Error reconciling totalXp for user ${w.userId}:`, err)
+      }
     }
     return inserted
-  } catch {
+  } catch (err) {
+    console.error('[topUpMonthlyWinnerXpJS] Unexpected error:', err)
     return 0
   }
 }
