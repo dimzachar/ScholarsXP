@@ -30,6 +30,135 @@ export enum NotificationType {
   RANK_PROMOTED = 'RANK_PROMOTED'
 }
 
+interface RankPromotionContext {
+  triggeredBy?: string
+  submissionId?: string
+}
+
+interface RankPromotionPayload {
+  oldRank: { displayName: string; tier: string | null; category: string }
+  newRank: { displayName: string; tier: string | null; category: string }
+  categoryChanged: boolean
+  tierChanged: boolean
+  isDemotion: boolean
+  isFirstPromotion: boolean
+  xpAtPromotion: number
+  triggeredBy?: string
+  submissionId?: string
+  promotionKey: string
+}
+
+function buildPromotionKey(
+  oldRank: { displayName: string; tier: string | null; category: string },
+  newRank: { displayName: string; tier: string | null; category: string },
+  xpAtPromotion: number,
+  context?: RankPromotionContext
+): string {
+  return [
+    oldRank?.displayName || 'No Rank',
+    newRank.displayName,
+    String(xpAtPromotion),
+    context?.triggeredBy || 'direct',
+    context?.submissionId || 'none'
+  ].join('::')
+}
+
+function mapNotificationRow(notification: any): Notification {
+  return {
+    id: notification.id,
+    userId: notification.userId,
+    type: notification.type as NotificationType,
+    title: notification.title,
+    message: notification.message,
+    data: notification.data,
+    read: notification.read,
+    createdAt: new Date(notification.createdAt)
+  }
+}
+
+async function findExistingNotification(
+  userId: string,
+  type: NotificationType,
+  dataContains: Record<string, unknown>
+): Promise<Notification | null> {
+  const service = createServiceClient()
+  const { data, error } = await service
+    .from('notifications')
+    .select('id, userId, type, title, message, data, read, createdAt')
+    .eq('userId', userId)
+    .eq('type', type)
+    .contains('data', dataContains)
+    .order('createdAt', { ascending: false })
+    .limit(1)
+
+  if (error) {
+    console.error('Error checking existing notifications:', error)
+    throw new Error('Failed to check existing notifications')
+  }
+
+  if (!data || data.length === 0) {
+    return null
+  }
+
+  return mapNotificationRow(data[0])
+}
+
+async function createNotificationIfNotExists(
+  userId: string,
+  type: NotificationType,
+  title: string,
+  message: string,
+  data: Record<string, unknown>,
+  dedupeData: Record<string, unknown>
+): Promise<{ notification: Notification; created: boolean }> {
+  const existingNotification = await findExistingNotification(userId, type, dedupeData)
+  if (existingNotification) {
+    return {
+      notification: existingNotification,
+      created: false
+    }
+  }
+
+  const notification = await createNotification(userId, type, title, message, data)
+  return {
+    notification,
+    created: true
+  }
+}
+
+function matchesPromotionPayload(details: any, expected: RankPromotionPayload): boolean {
+  if (!details || typeof details !== 'object') {
+    return false
+  }
+
+  if (details.promotionKey && details.promotionKey === expected.promotionKey) {
+    return true
+  }
+
+  return details.oldRank === expected.oldRank.displayName
+    && details.newRank === expected.newRank.displayName
+    && details.xpAtPromotion === expected.xpAtPromotion
+    && (expected.triggeredBy ? details.triggeredBy === expected.triggeredBy : true)
+    && (expected.submissionId ? details.submissionId === expected.submissionId : true)
+}
+
+async function hasExistingRankPromotionAction(
+  userId: string,
+  payload: RankPromotionPayload
+): Promise<boolean> {
+  const existingActions = await prisma.adminAction.findMany({
+    where: {
+      action: 'RANK_PROMOTION',
+      targetId: userId
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    select: { details: true }
+  })
+
+  return existingActions.some((action) => matchesPromotionPayload(action.details, payload))
+}
+
 export async function createNotification(
   userId: string,
   type: NotificationType,
@@ -65,16 +194,7 @@ export async function createNotification(
 
     console.log(`📧 Notification created for user ${userId}: ${title}`)
 
-    return {
-      id: notification.id,
-      userId: notification.userId,
-      type: notification.type as NotificationType,
-      title: notification.title,
-      message: notification.message,
-      data: notification.data,
-      read: notification.read,
-      createdAt: new Date(notification.createdAt)
-    }
+    return mapNotificationRow(notification)
   } catch (error) {
     console.error('Error creating notification:', error)
     throw new Error('Failed to create notification')
@@ -321,12 +441,13 @@ export async function notifySubmissionFinalized(
   finalXp: number,
   submissionUrl?: string
 ) {
-  await createNotification(
+  await createNotificationIfNotExists(
     userId,
     NotificationType.SUBMISSION_FINALIZED,
     '🎉 Submission Finalized!',
     `Congratulations! Your submission has been finalized and you've earned ${finalXp} XP!`,
-    { submissionId, finalXp, submissionUrl, status: 'FINALIZED' }
+    { submissionId, finalXp, submissionUrl, status: 'FINALIZED' },
+    { submissionId, status: 'FINALIZED' }
   )
 }
 
@@ -376,7 +497,8 @@ export async function notifyRankPromoted(
   userId: string,
   oldRank: { displayName: string; tier: string | null; category: string },
   newRank: { displayName: string; tier: string | null; category: string },
-  xpAtPromotion: number
+  xpAtPromotion: number,
+  context?: RankPromotionContext
 ) {
   const tierEmojis: Record<string, string> = {
     'Bronze': '🥉',
@@ -402,6 +524,10 @@ export async function notifyRankPromoted(
   const oldRankIndex = RANK_THRESHOLDS.findIndex(r => r.displayName === oldRank.displayName)
   const newRankIndex = RANK_THRESHOLDS.findIndex(r => r.displayName === newRank.displayName)
   const isDemotion = newRankIndex < oldRankIndex
+  const isFirstPromotion = !oldRank || oldRank.category === 'None' || oldRank.displayName === 'No Rank'
+  const normalizedCategoryChanged = isFirstPromotion || categoryChanged
+  const normalizedTierChanged = tierChanged && !isFirstPromotion
+  const promotionKey = buildPromotionKey(oldRank, newRank, xpAtPromotion, context)
   
   // Determine emoji: tier emoji if available, otherwise category emoji
   const emoji = newRank.tier 
@@ -429,7 +555,22 @@ export async function notifyRankPromoted(
     message = `Congratulations! You've advanced from ${oldRank.displayName} to ${newRank.displayName}!`
   }
 
-  await createNotification(
+  const payload: RankPromotionPayload = {
+    oldRank,
+    newRank,
+    categoryChanged: normalizedCategoryChanged,
+    tierChanged: normalizedTierChanged,
+    isDemotion,
+    isFirstPromotion,
+    xpAtPromotion,
+    triggeredBy: context?.triggeredBy,
+    submissionId: context?.submissionId,
+    promotionKey
+  }
+
+  const existingPromotionAction = await hasExistingRankPromotionAction(userId, payload)
+
+  await createNotificationIfNotExists(
     userId,
     isDemotion ? NotificationType.ADMIN_MESSAGE : NotificationType.RANK_PROMOTED,
     title,
@@ -437,62 +578,69 @@ export async function notifyRankPromoted(
     {
       oldRank,
       newRank,
-      categoryChanged,
-      tierChanged,
+      categoryChanged: normalizedCategoryChanged,
+      tierChanged: normalizedTierChanged,
       isDemotion,
-      color: newRank.tier ? tierEmojis[newRank.tier] : categoryEmojis[newRank.category]
-    }
+      color: newRank.tier ? tierEmojis[newRank.tier] : categoryEmojis[newRank.category],
+      xpAtPromotion,
+      triggeredBy: context?.triggeredBy,
+      submissionId: context?.submissionId,
+      promotionKey
+    },
+    { promotionKey }
   )
 
   // Also log to admin actions for audit trail (system-triggered)
   const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000001'
-  
-  // Determine if this is the first promotion (from no rank to Initiate)
-  const isFirstPromotion = !oldRank || oldRank.category === 'None' || oldRank.displayName === 'No Rank'
-  
-  try {
+
+  if (!existingPromotionAction) {
+    try {
     // Ensure system user exists (idempotent - safe to call multiple times)
-    await prisma.user.upsert({
-      where: { id: SYSTEM_USER_ID },
-      update: {}, // No updates needed if exists
-      create: {
-        id: SYSTEM_USER_ID,
-        username: 'system',
-        email: 'system@scholarsxp.internal',
-        role: 'ADMIN',
-        totalXp: 0,
-        currentWeekXp: 0
-      }
-    })
-    
-    await prisma.adminAction.create({
-      data: {
-        adminId: SYSTEM_USER_ID,
-        action: 'RANK_PROMOTION',
-        targetType: 'user',
-        targetId: userId,
-        details: {
-          oldRank: oldRank?.displayName || 'No Rank',
-          newRank: newRank.displayName,
-          oldCategory: oldRank?.category || 'None',
-          newCategory: newRank.category,
-          oldTier: oldRank?.tier || null,
-          newTier: newRank.tier,
-          categoryChanged: isFirstPromotion || categoryChanged, // First promotion is always a category change
-          tierChanged: tierChanged && !isFirstPromotion, // First promotion has no tier change
-          isFirstPromotion,
-          isDemotion,
-          xpAtPromotion
+      await prisma.user.upsert({
+        where: { id: SYSTEM_USER_ID },
+        update: {}, // No updates needed if exists
+        create: {
+          id: SYSTEM_USER_ID,
+          username: 'system',
+          email: 'system@scholarsxp.internal',
+          role: 'ADMIN',
+          totalXp: 0,
+          currentWeekXp: 0
         }
-      }
-    })
-    console.log(`[Rank${isDemotion ? 'Demotion' : 'Promotion'}] Logged admin action for user ${userId}: ${oldRank?.displayName || 'No Rank'} → ${newRank.displayName}`)
-  } catch (err) {
-    console.warn(`[Rank${isDemotion ? 'Demotion' : 'Promotion'}] Failed to log admin action:`, err)
+      })
+
+      await prisma.adminAction.create({
+        data: {
+          adminId: SYSTEM_USER_ID,
+          action: 'RANK_PROMOTION',
+          targetType: 'user',
+          targetId: userId,
+          details: {
+            oldRank: oldRank?.displayName || 'No Rank',
+            newRank: newRank.displayName,
+            oldCategory: oldRank?.category || 'None',
+            newCategory: newRank.category,
+            oldTier: oldRank?.tier || null,
+            newTier: newRank.tier,
+            categoryChanged: normalizedCategoryChanged,
+            tierChanged: normalizedTierChanged,
+            isFirstPromotion,
+            isDemotion,
+            xpAtPromotion,
+            triggeredBy: context?.triggeredBy,
+            submissionId: context?.submissionId,
+            promotionKey
+          }
+        }
+      })
+      console.log(`[Rank${isDemotion ? 'Demotion' : 'Promotion'}] Logged admin action for user ${userId}: ${oldRank?.displayName || 'No Rank'} → ${newRank.displayName}`)
+    } catch (err) {
+      console.warn(`[Rank${isDemotion ? 'Demotion' : 'Promotion'}] Failed to log admin action:`, err)
+    }
   }
 
   // Send Discord notification for major role changes only (fire and forget)
-  if (categoryChanged) {
+  if (normalizedCategoryChanged && !existingPromotionAction) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { username: true }

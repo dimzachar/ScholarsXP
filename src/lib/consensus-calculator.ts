@@ -8,7 +8,7 @@ import { generateReviewSummary } from '@/lib/ai-summary'
 import { reliabilityService } from './reliability/reliability-service'
 import { RELIABILITY_CONFIG } from '@/config/reliability'
 import { getFormula, calculateScore } from './reliability/formulas'
-import { notifySubmissionFinalized } from '@/lib/notifications'
+import { notifyRankPromoted, notifySubmissionFinalized } from '@/lib/notifications'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -39,6 +39,12 @@ export interface ReviewerReliability {
   totalReviews: number
   averageDeviation: number
   qualityRating: number
+}
+
+interface RankSnapshot {
+  displayName: string
+  tier: string | null
+  category: string
 }
 
 /**
@@ -405,6 +411,9 @@ export class ConsensusCalculatorService {
    * Update submission with consensus results using atomic transaction
    */
   private async updateSubmissionWithConsensus(submissionId: string, result: ConsensusResult): Promise<void> {
+    let finalizedSubmission: { userId: string; url: string | null } | null = null
+    let rankPromotion: { userId: string; oldRank: RankSnapshot; newRank: RankSnapshot; xpAtPromotion: number } | null = null
+
     // ✅ SAFE: All operations in single atomic transaction
     await prisma.$transaction(async (tx) => {
       const startTime = Date.now()
@@ -413,12 +422,19 @@ export class ConsensusCalculatorService {
         // 1. Get submission to find userId
         const submission = await tx.submission.findUnique({
           where: { id: submissionId },
-          select: { userId: true, url: true }
+          select: { userId: true, url: true, status: true }
         })
 
         if (!submission) {
           throw new Error(`Submission ${submissionId} not found`)
         }
+
+        if (submission.status === 'FINALIZED') {
+          console.log(`⚠️ Submission ${submissionId} is already finalized, skipping duplicate consensus finalization`)
+          return
+        }
+
+        finalizedSubmission = { userId: submission.userId, url: submission.url }
 
         // 2. Enforce weekly finalization cap (max 5 FINALIZED per user per week)
         const now = new Date()
@@ -500,55 +516,28 @@ export class ConsensusCalculatorService {
           const oldRank = getGamifiedRank(oldTotalXp)
           const newRank = getGamifiedRank(newTotalXp)
           
-          // Log promotion if rank changed
+          // Queue promotion notification if rank changed
           if (newRank && oldRank && newRank.displayName !== oldRank.displayName) {
             const categoryChanged = oldRank.category !== newRank.category
-            
-            await tx.adminAction.create({
-              data: {
-                adminId: submission.userId, // System-triggered
-                action: 'RANK_PROMOTION',
-                targetType: 'user',
-                targetId: submission.userId,
-                details: {
-                  oldRank: oldRank.displayName,
-                  newRank: newRank.displayName,
-                  oldCategory: oldRank.category,
-                  newCategory: newRank.category,
-                  xpAtPromotion: newTotalXp,
-                  categoryChanged,
-                  isDemotion: false,
-                  isBackfill: false,
-                  triggeredBy: 'submission_finalization',
-                  submissionId
-                }
-              }
-            })
-            
+            rankPromotion = {
+              userId: submission.userId,
+              oldRank,
+              newRank,
+              xpAtPromotion: newTotalXp
+            }
             console.log(`🏆 Rank ${categoryChanged ? 'promotion' : 'advancement'}: ${oldRank.displayName} → ${newRank.displayName} for user ${submission.userId}`)
           } else if (newRank && !oldRank) {
             // First rank (0 XP → Initiate)
-            await tx.adminAction.create({
-              data: {
-                adminId: submission.userId,
-                action: 'RANK_PROMOTION',
-                targetType: 'user',
-                targetId: submission.userId,
-                details: {
-                  oldRank: 'No Rank',
-                  newRank: newRank.displayName,
-                  oldCategory: 'None',
-                  newCategory: newRank.category,
-                  xpAtPromotion: newTotalXp,
-                  categoryChanged: true,
-                  isDemotion: false,
-                  isBackfill: false,
-                  triggeredBy: 'submission_finalization',
-                  submissionId
-                }
-              }
-            })
-            
+            rankPromotion = {
+              userId: submission.userId,
+              oldRank: {
+                displayName: 'No Rank',
+                tier: null,
+                category: 'None'
+              },
+              newRank,
+              xpAtPromotion: newTotalXp
+            }
             console.log(`🏆 First rank achieved: ${newRank.displayName} for user ${submission.userId}`)
           }
         }
@@ -611,17 +600,43 @@ export class ConsensusCalculatorService {
         await cacheInvalidation.invalidateOnUserAction('xp_awarded', submission.userId)
         console.log(`🗑️ Cache invalidated for user ${submission.userId} after XP award`)
 
-        // Send submission finalized notification (fire and forget)
-        notifySubmissionFinalized(submission.userId, submissionId, result.finalXp, submission.url).catch(err => {
-          console.warn('Failed to send submission finalized notification:', err)
-        })
-
       } catch (error) {
         const duration = Date.now() - startTime
         console.error(`❌ Consensus transaction failed after ${duration}ms for submission ${submissionId}:`, error)
         throw error // This will rollback the transaction
       }
     })
+
+    const finalizedSubmissionResult = finalizedSubmission
+    const rankPromotionResult = rankPromotion
+
+    if (!finalizedSubmissionResult) {
+      return
+    }
+
+    notifySubmissionFinalized(
+      finalizedSubmissionResult.userId,
+      submissionId,
+      result.finalXp,
+      finalizedSubmissionResult.url ?? undefined
+    ).catch(err => {
+      console.warn('Failed to send submission finalized notification:', err)
+    })
+
+    if (rankPromotionResult) {
+      notifyRankPromoted(
+        rankPromotionResult.userId,
+        rankPromotionResult.oldRank,
+        rankPromotionResult.newRank,
+        rankPromotionResult.xpAtPromotion,
+        {
+          triggeredBy: 'submission_finalization',
+          submissionId
+        }
+      ).catch(err => {
+        console.warn('Failed to send rank promotion notification:', err)
+      })
+    }
   }
 
   /**
