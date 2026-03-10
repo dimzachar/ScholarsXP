@@ -31,6 +31,8 @@ interface ReviewerRecord {
   lastActiveAt?: string | null
   lastLoginAt?: string | null
   createdAt?: string
+  reviewPausedUntil?: string | null
+  reviewPausedPermanently?: boolean
   reviewerOptOut?: boolean
   reviewerOptOutUntil?: string | null
   reviewerOptOutActive?: boolean
@@ -38,6 +40,51 @@ interface ReviewerRecord {
     totalReviews?: number
     submissionSuccessRate?: number
     reliabilityScore?: number | null
+  }
+}
+
+function parseFutureDate(value?: string | null): Date | null {
+  if (!value) {
+    return null
+  }
+
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime()) || parsed.getTime() <= Date.now()) {
+    return null
+  }
+
+  return parsed
+}
+
+function getReviewerAvailabilityState(reviewer: ReviewerRecord) {
+  const manualPauseUntil = parseFutureDate(reviewer.reviewerOptOutUntil)
+  const strikePauseUntil = parseFutureDate(reviewer.reviewPausedUntil)
+  const manuallyPausedIndefinitely = reviewer.reviewerOptOut === true
+  const strikePausedPermanently = reviewer.reviewPausedPermanently === true
+
+  const reasons: string[] = []
+
+  if (strikePausedPermanently) {
+    reasons.push('Permanently banned from reviewing')
+  } else if (strikePauseUntil) {
+    reasons.push(`Paused by strike until ${strikePauseUntil.toLocaleDateString()}`)
+  }
+
+  if (manuallyPausedIndefinitely) {
+    reasons.push('Paused indefinitely')
+  } else if (manualPauseUntil) {
+    reasons.push(`Temporarily paused until ${manualPauseUntil.toLocaleDateString()}`)
+  }
+
+  return {
+    reasons,
+    isPaused: reasons.length > 0,
+    isTemporarilyPaused: Boolean(strikePauseUntil || manualPauseUntil),
+    isIndefinitelyPaused: strikePausedPermanently || manuallyPausedIndefinitely,
+    strikePausedPermanently,
+    strikePauseUntil,
+    manuallyPausedIndefinitely,
+    manualPauseUntil
   }
 }
 
@@ -119,19 +166,13 @@ export default function ReviewerAvailabilityPage() {
     priority?: number
     priorityNote?: string 
   } => {
+    const availability = getReviewerAvailabilityState(reviewer)
     const reasons: string[] = []
     const MAX_ACTIVE_ASSIGNMENTS = 5
     const MIN_XP_REQUIRED = 50
-    const MAX_MISSED_REVIEWS = 3
 
-    // Check if opted out
-    if (reviewer.reviewerOptOutActive) {
-      reasons.push(reviewer.reviewerOptOut ? 'Paused indefinitely' : 'Temporarily paused')
-    }
-
-    // Check missed reviews
-    if ((reviewer.missedReviews || 0) > MAX_MISSED_REVIEWS) {
-      reasons.push(`Too many missed reviews (${reviewer.missedReviews})`)
+    if (availability.isPaused) {
+      reasons.push(...availability.reasons)
     }
 
     // Check XP requirement (ADMINs and DEVELOPERs exempt)
@@ -149,8 +190,7 @@ export default function ReviewerAvailabilityPage() {
     // Calculate priority rank among eligible reviewers
     if (inPool) {
       const eligibleReviewers = allReviewers.filter(r => {
-        if (r.reviewerOptOutActive) return false
-        if ((r.missedReviews || 0) > MAX_MISSED_REVIEWS) return false
+        if (getReviewerAvailabilityState(r).isPaused) return false
         if ((r.totalXp || 0) < MIN_XP_REQUIRED && !isAdmin(r.role)) return false
         if ((r.activeAssignments || 0) >= MAX_ACTIVE_ASSIGNMENTS) return false
         return true
@@ -184,8 +224,8 @@ export default function ReviewerAvailabilityPage() {
 
   const summary = useMemo(() => {
     const total = reviewers.length
-    const paused = reviewers.filter(r => r.reviewerOptOutActive).length
-    const indefinite = reviewers.filter(r => r.reviewerOptOut === true).length
+    const paused = reviewers.filter(r => getReviewerAvailabilityState(r).isPaused).length
+    const indefinite = reviewers.filter(r => getReviewerAvailabilityState(r).isIndefinitelyPaused).length
     const temporary = Math.max(paused - indefinite, 0)
     const inPool = reviewers.filter(r => getPoolEligibility(r, reviewers).inPool).length
 
@@ -311,24 +351,44 @@ export default function ReviewerAvailabilityPage() {
   }
 
   const formatStatus = (reviewer: ReviewerRecord) => {
-    if (reviewer.reviewerOptOut) {
+    const availability = getReviewerAvailabilityState(reviewer)
+
+    if (availability.strikePausedPermanently) {
+      return 'Banned from reviewing'
+    }
+
+    if (availability.strikePauseUntil) {
+      return `Paused by strike until ${availability.strikePauseUntil.toLocaleDateString()}`
+    }
+
+    if (availability.manuallyPausedIndefinitely) {
       return 'Paused (indefinite)'
     }
 
-    if (reviewer.reviewerOptOutActive && reviewer.reviewerOptOutUntil) {
-      return `Paused until ${new Date(reviewer.reviewerOptOutUntil).toLocaleDateString()}`
+    if (availability.manualPauseUntil) {
+      return `Paused until ${availability.manualPauseUntil.toLocaleDateString()}`
     }
 
     return 'Available for auto-assign'
   }
 
   const renderStatusBadge = (reviewer: ReviewerRecord) => {
-    if (reviewer.reviewerOptOut) {
+    const availability = getReviewerAvailabilityState(reviewer)
+
+    if (availability.strikePausedPermanently) {
+      return <Badge variant="destructive">Banned by strike</Badge>
+    }
+
+    if (availability.strikePauseUntil) {
+      return <Badge variant="outline">Paused by strike until {availability.strikePauseUntil.toLocaleDateString()}</Badge>
+    }
+
+    if (availability.manuallyPausedIndefinitely) {
       return <Badge variant="destructive">Paused indefinitely</Badge>
     }
 
-    if (reviewer.reviewerOptOutActive && reviewer.reviewerOptOutUntil) {
-      return <Badge variant="outline">Paused until {new Date(reviewer.reviewerOptOutUntil).toLocaleDateString()}</Badge>
+    if (availability.manualPauseUntil) {
+      return <Badge variant="outline">Paused until {availability.manualPauseUntil.toLocaleDateString()}</Badge>
     }
 
     return <Badge variant="secondary">Auto-assign enabled</Badge>

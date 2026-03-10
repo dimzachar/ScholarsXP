@@ -83,6 +83,8 @@ export interface ReviewerCandidate {
   averageReviewTime?: number
   reviewQualityScore?: number
   lastActiveAt?: Date
+  reviewPausedUntil?: string | null
+  reviewPausedPermanently?: boolean
 }
 
 export interface AssignmentResult {
@@ -182,7 +184,9 @@ export class ReviewerPoolService {
           totalXp: user.totalXp,
           missedReviews: user.missedReviews,
           activeAssignments: assignmentCounts[user.id] || 0,
-          lastActiveAt: user.lastActiveAt ? new Date(user.lastActiveAt) : undefined
+          lastActiveAt: user.lastActiveAt ? new Date(user.lastActiveAt) : undefined,
+          reviewPausedUntil: user.reviewPausedUntil,
+          reviewPausedPermanently: user.reviewPausedPermanently
         }))
         .filter(candidate => {
           // Filter by workload
