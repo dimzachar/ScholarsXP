@@ -69,7 +69,7 @@ export default function AdminPromotionsPage() {
   const [items, setItems] = useState<Promotion[]>([])
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(() => parseInt(searchParams.get('page') || '1', 10))
-  const [limit, setLimit] = useState(50)
+  const limit = 50
   const [total, setTotal] = useState(0)
   const [category, setCategory] = useState(searchParams.get('category') || 'all')
   const [q, setQ] = useState('')
