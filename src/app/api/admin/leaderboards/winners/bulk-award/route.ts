@@ -13,7 +13,7 @@ export const POST = withPermission('admin_access')(async (req: AuthenticatedRequ
     if (monthsErr) throw new Error(monthsErr.message)
     const months: string[] = (monthsData || []).map((m: any) => m.month)
     // Process oldest -> newest so cooldown applies across months correctly
-    const monthsAsc = [...months].sort()
+    const monthsAsc = [...months].sort((a, b) => a.localeCompare(b))
 
     const awarded: string[] = []
     const skipped: string[] = []

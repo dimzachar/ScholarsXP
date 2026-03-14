@@ -33,7 +33,7 @@ export class QueryCache {
    */
   static createKey(endpoint: string, params: Record<string, any>): string {
     const sortedParams = Object.keys(params)
-      .sort()
+      .sort((a, b) => a.localeCompare(b))
       .map(key => `${key}:${params[key]}`)
       .join('|')
     return `api:${endpoint}:${sortedParams}`

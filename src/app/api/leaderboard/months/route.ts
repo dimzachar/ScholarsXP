@@ -24,7 +24,7 @@ export const GET = withPublicOptimization(withErrorHandling(async (_request: Nex
     // Ensure current month is present, even if no data yet
     const current = getCurrentMonthUTC()
     const set = new Set<string>([...monthsWithXp, ...monthsWithWinners, current])
-    data = { months: Array.from(set).sort().reverse() }
+    data = { months: Array.from(set).sort((a, b) => a.localeCompare(b)).reverse() }
     await multiLayerCache.set(cacheKey, data, 300)
   }
   return NextResponse.json({ success: true, data })
