@@ -296,7 +296,7 @@ export default function ReliabilitySimulatorPage() {
 
     if (diff !== 0 && rounded.length > 0) {
       // Adjust the largest weight to absorb rounding error
-      const largest = rounded.reduce((prev, curr) => (prev.value > curr.value) ? prev : curr)
+      const largest = rounded.reduce((prev, curr) => (prev.value > curr.value) ? prev : curr, rounded[0])
       largest.value = Math.round((largest.value + diff) * 10) / 10
     }
 
