@@ -40,11 +40,8 @@ export function MobileInput({
     return 'h-14' // Full height for desktop
   }
 
-  // Determine text size based on device
-  const getTextSize = () => {
-    if (isMobile) return 'text-base' // Prevent zoom on iOS
-    return 'text-base'
-  }
+  // text-base on all devices to prevent zoom on iOS
+  const getTextSize = () => 'text-base'
 
   // Determine padding based on badge presence and device
   const getPadding = () => {
