@@ -303,8 +303,8 @@ export default function ReviewerAvailabilityPage() {
 
   const handleQuickToggle = async (reviewer: ReviewerRecord) => {
     await applyAvailability(reviewer, {
-      reviewerOptOut: reviewer.reviewerOptOutActive ? false : true,
-      reviewerOptOutUntil: reviewer.reviewerOptOutActive ? null : null,
+      reviewerOptOut: !reviewer.reviewerOptOutActive,
+      reviewerOptOutUntil: null,
       mode: reviewer.reviewerOptOutActive ? 'available' : 'indefinite'
     })
   }
