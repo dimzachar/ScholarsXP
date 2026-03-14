@@ -339,8 +339,8 @@ export default function AdminDashboardPage() {
                 {!loadingStats && module.stats.length > 0 && (
                   <CardContent>
                     <div className="grid grid-cols-3 gap-4">
-                      {module.stats.map((stat, index) => (
-                        <div key={index} className="text-center">
+                      {module.stats.map((stat) => (
+                        <div key={stat.label} className="text-center">
                           <div className="font-bold text-lg">{stat.value}</div>
                           <div className="text-xs text-muted-foreground">{stat.label}</div>
                         </div>
