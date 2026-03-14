@@ -351,8 +351,7 @@ export default function ReviewPage() {
     try {
       const parsed = new URL(ensureProtocol(rawUrl))
       const path = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname.replace(/\/$/, '') : ''
-      const suffix = parsed.search || parsed.hash ? '' : ''
-      const combined = `${parsed.hostname}${path}${suffix}`
+      const combined = `${parsed.hostname}${path}`
       return combined.length > 64 ? combined.slice(0, 63) + '…' : combined
     } catch {
       return rawUrl.length > 64 ? rawUrl.slice(0, 63) + '…' : rawUrl
