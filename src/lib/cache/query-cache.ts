@@ -222,15 +222,12 @@ export class CacheWarmer {
    * Warm analytics cache with current data
    */
   static async warmAnalytics(): Promise<void> {
-    console.log('🔥 Warming analytics cache...')
-
     // Warm common analytics queries
     const timeframes = ['last_7_days', 'last_30_days', 'last_90_days']
 
     for (const timeframe of timeframes) {
-      const key = QueryCache.createKey('analytics', { timeframe })
+      QueryCache.createKey('analytics', { timeframe })
       // Note: This would need to import and call the actual analytics function
-      console.log(`🔥 Would warm: ${key}`)
     }
   }
 
@@ -238,16 +235,13 @@ export class CacheWarmer {
    * Warm leaderboard cache
    */
   static async warmLeaderboard(): Promise<void> {
-    console.log('🔥 Warming leaderboard cache...')
-
     // Warm common leaderboard queries
     const pages = [1, 2, 3]
     const limits = [20, 50]
 
     for (const page of pages) {
       for (const limit of limits) {
-        const key = QueryCache.createKey('leaderboard', { page, limit })
-        console.log(`🔥 Would warm: ${key}`)
+        QueryCache.createKey('leaderboard', { page, limit })
       }
     }
   }
