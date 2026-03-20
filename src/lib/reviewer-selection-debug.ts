@@ -3,6 +3,7 @@ import { REVIEWER_ROLES, isAdmin } from '@/lib/roles'
 import { RELIABILITY_CONFIG } from '@/config/reliability'
 import { calculateScore, getFormula } from '@/lib/reliability/formulas'
 import type { ReviewerMetrics } from '@/lib/reliability/types'
+import { compareReviewerPriorityValues } from '@/lib/reviewer-ranking'
 
 const MIN_REVIEWER_XP = 50
 const MAX_ACTIVE_ASSIGNMENTS = 5
@@ -293,13 +294,18 @@ async function buildReplayEvent(
   const rankedPool = candidates
     .filter(candidate => candidate.inPool)
     .sort((a, b) => {
-      if (a.activeAssignmentsBefore !== b.activeAssignmentsBefore) {
-        return a.activeAssignmentsBefore - b.activeAssignmentsBefore
-      }
-      if (a.reliabilityScore !== b.reliabilityScore) {
-        return b.reliabilityScore - a.reliabilityScore
-      }
-      return b.totalXp - a.totalXp
+      return compareReviewerPriorityValues(
+        {
+          activeAssignments: a.activeAssignmentsBefore,
+          reliabilityScore: a.reliabilityScore,
+          totalXp: a.totalXp
+        },
+        {
+          activeAssignments: b.activeAssignmentsBefore,
+          reliabilityScore: b.reliabilityScore,
+          totalXp: b.totalXp
+        }
+      )
     })
     .map((candidate, index) => ({
       ...candidate,

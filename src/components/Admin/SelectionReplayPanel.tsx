@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { formatReliabilityPercent } from '@/lib/reviewer-ranking'
 
 interface SelectionReplayCandidate {
   id: string
@@ -43,10 +44,6 @@ interface SubmissionSelectionReplay {
 
 interface SelectionReplayPanelProps {
   replay: SubmissionSelectionReplay | null
-}
-
-function formatPercent(value: number): string {
-  return `${Math.round(value * 100)}%`
 }
 
 function formatReplayTimestamp(value: string): string {
@@ -166,7 +163,7 @@ export default function SelectionReplayPanel({ replay }: SelectionReplayPanelPro
                         </Badge>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Reliability {details ? formatPercent(details.reliabilityScore) : '-'} · XP {details?.totalXp ?? '-'} · Active {details?.activeAssignmentsBefore ?? '-'}
+                        Reliability {formatReliabilityPercent(details?.reliabilityScore)} · XP {details?.totalXp ?? '-'} · Active {details?.activeAssignmentsBefore ?? '-'}
                       </p>
                       <p className="mt-2 text-xs text-muted-foreground">
                         Current assignment status: {selection.status}
@@ -216,7 +213,7 @@ export default function SelectionReplayPanel({ replay }: SelectionReplayPanelPro
                                 #{candidate.priority} {candidate.username}
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                Reliability {formatPercent(candidate.reliabilityScore)} · XP {candidate.totalXp}
+                                Reliability {formatReliabilityPercent(candidate.reliabilityScore)} · XP {candidate.totalXp}
                               </p>
                             </div>
                             {candidate.selected && <Badge variant="secondary">Selected</Badge>}

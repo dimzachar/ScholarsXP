@@ -18,6 +18,7 @@ import { toast } from 'sonner'
 import { CalendarClock, CheckCircle2, Loader2, PauseCircle, PlayCircle, RefreshCw, Shield, Users, XCircle } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import ReviewerPoolBuckets from '@/components/Admin/ReviewerPoolBuckets'
+import { compareReviewerPriorityValues, formatReliabilityPercent } from '@/lib/reviewer-ranking'
 
 type AvailabilityMode = 'available' | 'temporary' | 'indefinite'
 
@@ -200,13 +201,18 @@ export default function ReviewerAvailabilityPage() {
       // Sort by workload (asc), then reliability (desc), then XP (desc) -
       // same as reviewer-pool.ts.
       const sorted = [...eligibleReviewers].sort((a, b) => {
-        const aAssign = a.activeAssignments || 0
-        const bAssign = b.activeAssignments || 0
-        if (aAssign !== bAssign) return aAssign - bAssign
-        const aReliability = a.metrics?.reliabilityScore ?? 0
-        const bReliability = b.metrics?.reliabilityScore ?? 0
-        if (aReliability !== bReliability) return bReliability - aReliability
-        return (b.totalXp || 0) - (a.totalXp || 0)
+        return compareReviewerPriorityValues(
+          {
+            activeAssignments: a.activeAssignments,
+            reliabilityScore: a.metrics?.reliabilityScore,
+            totalXp: a.totalXp
+          },
+          {
+            activeAssignments: b.activeAssignments,
+            reliabilityScore: b.metrics?.reliabilityScore,
+            totalXp: b.totalXp
+          }
+        )
       })
 
       const priority = sorted.findIndex(r => r.id === reviewer.id) + 1
@@ -557,7 +563,7 @@ export default function ReviewerAvailabilityPage() {
                             </TableCell>
                             <TableCell className="hidden md:table-cell">
                               {reviewer.metrics?.reliabilityScore !== null && reviewer.metrics?.reliabilityScore !== undefined
-                                ? `${Math.round(reviewer.metrics.reliabilityScore * 100)}%`
+                                ? formatReliabilityPercent(reviewer.metrics.reliabilityScore)
                                 : '-'
                               }
                             </TableCell>
@@ -587,7 +593,7 @@ export default function ReviewerAvailabilityPage() {
                                             <p className="font-medium">Priority #{priority} of {summary.inPool}</p>
                                             <p className="text-sm text-muted-foreground">{priorityNote}</p>
                                             <p className="text-xs text-muted-foreground mt-1">
-                                              Reliability: {reviewer.metrics?.reliabilityScore !== null && reviewer.metrics?.reliabilityScore !== undefined ? `${Math.round(reviewer.metrics.reliabilityScore * 100)}%` : '-'} | XP: {reviewer.totalXp || 0} | Active: {reviewer.activeAssignments || 0}
+                                              Reliability: {formatReliabilityPercent(reviewer.metrics?.reliabilityScore)} | XP: {reviewer.totalXp || 0} | Active: {reviewer.activeAssignments || 0}
                                             </p>
                                           </div>
                                         ) : (

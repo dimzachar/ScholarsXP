@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { compareReviewerPriorityValues, formatReliabilityPercent } from '@/lib/reviewer-ranking'
 
 interface ReviewerPoolBucketRecord {
   id: string
@@ -16,25 +17,20 @@ interface ReviewerPoolBucketsProps {
   reviewers: ReviewerPoolBucketRecord[]
 }
 
-function formatPercent(value?: number | null): string {
-  if (value === null || value === undefined) {
-    return '-'
-  }
-
-  return `${Math.round(value * 100)}%`
-}
-
 export default function ReviewerPoolBuckets({ reviewers }: ReviewerPoolBucketsProps) {
   const rankedReviewers = [...reviewers].sort((a, b) => {
-    const aActive = a.activeAssignments || 0
-    const bActive = b.activeAssignments || 0
-    if (aActive !== bActive) return aActive - bActive
-
-    const aReliability = a.metrics?.reliabilityScore ?? 0
-    const bReliability = b.metrics?.reliabilityScore ?? 0
-    if (aReliability !== bReliability) return bReliability - aReliability
-
-    return (b.totalXp || 0) - (a.totalXp || 0)
+    return compareReviewerPriorityValues(
+      {
+        activeAssignments: a.activeAssignments,
+        reliabilityScore: a.metrics?.reliabilityScore,
+        totalXp: a.totalXp
+      },
+      {
+        activeAssignments: b.activeAssignments,
+        reliabilityScore: b.metrics?.reliabilityScore,
+        totalXp: b.totalXp
+      }
+    )
   })
 
   const topReviewers = rankedReviewers.slice(0, 3)
@@ -82,7 +78,7 @@ export default function ReviewerPoolBuckets({ reviewers }: ReviewerPoolBucketsPr
                         #{index + 1} {reviewer.username || reviewer.email.split('@')[0]}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Active {reviewer.activeAssignments || 0} · Reliability {formatPercent(reviewer.metrics?.reliabilityScore)} · XP {reviewer.totalXp || 0}
+                        Active {reviewer.activeAssignments || 0} · Reliability {formatReliabilityPercent(reviewer.metrics?.reliabilityScore)} · XP {reviewer.totalXp || 0}
                       </p>
                     </div>
                     {index === 0 && (
@@ -121,7 +117,7 @@ export default function ReviewerPoolBuckets({ reviewers }: ReviewerPoolBucketsPr
                           #{reviewer.rank} {reviewer.username || reviewer.email.split('@')[0]}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Reliability {formatPercent(reviewer.metrics?.reliabilityScore)}
+                          Reliability {formatReliabilityPercent(reviewer.metrics?.reliabilityScore)}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           XP {reviewer.totalXp || 0}

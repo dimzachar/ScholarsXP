@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { REVIEWER_ROLES, isAdmin } from './roles'
 import { reliabilityService } from './reliability/reliability-service'
+import { compareReviewerPriorityValues } from './reviewer-ranking'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -219,15 +220,7 @@ export class ReviewerPoolService {
       // Sort by workload (ascending), then reliability (descending),
       // then XP (descending) as a tie-breaker.
       candidates.sort((a, b) => {
-        if (a.activeAssignments !== b.activeAssignments) {
-          return a.activeAssignments - b.activeAssignments
-        }
-        const aReliability = a.reliabilityScore ?? 0
-        const bReliability = b.reliabilityScore ?? 0
-        if (aReliability !== bReliability) {
-          return bReliability - aReliability
-        }
-        return b.totalXp - a.totalXp
+        return compareReviewerPriorityValues(a, b)
       })
 
       return candidates

@@ -473,7 +473,7 @@ async function fetchUserMetricsData(
         totalSubmissions: totalSubmissions, // Include legacy submissions
         totalReviews: user._count.peerReviews,
         totalAchievements: user._count.userAchievements,
-        reliabilityScore: reliabilityScore ? Math.round(reliabilityScore * 100) / 100 : null,
+        reliabilityScore: reliabilityScore ?? null,
         transactionBreakdown, // Add detailed XP breakdown
         submissionsXp // Add submissions-only XP for accurate "from submissions" display
       }
