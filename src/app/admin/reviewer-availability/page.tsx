@@ -196,11 +196,15 @@ export default function ReviewerAvailabilityPage() {
         return true
       })
 
-      // Sort by workload (asc) then XP (desc) - same as reviewer-pool.ts
+      // Sort by workload (asc), then reliability (desc), then XP (desc) -
+      // same as reviewer-pool.ts.
       const sorted = [...eligibleReviewers].sort((a, b) => {
         const aAssign = a.activeAssignments || 0
         const bAssign = b.activeAssignments || 0
         if (aAssign !== bAssign) return aAssign - bAssign
+        const aReliability = a.metrics?.reliabilityScore ?? 0
+        const bReliability = b.metrics?.reliabilityScore ?? 0
+        if (aReliability !== bReliability) return bReliability - aReliability
         return (b.totalXp || 0) - (a.totalXp || 0)
       })
 
@@ -213,7 +217,7 @@ export default function ReviewerAvailabilityPage() {
       } else if (priority <= Math.ceil(totalEligible / 2)) {
         priorityNote = 'Medium priority'
       } else {
-        priorityNote = 'Low priority - higher XP reviewers selected first'
+        priorityNote = 'Low priority - lower workload, then higher reliability, then higher XP selected first'
       }
 
       return { inPool, reasons, priority, priorityNote }
@@ -427,7 +431,7 @@ export default function ReviewerAvailabilityPage() {
                   Reviewer Availability
                 </CardTitle>
                 <CardDescription>
-                  Control which admins and reviewers receive automatic peer review assignments.
+                  Control which admins and reviewers receive automatic peer review assignments. Eligible reviewers are ranked by active workload first, then reliability, then total XP.
                 </CardDescription>
               </div>
               <Button variant="outline" size="sm" onClick={fetchReviewers} disabled={loading}>
@@ -446,7 +450,7 @@ export default function ReviewerAvailabilityPage() {
                   <p className="text-2xl font-semibold">{summary.total}</p>
                 </div>
                 <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950">
-                  <p className="text-sm text-muted-foreground">In active pool</p>
+                  <p className="text-sm text-muted-foreground">In active pool (ranked by workload, reliability, XP)</p>
                   <p className="text-2xl font-semibold text-green-700 dark:text-green-400">{summary.inPool}</p>
                 </div>
                 <div className="rounded-lg border p-4">
@@ -503,7 +507,7 @@ export default function ReviewerAvailabilityPage() {
                           ) : null}
                         </button>
                       </TableHead>
-                      <TableHead>In Pool</TableHead>
+                      <TableHead>Pool Rank</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="hidden md:table-cell">Notes</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -578,7 +582,7 @@ export default function ReviewerAvailabilityPage() {
                                             <p className="font-medium">Priority #{priority} of {summary.inPool}</p>
                                             <p className="text-sm text-muted-foreground">{priorityNote}</p>
                                             <p className="text-xs text-muted-foreground mt-1">
-                                              XP: {reviewer.totalXp || 0} | Active: {reviewer.activeAssignments || 0}
+                                              Reliability: {reviewer.metrics?.reliabilityScore !== null && reviewer.metrics?.reliabilityScore !== undefined ? `${Math.round(reviewer.metrics.reliabilityScore * 100)}%` : '-'} | XP: {reviewer.totalXp || 0} | Active: {reviewer.activeAssignments || 0}
                                             </p>
                                           </div>
                                         ) : (

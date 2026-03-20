@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { REVIEWER_ROLES, isAdmin } from './roles'
+import { reliabilityService } from './reliability/reliability-service'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -78,6 +79,7 @@ export interface ReviewerCandidate {
   email: string
   role: string
   totalXp: number
+  reliabilityScore?: number | null
   missedReviews: number
   activeAssignments: number
   averageReviewTime?: number
@@ -173,6 +175,9 @@ export class ReviewerPoolService {
         return acc
       }, {} as Record<string, number>) || {}
 
+      // Fetch reliability scores for reviewer ranking.
+      const reliabilityMap = await reliabilityService.getReliabilityScores(userIds)
+
       // Filter and transform users to reviewer candidates
       const candidates: ReviewerCandidate[] = users
         .filter(user => !this.isReviewerOptedOut(user.preferences))
@@ -182,6 +187,7 @@ export class ReviewerPoolService {
           email: user.email,
           role: user.role,
           totalXp: user.totalXp,
+          reliabilityScore: reliabilityMap.get(user.id)?.score ?? null,
           missedReviews: user.missedReviews,
           activeAssignments: assignmentCounts[user.id] || 0,
           lastActiveAt: user.lastActiveAt ? new Date(user.lastActiveAt) : undefined,
@@ -210,10 +216,16 @@ export class ReviewerPoolService {
           return true
         })
 
-      // Sort by workload (ascending) and then by XP (descending)
+      // Sort by workload (ascending), then reliability (descending),
+      // then XP (descending) as a tie-breaker.
       candidates.sort((a, b) => {
         if (a.activeAssignments !== b.activeAssignments) {
           return a.activeAssignments - b.activeAssignments
+        }
+        const aReliability = a.reliabilityScore ?? 0
+        const bReliability = b.reliabilityScore ?? 0
+        if (aReliability !== bReliability) {
+          return bReliability - aReliability
         }
         return b.totalXp - a.totalXp
       })
