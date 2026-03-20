@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { reviewerPoolService } from './reviewer-pool'
 import { xpAnalyticsService } from './xp-analytics'
-import { logAdminAction } from './audit-log'
+import { logReviewerAssignmentAutomation } from './reviewer-assignment-log'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -316,22 +316,23 @@ export class DeadlineMonitorService {
           console.error(`Failed to update old assignment ${assignment.id} status to REASSIGNED:`, updateError)
         }
 
-        // Log automated reassignment
-        await logAdminAction({
-          adminId: 'system',
+        await logReviewerAssignmentAutomation({
           action: 'REVIEW_DEADLINE_REASSIGN',
-          targetType: 'submission',
-          targetId: assignment.submissionId,
-          details: {
-            subAction: 'AUTO_REASSIGN_DEADLINE',
-            oldReviewerId: assignment.reviewerId,
-            oldReviewerName: assignment.reviewer.username || assignment.reviewer.email,
-            newReviewerId: assignmentResult.assignedReviewers[0].id,
-            newReviewerName: assignmentResult.assignedReviewers[0].username || assignmentResult.assignedReviewers[0].email,
-            reason: 'Missed deadline',
-            hoursOverdue: Math.abs((new Date(assignment.deadline).getTime() - new Date().getTime()) / (1000 * 60 * 60)),
-            timestamp: new Date().toISOString()
-          }
+          submissionId: assignment.submissionId,
+          source: 'deadline-monitor',
+          triggeredBy: 'system',
+          triggeredAt: new Date().toISOString(),
+          oldReviewer: {
+            id: assignment.reviewerId,
+            username: assignment.reviewer.username,
+            email: assignment.reviewer.email
+          },
+          newReviewer: {
+            id: assignmentResult.assignedReviewers[0].id,
+            username: assignmentResult.assignedReviewers[0].username,
+            email: assignmentResult.assignedReviewers[0].email
+          },
+          reason: 'Missed deadline'
         })
 
         // TODO: Send notification about reassignment

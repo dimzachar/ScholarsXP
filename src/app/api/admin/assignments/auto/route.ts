@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { createServiceClient } from '@/lib/supabase-server'
 import { ensureReviewAssignments } from '@/lib/auto-review-assignment'
-import { logAdminAction } from '@/lib/audit-log'
 
 export const POST = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
@@ -44,27 +43,10 @@ export const POST = withPermission('admin_access')(async (request: Authenticated
 
     const result = await ensureReviewAssignments(submissionId, submission.userId, {
       taskTypes: submission.taskTypes
+    }, {
+      triggeredBy: `admin:${request.user.id}`,
+      source: 'admin-auto-assignment-route'
     })
-
-    // Log admin action for auto assignment
-    if (result.success && result.status === 'ASSIGNED' && result.assignmentResult?.assignedReviewers) {
-      await logAdminAction({
-        adminId: request.user.id,
-        action: 'REVIEW_AUTO_ASSIGN',
-        targetType: 'submission',
-        targetId: submissionId,
-        details: {
-          subAction: 'AUTO_ASSIGN',
-          assignedReviewers: result.assignmentResult.assignedReviewers.map(r => ({
-            id: r.id,
-            username: r.username || r.email
-          })),
-          reviewerCount: result.assignmentResult.assignedReviewers.length,
-          warnings: result.assignmentResult.warnings || [],
-          timestamp: new Date().toISOString()
-        }
-      })
-    }
 
     if (!result.success) {
       return NextResponse.json(

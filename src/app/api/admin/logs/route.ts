@@ -4,6 +4,11 @@ import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import type { AdminActionType } from '@prisma/client'
 import type { NormalizedLogRow } from '@/lib/audit-log'
+import {
+  buildReviewerAssignmentSummary,
+  normalizeReviewerAssignmentAutomationLog,
+  parseReviewerAssignmentAutomationPayload
+} from '@/lib/reviewer-assignment-log'
 
 function parseCSV(value: string | null | undefined): string[] | undefined {
   if (!value) return undefined
@@ -134,13 +139,37 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
                 }
               } else if (row.action === 'REVIEW_REASSIGN' && det?.newReviewerId) {
                 summary = `Review reassigned ${det.oldReviewerId} -> ${det.newReviewerId}`
-              } else if (row.action === 'REVIEW_AUTO_ASSIGN' && det?.reviewerCount) {
-                summary = `Auto-assigned ${det.reviewerCount} reviewer(s)`
-              } else if (row.action === 'REVIEW_MANUAL_RESHUFFLE' && det?.reshuffledCount) {
-                summary = `Manual reshuffle: ${det.reshuffledCount} assignment(s) reshuffled`
-              } else if (row.action === 'REVIEW_BULK_RESHUFFLE' && det?.reshuffleResults) {
-                const totalReshuffled = det.reshuffleResults.reduce((sum: number, r: any) => sum + (r.newAssignments || 0), 0)
-                summary = `Bulk reshuffle: ${totalReshuffled} reviewer(s) assigned`
+              } else if (row.action === 'REVIEW_AUTO_ASSIGN') {
+                summary = buildReviewerAssignmentSummary({
+                  action: 'REVIEW_AUTO_ASSIGN',
+                  submissionId: row.targetId,
+                  source: 'admin-action',
+                  triggeredBy: row.adminId,
+                  triggeredAt: row.createdAt.toISOString(),
+                  assignedReviewers: det?.assignedReviewers,
+                  reviewerCount: det?.reviewerCount,
+                  warnings: det?.warnings
+                })
+              } else if (row.action === 'REVIEW_MANUAL_RESHUFFLE') {
+                summary = buildReviewerAssignmentSummary({
+                  action: 'REVIEW_MANUAL_RESHUFFLE',
+                  submissionId: row.targetId,
+                  source: 'admin-action',
+                  triggeredBy: row.adminId,
+                  triggeredAt: row.createdAt.toISOString(),
+                  reshuffledCount: det?.reshuffledCount,
+                  assignmentResults: det?.assignmentResults
+                })
+              } else if (row.action === 'REVIEW_BULK_RESHUFFLE') {
+                summary = buildReviewerAssignmentSummary({
+                  action: 'REVIEW_BULK_RESHUFFLE',
+                  submissionId: row.targetId,
+                  source: 'admin-action',
+                  triggeredBy: row.adminId,
+                  triggeredAt: row.createdAt.toISOString(),
+                  reshuffledCount: det?.reshuffledCount,
+                  assignmentResults: det?.assignmentResults
+                })
               } else if (row.action === 'REVIEW_DEADLINE_REASSIGN' && det?.reason) {
                 summary = `Deadline reassignment: ${det.reason}`
               } else if (row.action === 'CONTENT_FLAG' && det?.subAction) {
@@ -171,6 +200,84 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
               }
             })
           )
+      )
+    }
+
+    if (eventTypes.includes('admin_action')) {
+      const automationWhere: Prisma.AutomationLogWhereInput = {
+        ...(dateFrom || dateTo
+          ? { startedAt: { ...(dateFrom ? { gte: dateFrom } : {}), ...(dateTo ? { lte: dateTo } : {}) } }
+          : {}),
+        jobName: {
+          in: [
+            'review-auto-assign',
+            'review-deadline-reassign',
+            'review-manual-reshuffle',
+            'review-bulk-reshuffle'
+          ]
+        }
+      }
+
+      queries.push(
+        prisma.automationLog
+          .findMany({
+            where: automationWhere,
+            orderBy: { startedAt: 'desc' },
+            take: limit * 3,
+          })
+          .then(async rows => {
+            const relevantRows = rows.filter(row => {
+              const payload = parseReviewerAssignmentAutomationPayload(row.result)
+              if (!payload) {
+                return false
+              }
+
+              if (actionTypes && !actionTypes.includes(payload.action)) {
+                return false
+              }
+
+              if (q) {
+                const haystack = [
+                  payload.action,
+                  payload.reason,
+                  payload.submissionId,
+                  payload.oldReviewer?.username,
+                  payload.oldReviewer?.email,
+                  payload.newReviewer?.username,
+                  payload.newReviewer?.email,
+                  ...(payload.assignedReviewers || []).flatMap(reviewer => [reviewer.username, reviewer.email, reviewer.id]),
+                  buildReviewerAssignmentSummary(payload)
+                ]
+                  .filter(Boolean)
+                  .map(value => String(value).toLowerCase())
+
+                if (!haystack.some(value => value.includes(q))) {
+                  return false
+                }
+              }
+
+              return true
+            })
+
+            const adminIds = relevantRows
+              .map(row => row.triggeredBy.startsWith('admin:') ? row.triggeredBy.slice('admin:'.length) : null)
+              .filter((id): id is string => Boolean(id))
+
+            const admins = adminIds.length > 0
+              ? await prisma.user.findMany({
+                  where: { id: { in: [...new Set(adminIds)] } },
+                  select: { id: true, username: true, role: true }
+                })
+              : []
+
+            const adminLookup = new Map(
+              admins.map(admin => [admin.id, { username: admin.username, role: admin.role }])
+            )
+
+            return relevantRows
+              .map(row => normalizeReviewerAssignmentAutomationLog(row, adminLookup))
+              .filter((value): value is NormalizedLogRow => Boolean(value))
+          })
       )
     }
 

@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { reviewerPoolService } from '@/lib/reviewer-pool'
 import type { AssignmentResult, ReviewerPoolOptions } from '@/lib/reviewer-pool'
 import { notifyReviewAssigned } from '@/lib/notifications'
+import { logReviewerAssignmentAutomation } from '@/lib/reviewer-assignment-log'
 
 export interface EnsureReviewAssignmentsResult {
   success: boolean
@@ -74,7 +75,11 @@ async function withRetry<T>(
 export async function ensureReviewAssignments(
   submissionId: string,
   submissionUserId: string,
-  options: ReviewerPoolOptions = {}
+  options: ReviewerPoolOptions = {},
+  logContext: {
+    triggeredBy?: string
+    source?: string
+  } = {}
 ): Promise<EnsureReviewAssignmentsResult> {
   try {
     const existingAssignments = await withRetry(
@@ -150,6 +155,24 @@ export async function ensureReviewAssignments(
       console.log(`[PeerReview] Auto-assigned ${assignmentResult.assignedReviewers.length} reviewer(s) to submission ${submissionId}`)
       if (assignmentResult.warnings.length > 0) {
         console.warn(`[PeerReview] Assignment warnings for ${submissionId}: ${assignmentResult.warnings.join('; ')}`)
+      }
+
+      if (assignmentResult.assignedReviewers.length > 0) {
+        await logReviewerAssignmentAutomation({
+          action: 'REVIEW_AUTO_ASSIGN',
+          submissionId,
+          source: logContext.source || 'submission-processing',
+          triggeredBy: logContext.triggeredBy || 'system',
+          triggeredAt: new Date().toISOString(),
+          assignedReviewers: assignmentResult.assignedReviewers.map(reviewer => ({
+            id: reviewer.id,
+            username: reviewer.username,
+            email: reviewer.email
+          })),
+          reviewerCount: assignmentResult.assignedReviewers.length,
+          warnings: assignmentResult.warnings,
+          errors: assignmentResult.errors
+        })
       }
 
       if (assignmentResult.assignedReviewers.length > 0) {

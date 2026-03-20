@@ -226,6 +226,7 @@ export default function AdminLogsPage() {
                   <SelectItem value="USER_ROLE_CHANGE">👤 Role Change</SelectItem>
                   <SelectItem value="REVIEW_REASSIGN">🔄 Review Reassign</SelectItem>
                   <SelectItem value="REVIEW_AUTO_ASSIGN">🤖 Auto Assign</SelectItem>
+                  <SelectItem value="REVIEW_DEADLINE_REASSIGN">⏰ Auto Reassign</SelectItem>
                   <SelectItem value="REVIEW_MANUAL_RESHUFFLE">🔀 Manual Reshuffle</SelectItem>
                   <SelectItem value="REVIEW_BULK_RESHUFFLE">📦 Bulk Reshuffle</SelectItem>
                   <SelectItem value="SYSTEM_CONFIG">⚙️ System Config</SelectItem>
