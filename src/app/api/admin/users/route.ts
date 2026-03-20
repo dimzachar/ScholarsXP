@@ -5,8 +5,6 @@ import { withEnhancedCache, EnhancedCacheKeys } from '@/lib/cache/enhanced-utils
 import { withAdminOptimization } from '@/middleware/api-optimization'
 import { getWeekNumber } from '@/lib/utils'
 import { reliabilityService } from '@/lib/reliability/reliability-service'
-import { getFormula } from '@/lib/reliability/formulas'
-import { RELIABILITY_CONFIG } from '@/config/reliability'
 import { ALL_ROLES } from '@/lib/roles'
 import { getDiscordRoles, RANK_THRESHOLDS } from '@/lib/gamified-ranks'
 
@@ -362,9 +360,9 @@ async function fetchUserMetricsData(
     }
   }
 
-  // Calculate reviewer reliability scores for users with review history
-  const reviewersWithReviews = users.filter(u => u._count.peerReviews > 0)
-  const reviewerIdsWithReviews = reviewersWithReviews.map(u => u.id)
+  // Calculate reviewer reliability scores for all loaded users so admin ranking
+  // mirrors the live reviewer selector, even for reviewers with little or no history.
+  const reviewerIdsWithReviews = users.map(u => u.id)
   let reliabilityMap = new Map<string, { score: number }>()
 
   if (reviewerIdsWithReviews.length > 0) {
@@ -422,8 +420,7 @@ async function fetchUserMetricsData(
     const avgReviewScore = avgReviewMap.get(user.id) || 0
 
     // Get reliability score (calculated above)
-    const activeFormula = getFormula(RELIABILITY_CONFIG.ACTIVE_FORMULA)
-    const reliabilityScore = reliabilityMap.get(user.id)?.score || (user._count.peerReviews > 0 ? (0.3 * 1.0 + 0.7 * (activeFormula.defaultValues?.quality || 0.5)) : null)
+    const reliabilityScore = reliabilityMap.get(user.id)?.score ?? null
 
     // Determine activity status
     const daysSinceLastActive = user.lastActiveAt

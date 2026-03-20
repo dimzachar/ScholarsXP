@@ -3,12 +3,14 @@ import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { prisma, patchPeerReviewV2Columns } from '@/lib/prisma'
 import { getWeekNumber } from '@/lib/utils'
 import { propagateXpChanges, validateXpModification } from '@/lib/services/xp-propagation'
+import { getSubmissionSelectionReplay } from '@/lib/reviewer-selection-debug'
 
 export const GET = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
     const url = new URL(request.url)
     const submissionId = url.pathname.split('/').slice(-1)[0] // Extract ID from path
     const aiEvaluationGloballyEnabled = (process.env.ENABLE_AI_EVALUATION ?? 'true').toLowerCase() === 'true'
+    const includeSelectionReplay = url.searchParams.get('includeSelectionReplay') === '1'
 
     // Ensure DB has v2 PeerReview audit columns in dev/local
     await patchPeerReviewV2Columns()
@@ -292,7 +294,10 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
       submission,
       metrics,
       timeline,
-      adminActions
+      adminActions,
+      ...(includeSelectionReplay
+        ? { selectionReplay: await getSubmissionSelectionReplay(submissionId) }
+        : {})
     })
 
   } catch (error) {

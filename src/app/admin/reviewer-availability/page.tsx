@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import { CalendarClock, CheckCircle2, Loader2, PauseCircle, PlayCircle, RefreshCw, Shield, Users, XCircle } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import ReviewerPoolBuckets from '@/components/Admin/ReviewerPoolBuckets'
 
 type AvailabilityMode = 'available' | 'temporary' | 'indefinite'
 
@@ -462,6 +463,10 @@ export default function ReviewerAvailabilityPage() {
                   <p className="text-2xl font-semibold">{summary.indefinite}</p>
                 </div>
               </div>
+
+              <ReviewerPoolBuckets
+                reviewers={reviewers.filter(reviewer => getPoolEligibility(reviewer, reviewers).inPool)}
+              />
 
               <div className="overflow-hidden rounded-lg border">
                 <Table>

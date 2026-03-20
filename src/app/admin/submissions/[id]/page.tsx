@@ -23,6 +23,7 @@ import SubmissionDetailHeader from '@/components/Admin/SubmissionDetailHeader'
 import XpBreakdownSection from '@/components/Admin/XpBreakdownSection'
 import PeerReviewsSection from '@/components/Admin/PeerReviewsSection'
 import XpTransactionHistory from '@/components/Admin/XpTransactionHistory'
+import SelectionReplayPanel from '@/components/Admin/SelectionReplayPanel'
 
 interface SubmissionDetail {
   id: string
@@ -84,6 +85,39 @@ interface SubmissionDetail {
   }>
 }
 
+interface SubmissionSelectionReplay {
+  submissionId: string
+  selectionLogic: string
+  limitations: string[]
+  events: Array<{
+    key: string
+    assignedAt: string
+    selectedCount: number
+    selectedAssignments: Array<{
+      assignmentId: string
+      reviewerId: string
+      reviewerName: string
+      status: string
+    }>
+    candidates: Array<{
+      id: string
+      username: string
+      email: string
+      role: string
+      totalXp: number
+      reliabilityScore: number
+      activeAssignmentsBefore: number
+      currentAssignmentStatus?: string
+      selected: boolean
+      inPool: boolean
+      priority?: number
+      reasons: string[]
+    }>
+    poolSize: number
+    limitations: string[]
+  }>
+}
+
 
 
 export default function AdminSubmissionDetailPage() {
@@ -103,13 +137,14 @@ export default function AdminSubmissionDetailPage() {
   const [debuggingConsensus, setDebuggingConsensus] = useState(false)
   const [consensusDebugResult, setConsensusDebugResult] = useState<any>(null)
   const [consensusDebugError, setConsensusDebugError] = useState<string | null>(null)
+  const [selectionReplay, setSelectionReplay] = useState<SubmissionSelectionReplay | null>(null)
 
   const fetchSubmissionDetails = useCallback(async () => {
     try {
       setLoadingSubmission(true)
       setError(null)
 
-      const response = await authenticatedFetch(`/api/admin/submissions/${submissionId}`)
+      const response = await authenticatedFetch(`/api/admin/submissions/${submissionId}?includeSelectionReplay=1`)
       
       if (!response.ok) {
         throw new Error(`Failed to fetch submission: ${response.status}`)
@@ -117,6 +152,7 @@ export default function AdminSubmissionDetailPage() {
 
       const data = await response.json()
       setSubmission(data.submission)
+      setSelectionReplay(data.selectionReplay || null)
     } catch (error) {
       console.error('Error fetching submission details:', error)
       setError(error instanceof Error ? error.message : 'Failed to load submission details')
@@ -422,94 +458,98 @@ export default function AdminSubmissionDetailPage() {
           )}
 
           <TabsContent value="assignments">
-            <Card>
-              <CardHeader>
-                <CardTitle>Review Assignments</CardTitle>
-                <CardDescription>
-                  Reviewer assignment management and status tracking
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {reshuffleNotice && (
-                  <Alert className="mb-4 border-green-200 bg-green-50 text-green-900">
-                    <AlertDescription>{reshuffleNotice}</AlertDescription>
-                  </Alert>
-                )}
+            <div className="space-y-6">
+              <SelectionReplayPanel replay={selectionReplay} />
 
-                {reshuffleError && (
-                  <Alert variant="destructive" className="mb-4">
-                    <AlertDescription>{reshuffleError}</AlertDescription>
-                  </Alert>
-                )}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Review Assignments</CardTitle>
+                  <CardDescription>
+                    Reviewer assignment management and status tracking
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {reshuffleNotice && (
+                    <Alert className="mb-4 border-green-200 bg-green-50 text-green-900">
+                      <AlertDescription>{reshuffleNotice}</AlertDescription>
+                    </Alert>
+                  )}
 
-                {submission.reviewAssignments.length > 0 ? (
-                  <div className="space-y-4">
-                    <div className="flex justify-end gap-2">
-                      {submission.reviewAssignments.filter(a => a.status !== 'REASSIGNED').length < 3 && (
-                        <Button size="sm" onClick={handleAutoAssign} disabled={assigning}>
-                          {assigning ? 'Assigning…' : 'Re-assign reviewers'}
-                        </Button>
-                      )}
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        onClick={() => handleManualReshuffle()}
-                        disabled={reshuffling || submission.reviewAssignments.filter(a => a.status === 'PENDING' || a.status === 'MISSED').length === 0}
-                      >
-                        {reshuffling ? (
-                          <>
-                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                            Reshuffling...
-                          </>
-                        ) : (
-                          <>
-                            <Shuffle className="h-4 w-4 mr-2" />
-                            Bulk Reshuffle
-                          </>
+                  {reshuffleError && (
+                    <Alert variant="destructive" className="mb-4">
+                      <AlertDescription>{reshuffleError}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  {submission.reviewAssignments.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="flex justify-end gap-2">
+                        {submission.reviewAssignments.filter(a => a.status !== 'REASSIGNED').length < 3 && (
+                          <Button size="sm" onClick={handleAutoAssign} disabled={assigning}>
+                            {assigning ? 'Assigning…' : 'Re-assign reviewers'}
+                          </Button>
                         )}
-                      </Button>
-                    </div>
-                    {submission.reviewAssignments.map((assignment) => (
-                      <div key={assignment.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <div className="font-medium">{assignment.reviewer.username}</div>
-                          <div className="text-sm text-muted-foreground">
-                            Assigned: {formatDate(assignment.assignedAt)} • 
-                            Deadline: {formatDate(assignment.deadline)}
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handleManualReshuffle()}
+                          disabled={reshuffling || submission.reviewAssignments.filter(a => a.status === 'PENDING' || a.status === 'MISSED').length === 0}
+                        >
+                          {reshuffling ? (
+                            <>
+                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                              Reshuffling...
+                            </>
+                          ) : (
+                            <>
+                              <Shuffle className="h-4 w-4 mr-2" />
+                              Bulk Reshuffle
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      {submission.reviewAssignments.map((assignment) => (
+                        <div key={assignment.id} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div>
+                            <div className="font-medium">{assignment.reviewer.username}</div>
+                            <div className="text-sm text-muted-foreground">
+                              Assigned: {formatDate(assignment.assignedAt)} • 
+                              Deadline: {formatDate(assignment.deadline)}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge className={getStatusColor(assignment.status)}>
+                              {assignment.status.replace('_', ' ')}
+                            </Badge>
+                            {(assignment.status === 'PENDING' || assignment.status === 'MISSED') && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => handleManualReshuffle(assignment.id)}
+                                disabled={reshuffling}
+                              >
+                                Reshuffle
+                              </Button>
+                            )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Badge className={getStatusColor(assignment.status)}>
-                            {assignment.status.replace('_', ' ')}
-                          </Badge>
-                          {(assignment.status === 'PENDING' || assignment.status === 'MISSED') && (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => handleManualReshuffle(assignment.id)}
-                              disabled={reshuffling}
-                            >
-                              Reshuffle
-                            </Button>
-                          )}
-                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex justify-end">
+                        <Button size="sm" onClick={handleAutoAssign} disabled={assigning}>
+                          {assigning ? 'Assigning…' : 'Assign reviewers'}
+                        </Button>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex justify-end">
-                      <Button size="sm" onClick={handleAutoAssign} disabled={assigning}>
-                        {assigning ? 'Assigning…' : 'Assign reviewers'}
-                      </Button>
+                      <div className="text-center py-8 text-muted-foreground">
+                        No review assignments found
+                      </div>
                     </div>
-                    <div className="text-center py-8 text-muted-foreground">
-                      No review assignments found
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
