@@ -3,10 +3,66 @@ import { detectPlatform, normalizeUrl, getWeekNumber, getWeekBoundaries } from '
 import { canFeatureUrl } from '@/lib/embed-policy'
 import { rankFeaturedWithOptions, type FeaturedInput, type ScoredFeatured, type RankerKind } from '@/lib/featured-ranker'
 import { getRedditSummary } from '@/lib/reddit-summary'
+import { getLinkPreviewLookup } from '@/lib/link-preview'
+import { withQueryCache, QueryCache } from '@/lib/cache/query-cache'
 
 export type FeaturedRange = 'week' | 'month' | 'all'
+export type FeaturedCacheMode = 'default' | 'refresh' | 'bypass'
 
-function isSupported(url: string): boolean {
+const FEATURED_CACHE_VERSION = 'v1'
+const FEATURED_CACHE_TTL_SECONDS = 60 * 10
+const FEATURED_RESOLUTION_BATCH_SIZE = 6
+
+export type GetFeaturedOptions = {
+  ranker?: RankerKind
+  authorBoost?: boolean
+  autoTune?: boolean
+  cacheMode?: FeaturedCacheMode
+}
+
+export type FeaturedWarmRequest = {
+  range: FeaturedRange
+  limit: number
+  options?: Omit<GetFeaturedOptions, 'cacheMode'>
+}
+
+const DEFAULT_FEATURED_WARM_REQUESTS: FeaturedWarmRequest[] = [
+  { range: 'week', limit: 24, options: { ranker: 'enhanced', authorBoost: true, autoTune: false } },
+  { range: 'month', limit: 24, options: { ranker: 'enhanced', authorBoost: true, autoTune: false } },
+  { range: 'all', limit: 24, options: { ranker: 'enhanced', authorBoost: true, autoTune: false } },
+]
+
+export function getFeaturedCacheKey(
+  range: FeaturedRange,
+  limit = 24,
+  opts?: Omit<GetFeaturedOptions, 'cacheMode'>
+): string {
+  const ranker = opts?.ranker || 'baseline'
+  const authorBoost = opts?.authorBoost ?? false
+  const autoTune = opts?.autoTune ?? false
+  return `featured:${FEATURED_CACHE_VERSION}:default:${range}:${limit}:${ranker}:${authorBoost}:${autoTune}`
+}
+
+export async function invalidateFeaturedCache(): Promise<number> {
+  return QueryCache.invalidatePattern(`featured:${FEATURED_CACHE_VERSION}:`)
+}
+
+export async function warmFeaturedCaches(requests: FeaturedWarmRequest[] = DEFAULT_FEATURED_WARM_REQUESTS): Promise<void> {
+  await Promise.all(
+    requests.map((request) =>
+      getFeatured(request.range, request.limit, {
+        ...request.options,
+        cacheMode: 'refresh',
+      })
+    )
+  )
+}
+
+function isSupported(url: string, platformHint?: string | null): boolean {
+  if (platformHint === 'Twitter' || platformHint === 'Reddit' || platformHint === 'Medium') {
+    return true
+  }
+
   return canFeatureUrl(url)
 }
 
@@ -60,7 +116,27 @@ async function isTweetAvailable(url: string): Promise<boolean> {
 export async function getFeatured(
   range: FeaturedRange,
   limit = 24,
-  opts?: { ranker?: RankerKind; authorBoost?: boolean; autoTune?: boolean }
+  opts?: GetFeaturedOptions
+): Promise<ScoredFeatured[]> {
+  const cacheMode = opts?.cacheMode || 'default'
+  const cacheKey = getFeaturedCacheKey(range, limit, opts)
+
+  return withQueryCache(
+    cacheKey,
+    FEATURED_CACHE_TTL_SECONDS,
+    () => getFeaturedUncached(range, limit, opts),
+    {
+      refreshCache: cacheMode === 'refresh',
+      skipCache: cacheMode === 'bypass',
+      logPerformance: false,
+    }
+  )
+}
+
+export async function getFeaturedUncached(
+  range: FeaturedRange,
+  limit = 24,
+  opts?: Omit<GetFeaturedOptions, 'cacheMode'>
 ): Promise<ScoredFeatured[]> {
   const supabase = createServiceClient() as any
 
@@ -76,27 +152,15 @@ export async function getFeatured(
     // Add the timezone offset to align with database storage
     const timezoneOffset = now.getTimezoneOffset() * 60000 // Convert to milliseconds
     startDate = new Date(startDate.getTime() - timezoneOffset)
-    console.log('Featured: week range - currentWeek:', currentWeek, 'year:', year, 'startDate:', startDate?.toISOString(), 'timezoneOffset:', timezoneOffset/3600000, 'hours')
-    
-    // Debug: Log the actual query parameters
-    console.log('Featured: Query parameters - startDate ISO:', startDate?.toISOString())
   } else if (range === 'month') {
     startDate = new Date(now.getFullYear(), now.getMonth(), 1)
     startDate.setHours(0, 0, 0, 0)
     // Adjust for timezone - database seems to store local time, but we're comparing with UTC
     const timezoneOffset = now.getTimezoneOffset() * 60000 // Convert to milliseconds
     startDate = new Date(startDate.getTime() - timezoneOffset)
-    console.log('Featured: month range - startDate:', startDate?.toISOString(), 'timezoneOffset:', timezoneOffset/3600000, 'hours')
   }
 
   // Fetch Submissions: finalized only; require finalXp
-  console.log('Featured: Building Supabase query with parameters:')
-  console.log('  - Table: Submission')
-  console.log('  - Select: id,url,platform,userId,finalXp,aiXp,peerXp,reviewCount,consensusScore,createdAt,status')
-  console.log('  - Order: createdAt DESC')
-  console.log('  - Limit: 500')
-  console.log('  - startDate:', startDate?.toISOString())
-  
   let submissionsQuery = supabase
     .from('Submission')
     .select('id,url,platform,userId,finalXp,aiXp,peerXp,reviewCount,consensusScore,createdAt,status')
@@ -104,16 +168,12 @@ export async function getFeatured(
     .limit(500) // cap raw set; we'll score and slice later
 
   if (startDate) {
-    console.log('  - Adding filter: createdAt >=', startDate.toISOString())
     submissionsQuery = submissionsQuery.gte('createdAt', startDate.toISOString())
   }
 
   // Only finalized submissions
-  console.log('  - Adding filter: status = FINALIZED')
-  console.log('  - Adding filter: finalXp is not null')
   submissionsQuery = submissionsQuery.eq('status', 'FINALIZED').not('finalXp', 'is', null)
 
-  console.log('Featured: Executing Supabase query for range:', range, 'with startDate:', startDate?.toISOString())
   const { data: submissionsRaw, error: subErr } = await submissionsQuery
   if (subErr) {
     console.error('Featured: submission fetch error', subErr)
@@ -123,21 +183,10 @@ export async function getFeatured(
       statusText: subErr.statusText,
       body: subErr.body
     })
-  } else {
-    console.log('Featured: submissions fetched:', submissionsRaw?.length || 0, 'items')
-    if (submissionsRaw && submissionsRaw.length > 0) {
-      console.log('Featured: First submission example:', {
-        id: submissionsRaw[0]?.id,
-        url: submissionsRaw[0]?.url,
-        createdAt: submissionsRaw[0]?.createdAt,
-        status: submissionsRaw[0]?.status,
-        finalXp: submissionsRaw[0]?.finalXp
-      })
-    }
   }
 
   const submissions: FeaturedInput[] = (submissionsRaw || [])
-    .filter((r: any) => !!r?.url && isSupported(r.url))
+    .filter((r: any) => !!r?.url && isSupported(r.url, r.platform))
     .map((r: any) => ({
       id: r.id,
       url: r.url,
@@ -152,53 +201,6 @@ export async function getFeatured(
       finalXp: r.finalXp ?? null,
       origin: 'submission',
     }))
-
-  // Debug diagnostics: trace specific author through stages when env is set
-  const DEBUG_AUTHOR_RAW = process.env.FEATURED_DEBUG_AUTHOR || ''
-  const DEBUG_AUTHOR = DEBUG_AUTHOR_RAW.toLowerCase()
-  // Try to resolve DEBUG_AUTHOR to userId(s) via User table (matches username or discordHandle)
-  const debugUserIds = new Set<string>()
-  if (DEBUG_AUTHOR) {
-    // If looks like UUID, use directly
-    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (uuidRe.test(DEBUG_AUTHOR_RAW)) {
-      debugUserIds.add(DEBUG_AUTHOR_RAW)
-    } else {
-      try {
-        const pattern = `%${DEBUG_AUTHOR_RAW}%`
-        const { data: usersMatch, error: usersErr } = await supabase
-          .from('User')
-          .select('id,username,discordHandle')
-          .or(`username.ilike.${pattern},discordHandle.ilike.${pattern}`)
-
-        if (!usersErr && Array.isArray(usersMatch)) {
-          for (const u of usersMatch) {
-            if (u?.id) debugUserIds.add(String(u.id))
-          }
-          console.log('[FeaturedDebug] matched User ids for', DEBUG_AUTHOR_RAW, Array.from(debugUserIds))
-        }
-      } catch (e) {
-        console.log('[FeaturedDebug] user lookup failed', e)
-      }
-    }
-  }
-  const isDebug = (it: FeaturedInput): boolean => {
-    if (!DEBUG_AUTHOR) return false
-    const parts = [it.authorKey, it.userId, it.id, it.url]
-      .filter(Boolean)
-      .map((x) => String(x).toLowerCase())
-    if (parts.some((p) => p.includes(DEBUG_AUTHOR))) return true
-    if (it.userId && debugUserIds.has(String(it.userId))) return true
-    return false
-  }
-  if (DEBUG_AUTHOR) {
-    const dbg = submissions.filter(isDebug)
-    if (dbg.length) {
-      console.log('[FeaturedDebug] submissions matched', DEBUG_AUTHOR, dbg.map(d => ({ id: d.id, authorKey: d.authorKey, userId: d.userId, url: d.url, finalXp: d.finalXp, reviews: d.reviewCount, createdAt: d.createdAt })))
-    } else {
-      console.log('[FeaturedDebug] submissions matched', DEBUG_AUTHOR, '0 items')
-    }
-  }
 
   // Fetch LegacySubmission within range when possible; all for all-time
   let legacyQuery = supabase
@@ -239,14 +241,6 @@ export async function getFeatured(
       finalXp: r.finalXp ?? null,
       origin: 'legacy',
     }))
-  if (DEBUG_AUTHOR) {
-    const dbg = legacy.filter(isDebug)
-    if (dbg.length) {
-      console.log('[FeaturedDebug] legacy matched', DEBUG_AUTHOR, dbg.map(d => ({ id: d.id, authorKey: d.authorKey, url: d.url, finalXp: d.finalXp, createdAt: d.createdAt })))
-    } else {
-      console.log('[FeaturedDebug] legacy matched', DEBUG_AUTHOR, '0 items')
-    }
-  }
 
   const pickPreferredCandidate = (current: FeaturedInput, candidate: FeaturedInput): FeaturedInput => {
     const currentXp = current.finalXp ?? Number.NEGATIVE_INFINITY
@@ -311,78 +305,66 @@ export async function getFeatured(
   const merged: FeaturedInput[] = mergedOrder
     .map((key) => mergedByKey.get(key))
     .filter((it): it is FeaturedInput => Boolean(it))
-  if (DEBUG_AUTHOR) {
-    const dbg = merged.filter(isDebug)
-    console.log('[FeaturedDebug] merged matched', DEBUG_AUTHOR, dbg.length)
-  }
 
   const ranked = rankFeaturedWithOptions(merged, range, 1, 6, { ranker: opts?.ranker, authorBoost: opts?.authorBoost, autoTune: opts?.autoTune }) as (ScoredFeatured & { breakdown?: any })[]
-  
-  // For enhanced ranker, ensure breakdown data is preserved
-  if (opts?.ranker === 'enhanced' && range !== 'all') {
-    // The enhanced ranker returns items with breakdown property, but we need to make sure it's preserved
-    // through the ranking process. This is handled in the enhanced ranker implementation.
-    // console.log('[FeaturedService] Enhanced ranking used, breakdown data preserved for', ranked.length, 'items')
-  }
-  if (DEBUG_AUTHOR) {
-    const dbg = ranked.filter(isDebug)
-    console.log('[FeaturedDebug] ranked (before availability) matched', DEBUG_AUTHOR, dbg.length)
-  }
 
   // Server-side filter: exclude Reddit posts that are removed/unavailable.
   // To avoid heavy network calls, evaluate in order until we collect `limit` items.
   const result: ScoredFeatured[] = []
-  for (const item of ranked) {
-    if (result.length >= limit) break
-    const platform = item.platform || detectPlatform(item.url)
-    if (platform === 'Reddit') {
-      try {
-        const summary = await getRedditSummary(item.url)
-        if (summary?.removed) {
-          if (DEBUG_AUTHOR && isDebug(item)) {
-            console.log('[FeaturedDebug] filtered removed Reddit post', { id: item.id, url: item.url })
-          }
-          continue
-        }
-      } catch (err) {
-        if (DEBUG_AUTHOR && isDebug(item)) {
-          console.log('[FeaturedDebug] reddit summary failed, allowing item', { id: item.id, url: item.url, error: String(err) })
-        }
+  for (let offset = 0; offset < ranked.length && result.length < limit; offset += FEATURED_RESOLUTION_BATCH_SIZE) {
+    const batch = ranked.slice(offset, offset + FEATURED_RESOLUTION_BATCH_SIZE)
+    const resolvedBatch = await Promise.all(batch.map((item) => resolveFeaturedItem(item)))
+
+    for (const resolvedItem of resolvedBatch) {
+      if (!resolvedItem) continue
+      result.push(resolvedItem)
+      if (result.length >= limit) {
+        break
       }
-      result.push(item)
-      continue
-    }
-
-    if (platform === 'Twitter') {
-      try {
-        const ok = await isTweetAvailable(item.url)
-        if (ok) {
-          result.push(item)
-        } else {
-          if (DEBUG_AUTHOR && isDebug(item)) {
-            console.log('[FeaturedDebug] twitter availability check failed', { id: item.id, url: item.url })
-          }
-        }
-      } catch (err) {
-        if (DEBUG_AUTHOR && isDebug(item)) {
-          console.log('[FeaturedDebug] twitter availability error, allowing item', { id: item.id, url: item.url, error: String(err) })
-        }
-        result.push(item)
-      }
-      continue
-    }
-
-    // Other platforms: include as-is
-    result.push(item)
-  }
-
-  if (DEBUG_AUTHOR) {
-    const dbg = result.filter(isDebug)
-    console.log('[FeaturedDebug] final result matched', DEBUG_AUTHOR, dbg.length)
-    if (!dbg.length) {
-      console.log('[FeaturedDebug] Note: final exclusions may be from Reddit/Twitter availability checks or per-author/platform caps in ranker.')
     }
   }
 
   return result
+}
+
+async function resolveFeaturedItem(item: ScoredFeatured): Promise<ScoredFeatured | null> {
+  const platform = item.platform || detectPlatform(item.url)
+
+  if (platform === 'Reddit') {
+    try {
+      const summary = await getRedditSummary(item.url)
+      if (summary?.removed) {
+        return null
+      }
+    } catch {}
+
+    return item
+  }
+
+  if (platform === 'Twitter') {
+    try {
+      const ok = await isTweetAvailable(item.url)
+      return ok ? item : null
+    } catch {
+      return item
+    }
+  }
+
+  if (platform === 'Medium') {
+    try {
+      const lookup = await getLinkPreviewLookup(item.url)
+      if (lookup.unavailable || !lookup.resolved) {
+        return null
+      }
+
+      return {
+        ...item,
+        preview: lookup.preview,
+      }
+    } catch {
+      return null
+    }
+  }
+
+  return item
 }

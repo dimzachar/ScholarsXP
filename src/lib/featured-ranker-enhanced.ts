@@ -1,4 +1,5 @@
 import { resolveTaskFromPlatform, type TaskIdV2 } from './xp-rules-v2'
+import type { LinkPreview } from '@/types/link-preview'
 
 export type Range = 'week' | 'month' | 'all'
 
@@ -19,6 +20,7 @@ export type FeaturedInput = {
 
 export type ScoredFeatured = FeaturedInput & {
   score: number
+  preview?: LinkPreview | null
 }
 
 export type EnhancedScoreBreakdown = {

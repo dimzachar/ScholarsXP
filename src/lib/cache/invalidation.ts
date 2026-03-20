@@ -38,13 +38,13 @@ export class CacheInvalidation {
 
   async invalidateOnUserAction(action: string, userId?: string): Promise<void> {
     const invalidationMap = {
-      'submission_created': ['analytics:*', 'leaderboard:*', 'user-metrics:*', 'submission-count'],
-      'submission_reviewed': ['analytics:*', 'leaderboard:*'],
+      'submission_created': ['analytics:*', 'leaderboard:*', 'user-metrics:*', 'submission-count', 'featured:v1:*'],
+      'submission_reviewed': ['analytics:*', 'leaderboard:*', 'featured:v1:*'],
       'user_updated': userId ? [`user:${userId}:*`, `api:complete_profile:userId:${userId}`] : ['user-count', 'api:complete_profile:*'],
       'xp_awarded': userId 
-        ? ['analytics:*', 'leaderboard:*', 'user-metrics:*', `api:complete_profile:userId:${userId}`]
-        : ['analytics:*', 'leaderboard:*', 'user-metrics:*', 'api:complete_profile:*'],
-      'weekly_reset': ['leaderboard:*', 'analytics:*', 'user-metrics:*', 'api:complete_profile:*'],
+        ? ['analytics:*', 'leaderboard:*', 'user-metrics:*', `api:complete_profile:userId:${userId}`, 'featured:v1:*']
+        : ['analytics:*', 'leaderboard:*', 'user-metrics:*', 'api:complete_profile:*', 'featured:v1:*'],
+      'weekly_reset': ['leaderboard:*', 'analytics:*', 'user-metrics:*', 'api:complete_profile:*', 'featured:v1:*'],
       'achievement_earned': userId ? [`user:${userId}:*`, `api:complete_profile:userId:${userId}`, 'analytics:*'] : ['analytics:*', 'api:complete_profile:*']
     }
 
@@ -99,6 +99,7 @@ export class CacheInvalidation {
     await Promise.all([
       this.invalidateByPattern('analytics:*'),
       this.invalidateByPattern('leaderboard:*'),
+      this.invalidateByPattern('featured:v1:*'),
       this.cache.delete('submission-count')
     ])
   }
@@ -109,6 +110,7 @@ export class CacheInvalidation {
     await Promise.all([
       this.invalidateByPattern('api:admin_submissions:*'), // Correct pattern format
       this.invalidateByPattern('leaderboard:*'),
+      this.invalidateByPattern('featured:v1:*'),
       this.cache.delete('legacy-submission-count'),
       this.cache.delete('user-count')
     ])

@@ -248,6 +248,7 @@ async function handleDataRefresh(request: AuthenticatedRequest | null, triggered
     // Import cache invalidation service
     const { multiLayerCache } = await import('@/lib/cache/enhanced-cache')
     const { CacheInvalidation } = await import('@/lib/cache/invalidation')
+    const { warmFeaturedCaches } = await import('@/lib/featured-service')
 
     const invalidation = new CacheInvalidation(multiLayerCache)
 
@@ -256,11 +257,15 @@ async function handleDataRefresh(request: AuthenticatedRequest | null, triggered
       invalidation.invalidateAnalytics(),
       invalidation.invalidateLeaderboard(),
       invalidation.invalidateByPattern('admin:*'),
-      invalidation.invalidateByPattern('stats:*')
+      invalidation.invalidateByPattern('stats:*'),
+      invalidation.invalidateByPattern('featured:v1:*')
     ])
 
+    await warmFeaturedCaches()
+
     const result = {
-      cacheAreasCleared: ['analytics', 'leaderboard', 'admin', 'stats'],
+      cacheAreasCleared: ['analytics', 'leaderboard', 'admin', 'stats', 'featured'],
+      warmedCaches: ['featured:week', 'featured:month', 'featured:all'],
       timestamp: new Date().toISOString()
     }
 

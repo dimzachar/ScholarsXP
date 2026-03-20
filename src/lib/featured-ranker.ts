@@ -1,5 +1,6 @@
 import { rankFeaturedEnhanced } from './featured-ranker-enhanced'
 import type { EnhancedScoreBreakdown } from './featured-ranker-enhanced'
+import type { LinkPreview } from '@/types/link-preview'
 
 type Range = 'week' | 'month' | 'all'
 
@@ -20,12 +21,14 @@ export type FeaturedInput = {
 
 export type ScoredFeatured = FeaturedInput & {
   score: number
+  preview?: LinkPreview | null
 }
 
 // Extended type for enhanced ranking with breakdown
 export type ScoredFeaturedWithBreakdown = FeaturedInput & {
   score: number
   breakdown: EnhancedScoreBreakdown
+  preview?: LinkPreview | null
 }
 
 function ageDays(iso: string): number {

@@ -4,12 +4,15 @@ import React, { useEffect, useState } from 'react'
 import FeaturedCard from '@/components/FeaturedCard'
 import FeaturedEmbed from '@/components/FeaturedEmbed'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { canFeatureUrl } from '@/lib/embed-policy'
 import type { ScoredFeatured } from '@/lib/featured-ranker'
 import { computeFeaturedScoreBreakdown, computeAuthorMultipliers } from '@/lib/featured-ranker'
 
 type Range = 'week' | 'month' | 'all'
 type Ranker = 'baseline' | 'eb' | 'zscore' | 'conf' | 'enhanced'
+
+type Props = {
+  initialItems?: ScoredFeatured[]
+}
 
 function fmt(n: number) {
   if (!isFinite(n)) return '0'
@@ -74,34 +77,60 @@ function computeEnhancedBreakdown(item: any, range: Range) {
   }
 }
 
-export default function FeaturedBrowser() {
+export default function FeaturedBrowser({ initialItems = [] }: Props) {
   const [range, setRange] = useState<Range>('week')
   // Default to enhanced ranker for all ranges
   const [ranker, setRanker] = useState<Ranker>('enhanced')
   const [authorBoost, setAuthorBoost] = useState<boolean>(true)
   const [autoTune, setAutoTune] = useState<boolean>(false)
-  const [data, setData] = useState<Record<Range, ScoredFeatured[]>>({ week: [], month: [], all: [] })
+  const buildCacheKey = (r: Range, rk: Ranker, ab: boolean, at: boolean) => `${r}:${rk}:${ab}:${at}`
+  const [dataCache, setDataCache] = useState<Record<string, ScoredFeatured[]>>(() => {
+    if (!initialItems.length) {
+      return {}
+    }
+
+    return {
+      [buildCacheKey('week', 'enhanced', true, false)]: initialItems,
+    }
+  })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const activeCacheKey = buildCacheKey(range, ranker, authorBoost, autoTune)
+  const activeItems = dataCache[activeCacheKey]
 
   const fetchRange = async (r: Range, rk: Ranker, ab: boolean, at: boolean) => {
-    const url = `/api/featured?range=${r}&limit=24&ranker=${rk}`
-    const res = await fetch(url, { cache: 'no-store' })
+    const url = `/api/featured?range=${r}&limit=24&ranker=${rk}&authorBoost=${ab}&autoTune=${at}`
+    const res = await fetch(url)
     if (!res.ok) throw new Error('fetch failed')
     const json = await res.json()
     return (json?.data?.items ?? []) as ScoredFeatured[]
   }
 
   useEffect(() => {
+    if (activeItems) {
+      setLoading(false)
+      setError(null)
+      return
+    }
+
     let cancelled = false
     setLoading(true)
     setError(null)
     fetchRange(range, ranker, authorBoost, autoTune)
-      .then((items) => { if (!cancelled) setData((d) => ({ ...d, [range]: items })) })
+      .then((items) => {
+        if (!cancelled) {
+          setDataCache((current) => ({
+            ...current,
+            [activeCacheKey]: items,
+          }))
+        }
+      })
       .catch((e) => { if (!cancelled) setError(String(e?.message || e)) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [range, ranker, authorBoost, autoTune])
+  }, [activeCacheKey, activeItems, range, ranker, authorBoost, autoTune])
+
+  const getCachedItems = (r: Range) => dataCache[buildCacheKey(r, ranker, authorBoost, autoTune)] ?? []
 
   const renderMasonry = (items: ScoredFeatured[], r: Range) => {
     // Server already filters eligibility; avoid double-filtering to prevent accidental empty lists
@@ -239,7 +268,7 @@ export default function FeaturedBrowser() {
                 return null
               })()
             )}
-            <FeaturedEmbed url={item.url} />
+            <FeaturedEmbed url={item.url} platform={item.platform} preview={item.preview} />
           </FeaturedCard>
         ))}
       </div>
@@ -296,9 +325,9 @@ export default function FeaturedBrowser() {
           <TabsTrigger value="month">This Month</TabsTrigger>
           <TabsTrigger value="all">All-time</TabsTrigger>
         </TabsList>
-        <TabsContent value="week">{renderMasonry(data.week, 'week')}</TabsContent>
-        <TabsContent value="month">{renderMasonry(data.month, 'month')}</TabsContent>
-        <TabsContent value="all">{renderMasonry(data.all, 'all')}</TabsContent>
+        <TabsContent value="week">{renderMasonry(getCachedItems('week'), 'week')}</TabsContent>
+        <TabsContent value="month">{renderMasonry(getCachedItems('month'), 'month')}</TabsContent>
+        <TabsContent value="all">{renderMasonry(getCachedItems('all'), 'all')}</TabsContent>
       </Tabs>
     </div>
   )
