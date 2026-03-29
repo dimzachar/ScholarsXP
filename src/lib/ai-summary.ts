@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { buildSecurePrompt } from './prompt-defense';
 
 // Using model with JSON mode support for structured outputs
-const MODELS = ['arcee-ai/trinity-large-preview:free', 'z-ai/glm-4.5-air:free'];
+const MODELS = ['arcee-ai/trinity-large-preview:free', 'stepfun/step-3.5-flash:free'];
 
 interface Review {
   comments?: string | null;
@@ -65,7 +65,7 @@ export async function generateReviewSummary(
             { role: 'user', content: prompt },
           ],
           temperature: 0.3,
-          max_tokens: 300,
+          max_tokens: 800,
           response_format: { type: 'json_object' },
           // @ts-expect-error - OpenRouter specific
           reasoning: { enabled: false },
@@ -79,12 +79,18 @@ export async function generateReviewSummary(
           continue;
         }
 
+        // Warn if response was cut off due to token limit
+        if (finishReason === 'length') {
+          console.warn(`⚠️ AI summary truncated by token limit (model: ${model})`);
+        }
+
         // Parse JSON response
         try {
           const parsed = JSON.parse(content);
-          if (parsed.summary && typeof parsed.summary === 'string') {
+          const summaryText = parsed.summary || parsed.answer || parsed.text || parsed.feedback;
+          if (summaryText && typeof summaryText === 'string') {
             log(`✅ Success with ${model}`);
-            return parsed.summary.trim();
+            return summaryText.trim();
           }
           log(`⚠️ Invalid JSON structure from ${model}`);
         } catch {
