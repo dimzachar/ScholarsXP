@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { buildSecurePrompt } from './prompt-defense';
 
 // Using model with JSON mode support for structured outputs
-const MODELS = ['arcee-ai/trinity-large-preview:free', 'stepfun/step-3.5-flash:free'];
+const MODELS = ['arcee-ai/trinity-mini:free', 'qwen/qwen3.6-plus-preview:free', 'arcee-ai/trinity-large-preview:free'];
 
 interface Review {
   comments?: string | null;
@@ -67,8 +67,6 @@ export async function generateReviewSummary(
           temperature: 0.3,
           max_tokens: 800,
           response_format: { type: 'json_object' },
-          // @ts-expect-error - OpenRouter specific
-          reasoning: { enabled: false },
         });
 
         const content = response.choices[0]?.message?.content;
