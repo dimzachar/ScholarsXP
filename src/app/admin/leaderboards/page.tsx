@@ -16,6 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Pagination } from '@/components/ui/pagination'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 type Standing = {
   rank: number
@@ -40,6 +41,25 @@ type PreviewData = {
   winners?: Winner[]
 }
 
+type ParthenonItem = {
+  rank: number
+  userId: string
+  username: string
+  discordId: string
+  discordHandle: string
+  points: number
+  s_max: number
+  n: number
+  p_pts: number
+  parthenon_xp: number
+}
+
+type ParthenonData = {
+  items: ParthenonItem[]
+  sMax: number
+  participantCount: number
+}
+
 type HistoryWinner = Winner & { month: string; awardedAt: string }
 
 type UserResult = { id: string; username?: string | null; email?: string | null }
@@ -49,6 +69,7 @@ export default function AdminLeaderboardsPage() {
   const [months, setMonths] = useState<string[]>([])
   const [month, setMonth] = useState<string>('')
   const [preview, setPreview] = useState<PreviewData | null>(null)
+  const [parthenon, setParthenon] = useState<ParthenonData | null>(null)
   const [history, setHistory] = useState<HistoryWinner[]>([])
   const [loading, setLoading] = useState(false)
   const [overrideOpen, setOverrideOpen] = useState(false)
@@ -66,6 +87,19 @@ export default function AdminLeaderboardsPage() {
   const [revokeAllLoading, setRevokeAllLoading] = useState(false)
   const [awardLoading, setAwardLoading] = useState(false)
 
+  const downloadExport = async (path: string, filename: string) => {
+    const res = await authenticatedFetch(path)
+    if (!res.ok) return
+
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   useEffect(() => {
     const load = async () => {
       const res = await authenticatedFetch('/api/leaderboard/months')
@@ -81,13 +115,16 @@ export default function AdminLeaderboardsPage() {
     if (!month) return
     const run = async () => {
       setLoading(true)
-      const [p, h] = await Promise.all([
+      const [p, h, px] = await Promise.all([
         authenticatedFetch(`/api/admin/leaderboards/month/${month}/preview`)
           .then(async (r) => (r.ok ? r.json() : Promise.reject(await r.text()))),
         authenticatedFetch(`/api/admin/leaderboards/winners?limit=12&page=${historyPage}`)
           .then(async (r) => (r.ok ? r.json() : Promise.reject(await r.text()))),
+        authenticatedFetch(`/api/admin/leaderboards/month/${month}/parthenon`)
+          .then(async (r) => (r.ok ? r.json() : Promise.reject(await r.text()))),
       ])
       setPreview(p?.data || null)
+      setParthenon(px?.data || null)
       setHistory(h?.data?.items || [])
       setHistoryTotal(h?.data?.totalCount || 0)
       setLoading(false)
@@ -212,12 +249,19 @@ export default function AdminLeaderboardsPage() {
             </div>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Monthly Preview</CardTitle>
-              <CardDescription>Select a month, review standings and cooldown eligibility</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <Tabs defaultValue="preview" className="space-y-6">
+            <TabsList className="flex flex-wrap gap-2">
+              <TabsTrigger value="preview">Monthly Preview</TabsTrigger>
+              <TabsTrigger value="parthenon">Parthenon XP</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="preview">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Monthly Preview</CardTitle>
+                  <CardDescription>Select a month, review standings and cooldown eligibility</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
               {/* Winners strip for selected month */}
               {preview?.winners && preview.winners.length > 0 && (
                 <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-muted/50">
@@ -287,28 +331,16 @@ export default function AdminLeaderboardsPage() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={async () => {
-                      const res = await authenticatedFetch(`/api/admin/leaderboards/month/${month}/export`)
-                      if (res.ok) {
-                        const blob = await res.blob()
-                        const url = URL.createObjectURL(blob)
-                        const a = document.createElement('a')
-                        a.href = url
-                        a.download = `monthly_preview_${month}.csv`
-                        a.click()
-                        URL.revokeObjectURL(url)
-                      }
+                      await downloadExport(`/api/admin/leaderboards/month/${month}/export`, `monthly_preview_${month}.csv`)
                     }}>Export Monthly Preview CSV</DropdownMenuItem>
                     <DropdownMenuItem onClick={async () => {
-                      const res = await authenticatedFetch('/api/admin/leaderboards/winners/export')
-                      if (res.ok) {
-                        const blob = await res.blob()
-                        const url = URL.createObjectURL(blob)
-                        const a = document.createElement('a')
-                        a.href = url
-                        a.download = 'winners_export.csv'
-                        a.click()
-                        URL.revokeObjectURL(url)
-                      }
+                      await downloadExport(
+                        `/api/admin/leaderboards/month/${month}/export?list=parthenon-xp`,
+                        `parthenon_xp_${month}.csv`
+                      )
+                    }}>Export Parthenon XP CSV</DropdownMenuItem>
+                    <DropdownMenuItem onClick={async () => {
+                      await downloadExport('/api/admin/leaderboards/winners/export', 'winners_export.csv')
                     }}>Export Winners CSV</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -348,7 +380,7 @@ export default function AdminLeaderboardsPage() {
                   </TableHeader>
                   <TableBody>
                     {loading ? (
-                      <TableRow><TableCell colSpan={5}>Loading…</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={6}>Loading…</TableCell></TableRow>
                     ) : (filteredItems || []).length ? (
                       filteredItems.map((s) => (
                         <TableRow key={s.userId}>
@@ -416,13 +448,95 @@ export default function AdminLeaderboardsPage() {
                         </TableRow>
                       ))
                     ) : (
-                      <TableRow><TableCell colSpan={5}>No data.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={6}>No data.</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
               </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="parthenon">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Parthenon XP</CardTitle>
+                  <CardDescription>Monthly normalized leaderboard using the top-5 average as `s_max`.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Select value={month} onValueChange={setMonth}>
+                      <SelectTrigger className="w-[220px]">
+                        <SelectValue placeholder="Select month" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {months.map((m) => (
+                          <SelectItem value={m} key={m}>{m}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      disabled={!month}
+                      onClick={async () => {
+                        await downloadExport(
+                          `/api/admin/leaderboards/month/${month}/export?list=parthenon-xp`,
+                          `parthenon_xp_${month}.csv`
+                        )
+                      }}
+                    >
+                      <Download className="h-4 w-4 mr-2" />Export Parthenon XP CSV
+                    </Button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <Badge variant="secondary">S Max: {parthenon?.sMax?.toLocaleString() ?? 0}</Badge>
+                    <Badge variant="secondary">N: {parthenon?.participantCount ?? 0}</Badge>
+                    <Badge variant="outline">Formula: 1800 x (Pts / S Max)</Badge>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-16">#</TableHead>
+                          <TableHead>User</TableHead>
+                          <TableHead>D ID</TableHead>
+                          <TableHead>Handle</TableHead>
+                          <TableHead className="text-right">Pts</TableHead>
+                          <TableHead className="text-right">S Max</TableHead>
+                          <TableHead className="text-right">N</TableHead>
+                          <TableHead className="text-right">P Pts</TableHead>
+                          <TableHead className="text-right">Par XP</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {loading ? (
+                          <TableRow><TableCell colSpan={9}>Loading…</TableCell></TableRow>
+                        ) : (parthenon?.items || []).length ? (
+                          parthenon?.items.map((item) => (
+                            <TableRow key={item.userId}>
+                              <TableCell>{item.rank}</TableCell>
+                              <TableCell>{item.username}</TableCell>
+                              <TableCell>{item.discordId || '-'}</TableCell>
+                              <TableCell>{item.discordHandle || '-'}</TableCell>
+                              <TableCell className="text-right">{item.points.toLocaleString()}</TableCell>
+                              <TableCell className="text-right">{item.s_max.toLocaleString()}</TableCell>
+                              <TableCell className="text-right">{item.n.toLocaleString()}</TableCell>
+                              <TableCell className="text-right">{item.p_pts.toLocaleString()}</TableCell>
+                              <TableCell className="text-right">{item.parthenon_xp.toLocaleString()}</TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow><TableCell colSpan={9}>No data.</TableCell></TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -558,7 +672,7 @@ export default function AdminLeaderboardsPage() {
                         </TableRow>
                       ))
                     ) : (
-                      <TableRow><TableCell colSpan={3}>No winners yet.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={4}>No winners yet.</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
