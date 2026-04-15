@@ -6,19 +6,49 @@ import { CacheKeys, CacheTTL } from '@/lib/cache'
 import { multiLayerCache } from '@/lib/cache/enhanced-cache'
 import { getConsolidatedAnalytics, getFallbackAnalytics, compareAnalyticsResults } from '@/lib/database-queries'
 
+function getCustomRangeParams(searchParams: URLSearchParams): {
+  isCustomRange: boolean
+  startDate?: Date
+  endDate?: Date
+} {
+  const timeframe = searchParams.get('timeframe') || 'last_30_days'
+  const startDateParam = searchParams.get('startDate')
+  const endDateParam = searchParams.get('endDate')
+
+  if (timeframe !== 'custom_range' || !startDateParam || !endDateParam) {
+    return { isCustomRange: false }
+  }
+
+  const startDate = new Date(`${startDateParam}T00:00:00.000Z`)
+  const endDate = new Date(`${endDateParam}T23:59:59.999Z`)
+
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || startDate > endDate) {
+    return { isCustomRange: false }
+  }
+
+  return {
+    isCustomRange: true,
+    startDate,
+    endDate
+  }
+}
+
 // Original handler (defined first for fallback)
 const originalHandler = withPermission('admin_access')(async (request: AuthenticatedRequest) => {
   try {
     const { searchParams } = new URL(request.url)
     const timeframe = searchParams.get('timeframe') || 'last_30_days' // 'last_7_days', 'last_30_days', 'last_90_days', 'all_time'
     const metric = searchParams.get('metric') || 'overview' // 'overview', 'users', 'submissions', 'reviews', 'xp'
+    const customRange = getCustomRangeParams(searchParams)
 
     // Feature flag for optimized analytics (default: false for safety)
     const useOptimizedAnalytics = process.env.USE_OPTIMIZED_ANALYTICS === 'true'
     const compareResults = process.env.COMPARE_ANALYTICS_RESULTS === 'true'
 
     // Check multi-layer cache first for complete analytics data
-    const cacheKey = CacheKeys.analytics(`${timeframe}:${metric}:${useOptimizedAnalytics ? 'optimized' : 'legacy'}`)
+    const cacheKey = CacheKeys.analytics(
+      `${timeframe}:${metric}:${useOptimizedAnalytics ? 'optimized' : 'legacy'}:${customRange.startDate?.toISOString() || 'none'}:${customRange.endDate?.toISOString() || 'none'}`
+    )
     const cachedData = await multiLayerCache.get(cacheKey)
 
     if (cachedData) {
@@ -53,7 +83,13 @@ const originalHandler = withPermission('admin_access')(async (request: Authentic
 
     // Use optimized or legacy analytics based on feature flag
     let analyticsData
-    if (useOptimizedAnalytics) {
+    if (customRange.isCustomRange) {
+      analyticsData = await getOptimizedAnalyticsSummary({
+        timeframe,
+        startDate: customRange.startDate,
+        endDate: customRange.endDate
+      })
+    } else if (useOptimizedAnalytics) {
       // console.log('📊 Using optimized analytics implementation')
       analyticsData = await getConsolidatedAnalytics(startDate, timeframe, metric)
     } else {
@@ -88,6 +124,7 @@ const optimizedAnalyticsHandler = withPermission('admin_access')(async (request:
   try {
     const { searchParams } = new URL(request.url)
     const timeframe = searchParams.get('timeframe') || 'last_30_days'
+    const customRange = getCustomRangeParams(searchParams)
 
     // Use new optimized analytics query (enabled by default)
     const useNewOptimization = process.env.USE_NEW_ANALYTICS_OPTIMIZATION !== 'false'
@@ -96,7 +133,11 @@ const optimizedAnalyticsHandler = withPermission('admin_access')(async (request:
       // console.log('🚀 Using new optimized analytics implementation')
       const startTime = Date.now()
 
-      const analyticsData = await getOptimizedAnalyticsSummary(timeframe)
+      const analyticsData = await getOptimizedAnalyticsSummary({
+        timeframe,
+        startDate: customRange.startDate,
+        endDate: customRange.endDate
+      })
 
       const executionTime = Date.now() - startTime
       // console.log(`⚡ New optimized analytics completed in ${executionTime}ms`)

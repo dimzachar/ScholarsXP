@@ -5,8 +5,17 @@ import { QueryCache, CacheTTL, withQueryCache } from '../cache/query-cache'
  * Optimized analytics query that replaces 15+ separate database calls with a single query
  * Target: 4.2s → 1s (76% improvement), 150KB → 45KB (70% reduction)
  */
-export async function getOptimizedAnalyticsSummary(timeframe: string = 'last_30_days') {
-  const cacheKey = QueryCache.createKey('analytics_optimized', { timeframe })
+export async function getOptimizedAnalyticsSummary(options: {
+  timeframe?: string
+  startDate?: Date
+  endDate?: Date
+} = {}) {
+  const timeframe = options.timeframe || 'last_30_days'
+  const cacheKey = QueryCache.createKey('analytics_optimized', {
+    timeframe,
+    startDate: options.startDate?.toISOString() || null,
+    endDate: options.endDate?.toISOString() || null
+  })
   
   return await withQueryCache(
     cacheKey,
@@ -14,25 +23,29 @@ export async function getOptimizedAnalyticsSummary(timeframe: string = 'last_30_
     async () => {
       const startTime = Date.now()
       
-      // Calculate date range based on timeframe
       const now = new Date()
-      let startDate: Date
-      
-      switch (timeframe) {
-        case 'last_7_days':
-          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-          break
-        case 'last_30_days':
-          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-          break
-        case 'last_90_days':
-          startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
-          break
-        case 'all_time':
-        default:
-          startDate = new Date('2020-01-01') // Far enough back to include all data
-          break
+      let startDate = options.startDate
+      let endDate = options.endDate || now
+
+      if (!startDate) {
+        switch (timeframe) {
+          case 'last_7_days':
+            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+            break
+          case 'last_30_days':
+            startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+            break
+          case 'last_90_days':
+            startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+            break
+          case 'all_time':
+          default:
+            startDate = new Date('2020-01-01')
+            break
+        }
       }
+
+      const useBoundedDateRange = timeframe !== 'all_time' || Boolean(options.startDate || options.endDate)
 
       // Use separate fast queries instead of complex JOINs for better performance
       const [userStats, submissionStats, reviewStats, xpStats, achievementStats] = await Promise.all([
@@ -45,7 +58,8 @@ export async function getOptimizedAnalyticsSummary(timeframe: string = 'last_30_
           const active = await prisma.user.count({
             where: {
               lastActiveAt: {
-                gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+                gte: useBoundedDateRange ? startDate : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+                lte: endDate
               }
             }
           })
@@ -56,18 +70,24 @@ export async function getOptimizedAnalyticsSummary(timeframe: string = 'last_30_
         Promise.all([
           // Regular submissions
           prisma.submission.aggregate({
-            where: timeframe === 'all_time' ? {} : {
-              createdAt: { gte: startDate }
-            },
+            where: useBoundedDateRange ? {
+              createdAt: {
+                gte: startDate,
+                lte: endDate
+              }
+            } : {},
             _count: {
               id: true
             }
           }),
           // Legacy submissions
           prisma.legacySubmission.aggregate({
-            where: timeframe === 'all_time' ? {} : {
-              submittedAt: { gte: startDate }
-            },
+            where: useBoundedDateRange ? {
+              submittedAt: {
+                gte: startDate,
+                lte: endDate
+              }
+            } : {},
             _count: {
               id: true
             }
@@ -76,14 +96,22 @@ export async function getOptimizedAnalyticsSummary(timeframe: string = 'last_30_
           prisma.submission.count({
             where: {
               status: 'FINALIZED',
-              ...(timeframe === 'all_time' ? {} : { createdAt: { gte: startDate } })
+              ...(useBoundedDateRange ? {
+                createdAt: {
+                  gte: startDate,
+                  lte: endDate
+                }
+              } : {})
             }
           }),
           // Legacy submissions are considered "completed" by default
           prisma.legacySubmission.count({
-            where: timeframe === 'all_time' ? {} : {
-              submittedAt: { gte: startDate }
-            }
+            where: useBoundedDateRange ? {
+              submittedAt: {
+                gte: startDate,
+                lte: endDate
+              }
+            } : {}
           })
         ]).then(([regularTotal, legacyTotal, regularCompleted, legacyCompleted]) => {
           return {
@@ -94,9 +122,12 @@ export async function getOptimizedAnalyticsSummary(timeframe: string = 'last_30_
 
         // Review metrics - fast with indexes
         prisma.peerReview.aggregate({
-          where: timeframe === 'all_time' ? {} : {
-            createdAt: { gte: startDate }
-          },
+          where: useBoundedDateRange ? {
+            createdAt: {
+              gte: startDate,
+              lte: endDate
+            }
+          } : {},
           _count: {
             id: true
           },
@@ -109,7 +140,12 @@ export async function getOptimizedAnalyticsSummary(timeframe: string = 'last_30_
         prisma.xpTransaction.aggregate({
           where: {
             amount: { gt: 0 },
-            ...(timeframe === 'all_time' ? {} : { createdAt: { gte: startDate } })
+            ...(useBoundedDateRange ? {
+              createdAt: {
+                gte: startDate,
+                lte: endDate
+              }
+            } : {})
           },
           _sum: {
             amount: true
@@ -118,9 +154,12 @@ export async function getOptimizedAnalyticsSummary(timeframe: string = 'last_30_
 
         // Achievement metrics - fast query
         prisma.userAchievement.count({
-          where: timeframe === 'all_time' ? {} : {
-            earnedAt: { gte: startDate }
-          }
+          where: useBoundedDateRange ? {
+            earnedAt: {
+              gte: startDate,
+              lte: endDate
+            }
+          } : {}
         })
       ])
 
@@ -150,9 +189,9 @@ export async function getOptimizedAnalyticsSummary(timeframe: string = 'last_30_
       
       // Get additional data that's needed but can be cached separately
       const [platformStats, roleStats, topPerformers] = await Promise.all([
-        getPlatformStats(startDate, timeframe),
+        getPlatformStats(startDate, endDate, timeframe),
         getRoleStats(),
-        getTopPerformers(startDate, timeframe)
+        getTopPerformers(startDate, endDate, timeframe)
       ])
 
       return {
@@ -176,7 +215,7 @@ export async function getOptimizedAnalyticsSummary(timeframe: string = 'last_30_
         timeframe,
         dateRange: {
           start: startDate.toISOString(),
-          end: now.toISOString()
+          end: endDate.toISOString()
         },
         performance: {
           executionTime,
@@ -192,8 +231,12 @@ export async function getOptimizedAnalyticsSummary(timeframe: string = 'last_30_
 /**
  * Get platform statistics (cached separately for better performance)
  */
-async function getPlatformStats(startDate: Date, timeframe: string) {
-  const cacheKey = QueryCache.createKey('platform_stats', { timeframe })
+async function getPlatformStats(startDate: Date, endDate: Date, timeframe: string) {
+  const cacheKey = QueryCache.createKey('platform_stats', {
+    timeframe,
+    startDate: startDate.toISOString(),
+    endDate: endDate.toISOString()
+  })
   
   return await withQueryCache(
     cacheKey,
@@ -202,9 +245,14 @@ async function getPlatformStats(startDate: Date, timeframe: string) {
       const result = await prisma.submission.groupBy({
         by: ['platform'],
         _count: true,
-        where: timeframe === 'all_time' ? {} : {
-          createdAt: { gte: startDate }
-        }
+        where: timeframe === 'all_time'
+          ? {}
+          : {
+              createdAt: {
+                gte: startDate,
+                lte: endDate
+              }
+            }
       })
 
       return result.reduce((acc, stat) => {
@@ -241,8 +289,12 @@ async function getRoleStats() {
 /**
  * Get top performers (simplified for better performance)
  */
-async function getTopPerformers(startDate: Date, timeframe: string) {
-  const cacheKey = QueryCache.createKey('top_performers', { timeframe })
+async function getTopPerformers(startDate: Date, endDate: Date, timeframe: string) {
+  const cacheKey = QueryCache.createKey('top_performers', {
+    timeframe,
+    startDate: startDate.toISOString(),
+    endDate: endDate.toISOString()
+  })
   
   return await withQueryCache(
     cacheKey,
@@ -262,7 +314,7 @@ async function getTopPerformers(startDate: Date, timeframe: string) {
           COUNT(s.id) as submission_count
         FROM "User" u
         LEFT JOIN "Submission" s ON u.id = s."userId"
-          AND (${timeframe === 'all_time'} OR s."createdAt" >= ${startDate})
+          AND (${timeframe === 'all_time'} OR (s."createdAt" >= ${startDate} AND s."createdAt" <= ${endDate}))
         WHERE u.role NOT IN ('ADMIN', 'DEVELOPER')
         GROUP BY u.id, u.username, u."totalXp"
         ORDER BY submission_count DESC, u."totalXp" DESC
@@ -283,7 +335,7 @@ async function getTopPerformers(startDate: Date, timeframe: string) {
           COALESCE(AVG(pr."xpScore"), 0) as avg_score
         FROM "User" u
         LEFT JOIN "PeerReview" pr ON u.id = pr."reviewerId"
-          AND (${timeframe === 'all_time'} OR pr."createdAt" >= ${startDate})
+          AND (${timeframe === 'all_time'} OR (pr."createdAt" >= ${startDate} AND pr."createdAt" <= ${endDate}))
         WHERE u.role IN ('REVIEWER', 'ADMIN', 'DEVELOPER')
         GROUP BY u.id, u.username
         HAVING COUNT(pr.id) > 0
