@@ -82,7 +82,7 @@
   "overrides": {
     "js-yaml@<3.14.2": "3.14.2",
     "preact": "10.28.2",
-    "hono": "4.12.8",
+    "hono": ">=4.12.14",
     "h3": "1.15.9",
     "socket.io-parser": "4.2.6",
     "tar": ">=7.5.3",
@@ -90,13 +90,14 @@
     "lodash": ">=4.18.1",
     "axios": ">=1.15.0",
     "follow-redirects": ">=1.16.0",
-    "defu": ">=6.1.5"
+    "defu": ">=6.1.5",
+    "picomatch": ">=4.0.4"
   },
   "pnpm": {
     "overrides": {
       "js-yaml@<3.14.2": "3.14.2",
       "preact": "10.28.2",
-      "hono": "4.12.8",
+      "hono": ">=4.12.14",
       "h3": "1.15.9",
       "socket.io-parser": "4.2.6",
       "tar": ">=7.5.7",
@@ -105,8 +106,8 @@
       "axios": ">=1.15.0",
       "follow-redirects": ">=1.16.0",
       "defu": ">=6.1.5",
+      "picomatch": ">=4.0.4",
       "@isaacs/brace-expansion": ">=5.0.1",
-      "hono@<4.12.8": "4.12.8",
       "tar@<7.5.8": ">=7.5.8",
       "ajv@<6.14.0": ">=6.14.0",
       "bn.js@>=5.0.0 <5.2.3": ">=5.2.3",
@@ -116,8 +117,7 @@
       "minimatch@<3.1.4": "3.1.5",
       "minimatch@>=9.0.0 <9.0.7": "9.0.9",
       "minimatch@>=10.0.0 <10.2.3": "10.2.4",
-      "minimatch@10.1.1": "10.2.4",
-      "picomatch": ">=2.3.2"
+      "minimatch@10.1.1": "10.2.4"
     }
   },
   "devDependencies": {
@@ -132,7 +132,7 @@
     "autoprefixer": "^10.4.21",
     "cross-fetch": "^4.1.0",
     "eslint": "^9.39.4",
-    "eslint-config-next": "16.1.7",
+    "eslint-config-next": "16.2.3",
     "fast-check": "^4.3.0",
     "jest": "^30.0.4",
     "jest-axe": "^10.0.0",
