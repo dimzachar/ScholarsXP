@@ -35,11 +35,21 @@ export const POST = withPermission('review_content')(
       })
     }
 
+    const MAX_COMMENT_LENGTH = 1000;
+
     if (!comments || comments.trim().length < 20) {
       throw new ValidationError('Comments are required and must be at least 20 characters', {
         field: 'comments',
         minLength: 20,
         currentLength: comments?.trim().length || 0
+      })
+    }
+
+    if (comments.trim().length > MAX_COMMENT_LENGTH) {
+      throw new ValidationError(`Comments must be ${MAX_COMMENT_LENGTH} characters or fewer`, {
+        field: 'comments',
+        maxLength: MAX_COMMENT_LENGTH,
+        currentLength: comments.trim().length
       })
     }
 

@@ -185,6 +185,10 @@ export default function PeerReviewCard({
       setError('Please provide detailed comments (minimum 20 characters).')
       return
     }
+    if (comments.length > 1000) {
+      setError('Comments must be 1000 characters or fewer. Please shorten your feedback.')
+      return
+    }
     setError(null)
     setIsSubmitting(true)
     try {
@@ -590,15 +594,22 @@ export default function PeerReviewCard({
                 value={comments}
                 onChange={(e) => setComments(e.target.value)}
                 placeholder="Provide specific, constructive feedback about the content. Explain your ratings and suggest improvements..."
-                className="min-h-[160px] resize-none"
+                className={`min-h-[160px] resize-none ${comments.length > 1000 ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                 aria-required
-                aria-invalid={comments.trim().length>0 && comments.trim().length<20}
+                aria-invalid={comments.trim().length > 0 && (comments.trim().length < 20 || comments.length > 1000)}
                 aria-describedby="comments-help comments-count"
                 disabled={isSubmitting || !!readOnly}
               />
-              <div className="flex justify-between text-xs text-muted-foreground mt-2">
-                <span id="comments-count" aria-live="polite">{comments.length} characters (minimum 20)</span>
-                <span id="comments-help">Be specific and constructive</span>
+              <div className="flex justify-between text-xs mt-2">
+                <span
+                  id="comments-count"
+                  aria-live="polite"
+                  className={comments.length > 1000 ? 'text-destructive font-medium' : 'text-muted-foreground'}
+                >
+                  {comments.length}/1000 characters (minimum 20)
+                  {comments.length > 1000 && ` — ${comments.length - 1000} over limit`}
+                </span>
+                <span id="comments-help" className="text-muted-foreground">Be specific and constructive</span>
               </div>
               </div>
             </div>
@@ -634,7 +645,7 @@ export default function PeerReviewCard({
                 >
                   Cancel
                 </Button>
-                <Button variant="destructive" size="lg" onClick={handleSubmit} disabled={isSubmitting || !comments.trim() || comments.length < 20}>
+                <Button variant="destructive" size="lg" onClick={handleSubmit} disabled={isSubmitting || !comments.trim() || comments.length < 20 || comments.length > 1000}>
                   {isSubmitting ? 'Submitting…' : 'Submit Review'}
                 </Button>
               </div>

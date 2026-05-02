@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { buildSecurePrompt } from './prompt-defense';
 
 // Using model with JSON mode support for structured outputs
-const MODELS = ['arcee-ai/trinity-mini:free', 'qwen/qwen3.6-plus-preview:free', 'arcee-ai/trinity-large-preview:free'];
+const MODELS = ['openai/gpt-oss-20b:free', 'openai/gpt-oss-120b:free', 'arcee-ai/trinity-large-preview:free'];
 
 interface Review {
   comments?: string | null;
