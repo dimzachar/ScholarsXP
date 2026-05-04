@@ -4,6 +4,13 @@ import { buildSecurePrompt } from './prompt-defense';
 // Using model with JSON mode support for structured outputs
 const MODELS = ['openai/gpt-oss-20b:free', 'openai/gpt-oss-120b:free', 'arcee-ai/trinity-large-preview:free'];
 
+const FAILURE_PREFIXES = ['Failed to generate', 'No detailed feedback', 'Unable to generate'];
+
+export function isAiSummaryFailure(summary: string | null): boolean {
+  if (!summary) return false;
+  return FAILURE_PREFIXES.some(prefix => summary.startsWith(prefix));
+}
+
 interface Review {
   comments?: string | null;
   xpScore: number;

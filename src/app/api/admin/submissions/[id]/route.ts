@@ -654,10 +654,10 @@ export const PATCH = withPermission('admin_access')(async (request: Authenticate
                 })
 
                 // Import dynamically to avoid circular dependencies if any
-                const { generateReviewSummary } = await import('@/lib/ai-summary')
+                const { generateReviewSummary, isAiSummaryFailure } = await import('@/lib/ai-summary')
                 const summary = await generateReviewSummary(sub.title || 'Untitled Submission', reviews)
 
-                if (!summary.startsWith('Failed to generate') && !summary.startsWith('No detailed feedback')) {
+                if (!isAiSummaryFailure(summary)) {
                   await prisma.submission.update({
                     where: { id: submissionId },
                     data: {

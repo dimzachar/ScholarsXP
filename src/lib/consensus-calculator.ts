@@ -4,7 +4,7 @@ import path from 'path'
 import { xpAnalyticsService } from './xp-analytics'
 import { prisma } from '@/lib/prisma'
 import { getWeekNumber, getWeekBoundaries, recalculateCurrentWeekXp } from '@/lib/utils'
-import { generateReviewSummary } from '@/lib/ai-summary'
+import { generateReviewSummary, isAiSummaryFailure } from '@/lib/ai-summary'
 import { reliabilityService } from './reliability/reliability-service'
 import { RELIABILITY_CONFIG } from '@/config/reliability'
 import { getFormula, calculateScore } from './reliability/formulas'
@@ -469,25 +469,55 @@ export class ConsensusCalculatorService {
               select: { comments: true, xpScore: true, qualityRating: true }
             })
 
-            if (reviews.length > 0) {
-              const summary = await generateReviewSummary(
+            if (reviews.length === 0) return
+
+            let summary: string | null = null
+            let lastError: string | null = null
+
+            for (let attempt = 1; attempt <= 3; attempt++) {
+              summary = await generateReviewSummary(
                 submission.url || 'Untitled Submission',
                 reviews
               )
 
-              if (!summary.startsWith('Failed to generate') && !summary.startsWith('No detailed feedback')) {
-                await prisma.submission.update({
-                  where: { id: submissionId },
-                  data: {
-                    aiSummary: summary,
-                    summaryGeneratedAt: new Date()
-                  }
-                })
-                console.log(`✅ AI summary generated for submission ${submissionId}`)
+              if (!isAiSummaryFailure(summary)) break
+
+              lastError = summary
+              if (attempt < 3) {
+                await new Promise(resolve => setTimeout(resolve, 2000 * attempt))
               }
             }
-          } catch (err) {
-            console.warn(`⚠️ Failed to generate AI summary for ${submissionId}:`, err)
+
+            if (summary && !isAiSummaryFailure(summary)) {
+              await prisma.submission.update({
+                where: { id: submissionId },
+                data: {
+                  aiSummary: summary,
+                  summaryGeneratedAt: new Date()
+                }
+              })
+              console.log(`✅ AI summary generated for submission ${submissionId}`)
+            } else {
+              const failureMsg = lastError || summary || 'Unknown AI summary failure'
+              console.warn(`⚠️ AI summary failed for submission ${submissionId}: ${failureMsg}`)
+              await prisma.systemLog.create({
+                data: {
+                  level: 'WARN',
+                  message: `AI summary failed for submission ${submissionId}: ${failureMsg}`,
+                  metadata: { submissionId, reviewCount: reviews.length, lastError: failureMsg }
+                }
+              })
+            }
+          } catch (err: any) {
+            const errMsg = err?.message || String(err)
+            console.warn(`⚠️ Failed to generate AI summary for ${submissionId}:`, errMsg)
+            await prisma.systemLog.create({
+              data: {
+                level: 'ERROR',
+                message: `AI summary generation threw for submission ${submissionId}: ${errMsg}`,
+                metadata: { submissionId, error: errMsg }
+              }
+            })
           }
         })
 

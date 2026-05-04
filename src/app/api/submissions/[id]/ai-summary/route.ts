@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 import { createServiceClient } from '@/lib/supabase-server'
-import { generateReviewSummary } from '@/lib/ai-summary'
+import { generateReviewSummary, isAiSummaryFailure } from '@/lib/ai-summary'
 import { QueryCache, CacheTTL } from '@/lib/cache/query-cache'
 
 export const GET = withPermission('authenticated')(async (
@@ -36,7 +36,7 @@ export const GET = withPermission('authenticated')(async (
     }
 
     // Check if we already have a summary in the database
-    if (submission.aiSummary && !submission.aiSummary.startsWith('Failed to generate')) {
+    if (submission.aiSummary && !isAiSummaryFailure(submission.aiSummary)) {
       // console.log(`✅ Returning DB cached summary`)
       return NextResponse.json({
         summary: submission.aiSummary,
@@ -67,7 +67,7 @@ export const GET = withPermission('authenticated')(async (
     const summary = await generateReviewSummary(submission.title || 'Untitled Submission', reviews || [])
 
     // Save to database if successful
-    if (!summary.startsWith('Failed to generate') && !summary.startsWith('No detailed feedback')) {
+    if (!isAiSummaryFailure(summary)) {
       await supabase
         .from('Submission')
         .update({
