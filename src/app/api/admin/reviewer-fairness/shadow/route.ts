@@ -19,8 +19,15 @@ export const POST = withPermission('admin_access')(async (request: Authenticated
       )
     }
 
-    const start = new Date(startDate)
-    const end = new Date(endDate)
+    // Treat bare YYYY-MM-DD as day boundaries in UTC so `endDate = today`
+    // includes events from today (not just up to midnight this morning).
+    const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/
+    const start = DATE_ONLY.test(startDate)
+      ? new Date(`${startDate}T00:00:00.000Z`)
+      : new Date(startDate)
+    const end = DATE_ONLY.test(endDate)
+      ? new Date(`${endDate}T23:59:59.999Z`)
+      : new Date(endDate)
 
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       return NextResponse.json(

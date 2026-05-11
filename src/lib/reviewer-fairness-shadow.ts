@@ -61,10 +61,11 @@ interface ShadowLogEntry {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_SHADOW_ALGORITHMS: AlgorithmId[] = [
-  'o3_a3_combined',
-  'o3_o5_a3_combined',
-  'o3_band_randomize',
-  'baseline' // reference — should always match actual picks
+  'o3_a3_combined',         // session 5 winner
+  'o3_o5soft_a3_combined',  // session 5 fallback (rotation O5)
+  'o3_o5_a3_combined',      // strict O5 variant for reference
+  'o3_band_randomize',      // pure O3 without 3A reassign preference
+  'baseline'                // reference — should always match actual picks
 ]
 
 let activeShadowAlgorithms: AlgorithmId[] = [...DEFAULT_SHADOW_ALGORITHMS]
