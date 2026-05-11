@@ -624,3 +624,23 @@ model ShadowConsensusLog {
   @@index([submissionId])
   @@index([timestamp])
 }
+
+model FairnessShadowLog {
+  id                  String   @id @default(uuid()) @db.Uuid
+  submissionId        String   @db.Uuid
+  algorithmId         String   // e.g. 'o3_a3_combined', 'o3_o5_a3_combined'
+  eventType           String   // 'initial' | 'reassignment'
+  actualPicks         Json     // [{ reviewerId, username, reliabilityScore }]
+  shadowPicks         Json     // [{ reviewerId, username, reliabilityScore }]
+  diverged            Boolean  // true if any shadow pick differs from actual
+  divergedCount       Int      // how many picks differ
+  poolSize            Int      // total pool considered
+  eligiblePoolSize    Int      // size after eligibility filter
+  eligibleReviewerIds Json?    // string[] of reviewer ids eligible at pick time (coverage denominator)
+  createdAt           DateTime @default(now())
+
+  @@index([algorithmId, createdAt(sort: Desc)])
+  @@index([submissionId])
+  @@index([createdAt])
+  @@map("FairnessShadowLog")
+}

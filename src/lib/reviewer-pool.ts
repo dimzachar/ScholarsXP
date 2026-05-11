@@ -72,6 +72,8 @@ export interface ReviewerPoolOptions {
   minReviewerRating?: number
   minimumReviewers?: number
   allowPartialAssignment?: boolean
+  /** Set to true when this assignment is a deadline reassignment (for fairness shadow logging) */
+  isReassignment?: boolean
 }
 
 export interface ReviewerCandidate {
@@ -274,6 +276,13 @@ export class ReviewerPoolService {
       const reviewerCount = Math.min(availableReviewers.length, minimumReviewers)
       const selectedReviewers = availableReviewers.slice(0, reviewerCount)
 
+      // Snapshot pick time BEFORE inserting — shadow monitor reads
+      // ReviewAssignment with `assignedAt < pickedAt` so the rows we're about
+      // to insert don't leak into its recent-count stats.
+      const pickedAt = new Date()
+
+      console.log(`[FairnessShadow] assignReviewers called: sub=${submissionId.slice(0, 8)}… pool=${availableReviewers.length} picked=${selectedReviewers.length} isReassignment=${options.isReassignment ?? false}`)
+
       // Calculate deadline (48 hours from now, excluding weekends)
       const deadline = this.calculateReviewDeadline()
 
@@ -283,7 +292,7 @@ export class ReviewerPoolService {
         reviewerId: reviewer.id,
         deadline: deadline.toISOString(),
         status: 'PENDING' as const,
-        assignedAt: new Date().toISOString()
+        assignedAt: pickedAt.toISOString()
       }))
 
       const { data: createdAssignments, error: assignmentError } = await withRetry(
@@ -336,6 +345,24 @@ export class ReviewerPoolService {
       result.assignedReviewers = selectedReviewers
 
       console.log(`✅ Successfully assigned ${selectedReviewers.length} reviewers to submission ${submissionId}`)
+
+      // Phase 1 fairness shadow — fire-and-forget, never blocks real assignment
+      void (async () => {
+        try {
+          const { logShadowPicks } = await import('./reviewer-fairness-shadow')
+          await logShadowPicks({
+            submissionId,
+            submissionUserId,
+            isReassignment: options.isReassignment ?? false,
+            availablePool: availableReviewers,
+            actualPicks: selectedReviewers,
+            minimumReviewers,
+            pickedAt,
+          })
+        } catch (err) {
+          console.error('[FairnessShadow] Shadow hook failed — this does not affect assignments:', err)
+        }
+      })()
 
       return result
 
