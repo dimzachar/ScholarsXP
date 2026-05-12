@@ -384,47 +384,42 @@ export async function queryShadowLogs(
       SELECT
         l."algorithmId",
         (p->>'reviewerId')::uuid AS "reviewerId",
-        p->>'username' AS username,
-        (p->>'reliabilityScore')::float AS "reliabilityScore"
+        MAX(p->>'username') AS username,
+        COUNT(*)::bigint AS picks,
+        SUM((p->>'reliabilityScore')::float)::float AS "relSum"
       FROM "FairnessShadowLog" l
       CROSS JOIN LATERAL jsonb_array_elements(l."actualPicks") AS p
       WHERE l."createdAt" >= ${startDate}
         AND l."createdAt" <= ${endDate}
         AND l."algorithmId" = ANY(${requestedAlgoIds})
+      GROUP BY l."algorithmId", (p->>'reviewerId')::uuid
     ),
     shadow_picks AS (
       SELECT
         l."algorithmId",
         (p->>'reviewerId')::uuid AS "reviewerId",
-        p->>'username' AS username,
-        (p->>'reliabilityScore')::float AS "reliabilityScore"
+        MAX(p->>'username') AS username,
+        COUNT(*)::bigint AS picks,
+        SUM((p->>'reliabilityScore')::float)::float AS "relSum"
       FROM "FairnessShadowLog" l
       CROSS JOIN LATERAL jsonb_array_elements(l."shadowPicks") AS p
       WHERE l."createdAt" >= ${startDate}
         AND l."createdAt" <= ${endDate}
         AND l."algorithmId" = ANY(${requestedAlgoIds})
-    ),
-    all_picks AS (
-      SELECT "algorithmId", "reviewerId", username FROM actual_picks
-      UNION
-      SELECT "algorithmId", "reviewerId", username FROM shadow_picks
+      GROUP BY l."algorithmId", (p->>'reviewerId')::uuid
     )
     SELECT
-      ap."algorithmId",
-      ap."reviewerId"::text AS "reviewerId",
-      MAX(ap.username) AS username,
-      COALESCE(COUNT(act."reviewerId"), 0)::bigint AS "actualPicks",
-      COALESCE(COUNT(sh."reviewerId"), 0)::bigint AS "shadowPicks",
-      COALESCE(SUM(act."reliabilityScore"), 0)::float AS "actualRelSum",
-      COALESCE(SUM(sh."reliabilityScore"), 0)::float AS "shadowRelSum"
-    FROM all_picks ap
-    LEFT JOIN actual_picks act
-      ON act."algorithmId" = ap."algorithmId"
-     AND act."reviewerId" = ap."reviewerId"
-    LEFT JOIN shadow_picks sh
-      ON sh."algorithmId" = ap."algorithmId"
-     AND sh."reviewerId" = ap."reviewerId"
-    GROUP BY ap."algorithmId", ap."reviewerId"
+      COALESCE(a."algorithmId", s."algorithmId") AS "algorithmId",
+      COALESCE(a."reviewerId", s."reviewerId")::text AS "reviewerId",
+      COALESCE(a.username, s.username) AS username,
+      COALESCE(a.picks, 0)::bigint AS "actualPicks",
+      COALESCE(s.picks, 0)::bigint AS "shadowPicks",
+      COALESCE(a."relSum", 0)::float AS "actualRelSum",
+      COALESCE(s."relSum", 0)::float AS "shadowRelSum"
+    FROM actual_picks a
+    FULL OUTER JOIN shadow_picks s
+      ON s."algorithmId" = a."algorithmId"
+     AND s."reviewerId" = a."reviewerId"
   `
 
   // Eligible reviewer set union per algorithm (coverage denominator).
