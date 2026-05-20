@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { ENABLE_ACHIEVEMENTS } from '@/config/feature-flags'
 import { mapTransactionTypeToBucket } from './xp-ledger'
 import { applyTransactionToBreakdown, createEmptyBreakdown } from './xp-ledger'
-import { getWeekNumber } from '@/lib/utils'
+import { getWeekNumber, getWeekBoundaries } from '@/lib/utils'
 import { getGamifiedRank } from '@/lib/gamified-ranks'
 import { notifyRankPromoted } from '@/lib/notifications'
 
@@ -135,12 +135,17 @@ export class XpAnalyticsService {
    */
   async getXpBreakdownForWeek(userId: string, weekNumber: number): Promise<XpBreakdown> {
     try {
+      const currentYear = new Date().getFullYear()
+      const { startDate, endDate } = getWeekBoundaries(weekNumber, currentYear)
+
       // Add cache-busting to ensure fresh data
       const { data: transactions, error } = await supabase
         .from('XpTransaction')
         .select('amount, type')
         .eq('userId', userId)
         .eq('weekNumber', weekNumber)
+        .gte('createdAt', startDate.toISOString())
+        .lte('createdAt', endDate.toISOString())
         .order('createdAt', { ascending: false })
 
       if (error) {
@@ -347,10 +352,14 @@ export class XpAnalyticsService {
         .gt('totalXp', user.totalXp)
 
       // Get weekly rank from XpTransaction (source of truth)
+      const currentYear = new Date().getFullYear()
+      const { startDate, endDate } = getWeekBoundaries(currentWeek, currentYear)
       const { data: allWeeklyXp, error: weeklyXpError } = await supabase
         .from('XpTransaction')
         .select('userId, amount')
         .eq('weekNumber', currentWeek)
+        .gte('createdAt', startDate.toISOString())
+        .lte('createdAt', endDate.toISOString())
 
       let weeklyRank = 0
       let weeklyActiveUsers = 0

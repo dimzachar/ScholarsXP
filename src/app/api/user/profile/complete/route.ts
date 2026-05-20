@@ -4,7 +4,7 @@ import { withUserOptimization } from '@/middleware/api-optimization'
 import { QueryCache, CacheTTL, withQueryCache } from '@/lib/cache/query-cache'
 import { CompleteUserProfileDTO, ResponseTransformer } from '@/types/api-responses'
 import { createServerSupabaseClient, createServiceClient } from '@/lib/supabase-server'
-import { getWeekNumber } from '@/lib/utils'
+import { getWeekNumber, getWeekBoundaries } from '@/lib/utils'
 import { xpAnalyticsService } from '@/lib/xp-analytics'
 import { ENABLE_ACHIEVEMENTS } from '@/config/feature-flags'
 import { applyTransactionToBreakdown, createEmptyBreakdown } from '@/lib/xp-ledger'
@@ -163,11 +163,18 @@ async function getOptimizedCompleteProfile(
           .eq('userId', userId),
 
         // Get current week XP from transactions (source of truth)
-        serviceSupabase
-          .from('XpTransaction')
-          .select('amount')
-          .eq('userId', userId)
-          .eq('weekNumber', getWeekNumber(new Date()))
+        (() => {
+          const currentWeek = getWeekNumber(new Date())
+          const currentYear = new Date().getFullYear()
+          const { startDate, endDate } = getWeekBoundaries(currentWeek, currentYear)
+          return serviceSupabase
+            .from('XpTransaction')
+            .select('amount')
+            .eq('userId', userId)
+            .eq('weekNumber', currentWeek)
+            .gte('createdAt', startDate.toISOString())
+            .lte('createdAt', endDate.toISOString())
+        })()
       ])
 
       // Calculate statistics efficiently (include legacy submissions)
