@@ -705,11 +705,11 @@ export default function ReviewPage() {
                                 href={ensureProtocol(url)}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                                className="flex max-w-full min-w-0 items-center gap-1 text-sm text-primary hover:underline"
                                 title={url}
                               >
-                                {host}
-                                <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                                <span className="truncate min-w-0">{host}</span>
+                                <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden />
                               </a>
                             )}
                             <div className="mt-1 text-xs text-muted-foreground">

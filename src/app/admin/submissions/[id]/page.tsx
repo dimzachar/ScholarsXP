@@ -135,7 +135,7 @@ export default function AdminSubmissionDetailPage() {
   const [reshuffleNotice, setReshuffleNotice] = useState<string | null>(null)
   const [reshuffleError, setReshuffleError] = useState<string | null>(null)
   const [debuggingConsensus, setDebuggingConsensus] = useState(false)
-  const [consensusDebugResult, setConsensusDebugResult] = useState<any>(null)
+  const [consensusDebugResult, setConsensusDebugResult] = useState<unknown>(null)
   const [consensusDebugError, setConsensusDebugError] = useState<string | null>(null)
   const [selectionReplay, setSelectionReplay] = useState<SubmissionSelectionReplay | null>(null)
 
@@ -227,7 +227,7 @@ export default function AdminSubmissionDetailPage() {
       setReshuffleNotice(null)
       setReshuffleError(null)
 
-      const body: any = { reason: 'manual:admin' }
+      const body: { reason: string; assignmentIds?: string[] } = { reason: 'manual:admin' }
       if (assignmentId) {
         body.assignmentIds = [assignmentId]
       }
@@ -331,21 +331,21 @@ export default function AdminSubmissionDetailPage() {
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/50 to-muted">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <Button variant="outline" size="sm" onClick={() => router.back()}>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+            <Button variant="outline" size="sm" onClick={() => router.back()} className="shrink-0">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Button>
-            <div>
-              <h1 className="text-3xl font-bold">Submission Details</h1>
-              <p className="text-muted-foreground">
+            <div className="min-w-0">
+              <h1 className="text-2xl sm:text-3xl font-bold truncate">Submission Details</h1>
+              <p className="text-sm sm:text-base text-muted-foreground truncate">
                 Comprehensive XP management and review oversight
               </p>
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" onClick={fetchSubmissionDetails}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
@@ -365,13 +365,13 @@ export default function AdminSubmissionDetailPage() {
 
         {/* Detailed Tabs */}
         <Tabs defaultValue="xp-breakdown" className="space-y-6">
-          <TabsList className={`grid w-full ${submission.platform === 'LEGACY' ? 'grid-cols-3' : 'grid-cols-4'}`}>
-            <TabsTrigger value="xp-breakdown">XP Breakdown</TabsTrigger>
-            <TabsTrigger value="peer-reviews">Peer Reviews</TabsTrigger>
+          <TabsList className="flex w-full flex-wrap gap-1 h-auto p-1 bg-muted rounded-md">
+            <TabsTrigger value="xp-breakdown" className="flex-1 min-w-[120px] text-xs sm:text-sm">XP Breakdown</TabsTrigger>
+            <TabsTrigger value="peer-reviews" className="flex-1 min-w-[120px] text-xs sm:text-sm">Peer Reviews</TabsTrigger>
             {submission.platform !== 'LEGACY' && (
-              <TabsTrigger value="transactions">XP History</TabsTrigger>
+              <TabsTrigger value="transactions" className="flex-1 min-w-[120px] text-xs sm:text-sm">XP History</TabsTrigger>
             )}
-            <TabsTrigger value="assignments">Review Assignments</TabsTrigger>
+            <TabsTrigger value="assignments" className="flex-1 min-w-[120px] text-xs sm:text-sm">Review Assignments</TabsTrigger>
           </TabsList>
 
           <TabsContent value="xp-breakdown">
@@ -483,7 +483,7 @@ export default function AdminSubmissionDetailPage() {
 
                   {submission.reviewAssignments.length > 0 ? (
                     <div className="space-y-4">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex flex-wrap justify-end gap-2">
                         {submission.reviewAssignments.filter(a => a.status !== 'REASSIGNED').length < 3 && (
                           <Button size="sm" onClick={handleAutoAssign} disabled={assigning}>
                             {assigning ? 'Assigning…' : 'Re-assign reviewers'}
@@ -509,15 +509,15 @@ export default function AdminSubmissionDetailPage() {
                         </Button>
                       </div>
                       {submission.reviewAssignments.map((assignment) => (
-                        <div key={assignment.id} className="flex items-center justify-between p-4 border rounded-lg">
-                          <div>
-                            <div className="font-medium">{assignment.reviewer.username}</div>
-                            <div className="text-sm text-muted-foreground">
-                              Assigned: {formatDate(assignment.assignedAt)} • 
+                        <div key={assignment.id} className="flex flex-col gap-3 p-4 border rounded-lg sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium truncate">{assignment.reviewer.username}</div>
+                            <div className="text-sm text-muted-foreground break-words">
+                              Assigned: {formatDate(assignment.assignedAt)} •{' '}
                               Deadline: {formatDate(assignment.deadline)}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
                             <Badge className={getStatusColor(assignment.status)}>
                               {assignment.status.replace('_', ' ')}
                             </Badge>

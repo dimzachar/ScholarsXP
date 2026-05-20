@@ -513,30 +513,30 @@ export default function AdminDashboardPage() {
 
             {/* Main Content */}
             <Tabs defaultValue="actions" className="space-y-6">
-              <TabsList className={`grid w-full max-w-4xl mx-auto ${isDeveloper(_user?.role) ? 'grid-cols-6' : 'grid-cols-5'}`}>
-                <TabsTrigger value="actions" className="flex items-center gap-2">
+              <TabsList className="flex w-full max-w-4xl mx-auto flex-wrap gap-1 h-auto p-1 bg-muted rounded-md">
+                <TabsTrigger value="actions" className="flex flex-1 min-w-[110px] items-center gap-2">
                   <Zap className="h-4 w-4" />
                   Actions
                 </TabsTrigger>
-                <TabsTrigger value="automation" className="flex items-center gap-2">
+                <TabsTrigger value="automation" className="flex flex-1 min-w-[110px] items-center gap-2">
                   <Activity className="h-4 w-4" />
                   Automation
                 </TabsTrigger>
-                <TabsTrigger value="users" className="flex items-center gap-2">
+                <TabsTrigger value="users" className="flex flex-1 min-w-[110px] items-center gap-2">
                   <Users className="h-4 w-4" />
                   Users
                 </TabsTrigger>
-                <TabsTrigger value="submissions" className="flex items-center gap-2">
+                <TabsTrigger value="submissions" className="flex flex-1 min-w-[110px] items-center gap-2">
                   <FileText className="h-4 w-4" />
                   Submissions
                 </TabsTrigger>
                 {isDeveloper(_user?.role) && (
-                  <TabsTrigger value="reviews" className="flex items-center gap-2">
+                  <TabsTrigger value="reviews" className="flex flex-1 min-w-[110px] items-center gap-2">
                     <MessageSquare className="h-4 w-4" />
                     Reviews
                   </TabsTrigger>
                 )}
-                <TabsTrigger value="analytics" className="flex items-center gap-2">
+                <TabsTrigger value="analytics" className="flex flex-1 min-w-[110px] items-center gap-2">
                   <BarChart3 className="h-4 w-4" />
                   Analytics
                 </TabsTrigger>

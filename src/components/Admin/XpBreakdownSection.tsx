@@ -137,16 +137,17 @@ export default function XpBreakdownSection({ submission, onUpdate }: XpBreakdown
             </div>
           ) : (
             <div className="p-4 border rounded-lg dark:border-slate-700 dark:bg-slate-900/40">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Bot className="h-5 w-5 text-blue-600 dark:text-blue-300" />
-                  <h3 className="font-semibold text-slate-900 dark:text-slate-100">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Bot className="h-5 w-5 text-blue-600 dark:text-blue-300 shrink-0" />
+                  <h3 className="font-semibold text-slate-900 dark:text-slate-100 truncate">
                     {aiEvaluationEnabled ? 'AI Evaluation' : 'AI Evaluation (read-only)'}
                   </h3>
                 </div>
                 <Button 
                   variant="outline" 
                   size="sm"
+                  className="shrink-0"
                   onClick={() => openModificationDialog('ai', submission.aiXp ?? 0)}
                   disabled={!aiEvaluationEnabled}
                 >
@@ -161,17 +162,17 @@ export default function XpBreakdownSection({ submission, onUpdate }: XpBreakdown
                 </div>
               )}
               
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className={`text-3xl font-bold ${getXpStatusColor(submission.aiXp)} dark:text-blue-200`}>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                <div className="min-w-0">
+                  <div className={`text-2xl sm:text-3xl font-bold truncate ${getXpStatusColor(submission.aiXp)} dark:text-blue-200`}>
                     {submission.aiXp ?? 'N/A'}
                   </div>
                   <div className="text-sm text-muted-foreground">XP Score</div>
                 </div>
-                <div className="text-right">
+                <div className="text-right min-w-0">
                   {getXpStatusBadge(submission.aiXp)}
                   {submission.originalityScore && (
-                    <div className="text-sm text-muted-foreground mt-1">
+                    <div className="text-sm text-muted-foreground mt-1 truncate">
                       {(submission.originalityScore * 100).toFixed(1)}% originality
                     </div>
                   )}
@@ -188,15 +189,16 @@ export default function XpBreakdownSection({ submission, onUpdate }: XpBreakdown
 
           {/* Peer XP Section */}
           <div className="p-4 border rounded-lg">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-green-600 dark:text-green-300" />
-                <h3 className="font-semibold text-slate-900 dark:text-slate-100">Peer Review</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Users className="h-5 w-5 text-green-600 dark:text-green-300 shrink-0" />
+                <h3 className="font-semibold text-slate-900 dark:text-slate-100 truncate">Peer Review</h3>
               </div>
               {!isLegacy && (
                 <Button 
                   variant="outline" 
                   size="sm"
+                  className="shrink-0"
                   onClick={() => openModificationDialog('peer', submission.peerXp ?? 0)}
                   disabled={submission.peerXp === null}
                 >
@@ -206,17 +208,17 @@ export default function XpBreakdownSection({ submission, onUpdate }: XpBreakdown
               )}
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className={`text-3xl font-bold ${getXpStatusColor(submission.peerXp)}`}>
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              <div className="min-w-0">
+                <div className={`text-2xl sm:text-3xl font-bold truncate ${getXpStatusColor(submission.peerXp)}`}>
                   {submission.peerXp ?? 'N/A'}
                 </div>
                 <div className="text-sm text-muted-foreground">Average Score</div>
               </div>
-              <div className="text-right">
+              <div className="text-right min-w-0">
                 {getXpStatusBadge(submission.peerXp)}
                 {submission.consensusScore && (
-                  <div className="text-sm text-muted-foreground mt-1">
+                  <div className="text-sm text-muted-foreground mt-1 truncate">
                     {(submission.consensusScore * 100).toFixed(1)}% consensus
                   </div>
                 )}
@@ -243,14 +245,15 @@ export default function XpBreakdownSection({ submission, onUpdate }: XpBreakdown
 
           {/* Final XP Section */}
           <div className="p-5 rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50 via-emerald-100/80 to-white dark:from-emerald-950 dark:via-emerald-900/70 dark:to-slate-950/80 dark:border-emerald-500/40 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Award className="h-5 w-5 text-emerald-600 dark:text-emerald-200" />
-                <h3 className="font-semibold text-emerald-900 dark:text-emerald-100">Final XP Award</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Award className="h-5 w-5 text-emerald-600 dark:text-emerald-200 shrink-0" />
+                <h3 className="font-semibold text-emerald-900 dark:text-emerald-100 truncate">Final XP Award</h3>
               </div>
               <Button 
                 variant="outline" 
                 size="sm"
+                className="shrink-0"
                 onClick={() => openModificationDialog('final', submission.finalXp ?? 0)}
               >
                 <Edit className="h-4 w-4 mr-2" />
@@ -258,18 +261,18 @@ export default function XpBreakdownSection({ submission, onUpdate }: XpBreakdown
               </Button>
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className={`text-4xl font-bold ${getXpStatusColor(submission.finalXp)} dark:text-emerald-200`}>
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              <div className="min-w-0">
+                <div className={`text-2xl sm:text-4xl font-bold truncate ${getXpStatusColor(submission.finalXp)} dark:text-emerald-200`}>
                   {submission.finalXp ?? 'Pending'}
                 </div>
                 <div className="text-sm text-muted-foreground">Final Award</div>
               </div>
-              <div className="text-right">
+              <div className="text-right min-w-0">
                 {getXpStatusBadge(submission.finalXp)}
                 {submission.finalXp !== null && submission.status === 'FINALIZED' && (
-                  <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-300 text-sm mt-1">
-                    <CheckCircle className="h-3 w-3" />
+                  <div className="flex items-center justify-end gap-1 text-emerald-600 dark:text-emerald-300 text-sm mt-1">
+                    <CheckCircle className="h-3 w-3 shrink-0" />
                     Awarded
                   </div>
                 )}

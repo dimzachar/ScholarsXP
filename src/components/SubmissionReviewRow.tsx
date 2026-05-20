@@ -200,15 +200,15 @@ export default function SubmissionReviewRow({
                 </span>
               )}
               {assignedReviewers.length > 0 && (
-                <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground sm:hidden">
-                  <Users className="h-3 w-3 text-muted-foreground/80" aria-hidden="true" />
-                  <span className="uppercase tracking-wide text-[10px] font-semibold text-muted-foreground/80">
+                <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground sm:hidden">
+                  <span className="inline-flex items-center gap-1 uppercase tracking-wide text-[10px] font-semibold text-muted-foreground/80">
+                    <Users className="h-3 w-3 text-muted-foreground/80" aria-hidden="true" />
                     Reviewers
                   </span>
                   {assignedReviewers.map((reviewer) => (
                     <span
                       key={reviewer.id}
-                      className="rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground/90"
+                      className="max-w-[120px] truncate rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground/90"
                       title={reviewer.displayName}
                     >
                       {reviewer.shortLabel}

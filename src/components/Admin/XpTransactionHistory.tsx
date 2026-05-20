@@ -215,14 +215,14 @@ export default function XpTransactionHistory({ submissionId }: XpTransactionHist
               {transactions.map((transaction) => (
                 <div 
                   key={transaction.id} 
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/20 transition-colors"
+                  className="flex items-start justify-between gap-3 p-4 border rounded-lg hover:bg-muted/20 transition-colors"
                 >
-                  <div className="flex items-start gap-3 flex-1">
-                    <div className="mt-1">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <div className="mt-1 shrink-0">
                       {getTransactionIcon(transaction.type)}
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
                         <Badge className={getTransactionTypeColor(transaction.type)}>
                           {formatTransactionType(transaction.type)}
                         </Badge>
@@ -230,17 +230,17 @@ export default function XpTransactionHistory({ submissionId }: XpTransactionHist
                           Week {transaction.weekNumber}
                         </Badge>
                       </div>
-                      <div className="font-medium text-sm mb-1">
+                      <div className="font-medium text-sm mb-1 break-words break-all">
                         {transaction.description}
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Calendar className="h-3 w-3" />
-                        {formatDate(transaction.createdAt)}
+                        <Calendar className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{formatDate(transaction.createdAt)}</span>
                       </div>
                     </div>
                   </div>
                   
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     <div className={`text-lg font-bold ${
                       transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'
                     }`}>
@@ -262,15 +262,15 @@ export default function XpTransactionHistory({ submissionId }: XpTransactionHist
                 <div className="relative">
                   <div className="absolute left-4 top-0 bottom-0 w-px bg-border"></div>
                   <div className="space-y-4">
-                    {transactions.slice(0, 5).map((transaction, index) => (
+                    {transactions.slice(0, 5).map((transaction) => (
                       <div key={transaction.id} className="flex items-center gap-4">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                        <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-xs font-bold ${
                           transaction.amount >= 0 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
                         }`}>
                           {transaction.amount >= 0 ? '+' : ''}{transaction.amount}
                         </div>
-                        <div className="flex-1 text-sm">
-                          <div className="font-medium">{transaction.description}</div>
+                        <div className="flex-1 min-w-0 text-sm">
+                          <div className="font-medium break-words break-all">{transaction.description}</div>
                           <div className="text-muted-foreground text-xs">
                             {formatDate(transaction.createdAt)}
                           </div>

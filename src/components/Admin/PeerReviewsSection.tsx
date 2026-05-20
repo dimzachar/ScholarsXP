@@ -153,8 +153,8 @@ export default function PeerReviewsSection({
     <>
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
                 Peer Reviews ({peerReviews.length})
@@ -163,7 +163,7 @@ export default function PeerReviewsSection({
                 Individual reviewer scores with edit capabilities
               </CardDescription>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               {peerReviews.length > 0 && (
                 <div className="text-right">
                   <div className={`text-2xl font-bold ${getScoreColor(averageScore)}`}>
@@ -225,16 +225,16 @@ export default function PeerReviewsSection({
               {/* Individual Reviews */}
               {peerReviews.map((review) => (
                 <div key={review.id} className="p-4 border rounded-lg hover:bg-muted/20 transition-colors">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10">
+                  <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <Avatar className="h-10 w-10 shrink-0">
                         <AvatarFallback>
                           {review.reviewer.username.substring(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <div>
-                        <div className="font-medium">{review.reviewer.username}</div>
-                        <div className="text-sm text-muted-foreground">
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{review.reviewer.username}</div>
+                        <div className="text-sm text-muted-foreground truncate" title={review.reviewer.email}>
                           {review.reviewer.email}
                         </div>
                       </div>
@@ -242,6 +242,7 @@ export default function PeerReviewsSection({
                     <Button 
                       variant="outline" 
                       size="sm"
+                      className="shrink-0"
                       onClick={() => setEditingReview(review)}
                     >
                       <Edit className="h-4 w-4 mr-2" />
@@ -297,21 +298,21 @@ export default function PeerReviewsSection({
                   {review.comments && (
                     <div className="mb-3 p-3 bg-blue-50 rounded border-l-4 border-blue-200">
                       <div className="flex items-start gap-2">
-                        <MessageSquare className="h-4 w-4 text-blue-600 mt-0.5" />
-                        <div>
+                        <MessageSquare className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                        <div className="min-w-0">
                           <div className="text-sm font-medium text-blue-800 mb-1">Comments</div>
-                          <div className="text-sm text-blue-700">{review.comments}</div>
+                          <div className="text-sm text-blue-700 break-words">{review.comments}</div>
                         </div>
                       </div>
                     </div>
                   )}
 
                   {/* Metadata */}
-                  <div className="flex items-center justify-between text-sm text-muted-foreground">
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {formatDate(review.createdAt)}
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 min-w-0">
+                      <div className="flex items-center gap-1 min-w-0">
+                        <Clock className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{formatDate(review.createdAt)}</span>
                       </div>
                       {review.isLate && (
                         <Badge variant="destructive" className="text-xs">
@@ -320,7 +321,7 @@ export default function PeerReviewsSection({
                         </Badge>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 text-green-600">
+                    <div className="flex items-center gap-1 text-green-600 shrink-0">
                       <CheckCircle className="h-3 w-3" />
                       Completed
                     </div>

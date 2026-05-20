@@ -48,6 +48,7 @@ interface SubmissionDetailHeaderProps {
     role: string
       totalXp: number
     }
+    peerReviews?: Array<unknown>
   }
 }
 
@@ -89,16 +90,16 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
 
   const calculateProgress = () => {
     if (submission.status === 'FINALIZED') return 100
-    let progress = 0
-    if (showAiMetric) {
-      if (submission.aiXp > 0) progress += 33
-      if (submission.peerXp !== null) progress += 33
-      if (submission.finalXp !== null) progress += 34
-    } else {
-      if (submission.peerXp !== null) progress += 50
-      if (submission.finalXp !== null) progress += 50
-    }
-    return Math.min(100, progress)
+    // Use the actual count of completed peer reviews (not assignment count, which
+    // includes PENDING). 3 reviews are required to finalize.
+    const completedReviews = Array.isArray(submission.peerReviews)
+      ? submission.peerReviews.length
+      : 0
+    const peerRatio = Math.min(1, completedReviews / 3)
+    let progress = Math.round(peerRatio * 100)
+    // Cap below 100% until status is FINALIZED.
+    if (progress >= 100) progress = 99
+    return progress
   }
 
   const reviewSummaryIntro = showAiMetric
@@ -123,10 +124,10 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
   return (
     <Card className="mb-8">
       <CardHeader>
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
-              <CardTitle className="text-xl">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <CardTitle className="text-lg sm:text-xl break-words min-w-0">
                 {submission.title || 'Untitled Submission'}
               </CardTitle>
               <Badge className={getStatusColor(submission.status)}>
@@ -139,13 +140,13 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
                 </Badge>
               )}
             </div>
-            <CardDescription className="text-base">
+            <CardDescription className="text-sm sm:text-base break-words">
               {submission.content?.substring(0, 200)}
               {submission.content?.length > 200 && '...'}
             </CardDescription>
           </div>
-          <Link href={submission.url} target="_blank">
-            <Button variant="outline" size="sm">
+          <Link href={submission.url} target="_blank" className="shrink-0">
+            <Button variant="outline" size="sm" className="w-full sm:w-auto">
               <ExternalLink className="h-4 w-4 mr-2" />
               View Original
             </Button>
@@ -155,52 +156,52 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
       
       <CardContent>
         {/* XP Metrics */}
-        <div className={`grid ${showAiMetric ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3'} gap-4 mb-6`}>
+        <div className={`grid grid-cols-2 ${showAiMetric ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-3 sm:gap-4 mb-6`}>
           {showAiMetric && (
-            <div className="text-center p-4 rounded-lg border border-blue-200/60 bg-blue-50 dark:bg-slate-900/60 dark:border-blue-500/30">
-              <div className={`text-2xl font-bold ${getXpStatusColor(submission.aiXp)} dark:text-blue-200`}>
+            <div className="text-center p-3 sm:p-4 rounded-lg border border-blue-200/60 bg-blue-50 dark:bg-slate-900/60 dark:border-blue-500/30 min-w-0">
+              <div className={`text-xl sm:text-2xl font-bold truncate ${getXpStatusColor(submission.aiXp)} dark:text-blue-200`}>
                 {submission.aiXp}
               </div>
-              <div className="text-sm text-muted-foreground">{aiMetricLabel}</div>
+              <div className="text-xs sm:text-sm text-muted-foreground truncate">{aiMetricLabel}</div>
               {submission.originalityScore && (
-                <div className="text-xs text-blue-600 dark:text-blue-300 mt-1">
+                <div className="text-xs text-blue-600 dark:text-blue-300 mt-1 truncate">
                   {(submission.originalityScore * 100).toFixed(0)}% original
                 </div>
               )}
             </div>
           )}
           
-          <div className="text-center p-4 rounded-lg border border-green-200/60 bg-green-50 dark:bg-emerald-900/40 dark:border-emerald-500/30">
-            <div className={`text-2xl font-bold ${getXpStatusColor(submission.peerXp)} dark:text-emerald-200`}>
+          <div className="text-center p-3 sm:p-4 rounded-lg border border-green-200/60 bg-green-50 dark:bg-emerald-900/40 dark:border-emerald-500/30 min-w-0">
+            <div className={`text-xl sm:text-2xl font-bold truncate ${getXpStatusColor(submission.peerXp)} dark:text-emerald-200`}>
               {submission.peerXp ?? 'N/A'}
             </div>
-            <div className="text-sm text-muted-foreground">Peer XP</div>
+            <div className="text-xs sm:text-sm text-muted-foreground truncate">Peer XP</div>
             {submission.consensusScore && (
-              <div className="text-xs text-green-600 dark:text-green-300 mt-1">
+              <div className="text-xs text-green-600 dark:text-green-300 mt-1 truncate">
                 {(submission.consensusScore * 100).toFixed(0)}% consensus
               </div>
             )}
           </div>
           
-          <div className="text-center p-4 rounded-lg border border-emerald-200/70 bg-gradient-to-br from-emerald-50 via-emerald-100/80 to-white dark:from-emerald-950 dark:via-emerald-900/70 dark:to-slate-950/80 dark:border-emerald-500/40 shadow-sm">
-            <div className={`text-2xl font-bold ${getXpStatusColor(submission.finalXp)} dark:text-emerald-200`}>
+          <div className="text-center p-3 sm:p-4 rounded-lg border border-emerald-200/70 bg-gradient-to-br from-emerald-50 via-emerald-100/80 to-white dark:from-emerald-950 dark:via-emerald-900/70 dark:to-slate-950/80 dark:border-emerald-500/40 shadow-sm min-w-0">
+            <div className={`text-xl sm:text-2xl font-bold truncate ${getXpStatusColor(submission.finalXp)} dark:text-emerald-200`}>
               {submission.finalXp?.toLocaleString() ?? 'Pending'}
             </div>
-            <div className="text-sm text-muted-foreground">Final XP</div>
+            <div className="text-xs sm:text-sm text-muted-foreground truncate">Final XP</div>
             {aiEvaluationEnabled && submission.finalXp !== null && submission.aiXp !== null && (
-              <div className="text-xs text-emerald-600 dark:text-emerald-300 mt-1">
+              <div className="text-xs text-emerald-600 dark:text-emerald-300 mt-1 truncate">
                 {submission.finalXp > submission.aiXp ? '+' : ''}
                 {(submission.finalXp - submission.aiXp).toLocaleString()} vs AI
               </div>
             )}
           </div>
           
-          <div className="text-center p-4 rounded-lg border border-orange-200/60 bg-orange-50 dark:bg-amber-900/40 dark:border-amber-500/30">
-            <div className={`text-2xl font-bold text-orange-600 dark:text-amber-200`}>
+          <div className="text-center p-3 sm:p-4 rounded-lg border border-orange-200/60 bg-orange-50 dark:bg-amber-900/40 dark:border-amber-500/30 min-w-0">
+            <div className={`text-xl sm:text-2xl font-bold text-orange-600 dark:text-amber-200 truncate`}>
               {submission.reviewCount}
             </div>
-            <div className="text-sm text-muted-foreground">Reviews</div>
-            <div className="text-xs text-orange-600 dark:text-amber-300 mt-1">
+            <div className="text-xs sm:text-sm text-muted-foreground truncate">Reviews</div>
+            <div className="text-xs text-orange-600 dark:text-amber-300 mt-1 truncate">
               {submission.reviewCount >= 3 ? 'Complete' : `${Math.max(0, 3 - submission.reviewCount)} needed`}
             </div>
           </div>
@@ -238,35 +239,35 @@ export default function SubmissionDetailHeader({ submission }: SubmissionDetailH
 
         {/* Metadata */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-          <div className="flex items-center gap-2">
-            <User className="h-4 w-4 text-muted-foreground" />
-            <div>
-              <div className="font-medium">{submission.user.username}</div>
-              <div className="text-muted-foreground">{submission.user.email}</div>
+          <div className="flex items-center gap-2 min-w-0">
+            <User className="h-4 w-4 text-muted-foreground shrink-0" />
+            <div className="min-w-0">
+              <div className="font-medium truncate">{submission.user.username}</div>
+              <div className="text-muted-foreground truncate" title={submission.user.email}>{submission.user.email}</div>
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-            <div>
+          <div className="flex items-center gap-2 min-w-0">
+            <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+            <div className="min-w-0">
               <div className="font-medium">Submitted</div>
-              <div className="text-muted-foreground">{formatDate(submission.createdAt)}</div>
+              <div className="text-muted-foreground truncate">{formatDate(submission.createdAt)}</div>
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
-            <Award className="h-4 w-4 text-muted-foreground" />
-            <div>
+          <div className="flex items-center gap-2 min-w-0">
+            <Award className="h-4 w-4 text-muted-foreground shrink-0" />
+            <div className="min-w-0">
               <div className="font-medium">Week {submission.weekNumber}</div>
-              <div className="text-muted-foreground">User Total: {submission.user.totalXp.toLocaleString()} XP</div>
+              <div className="text-muted-foreground truncate">User Total: {submission.user.totalXp.toLocaleString()} XP</div>
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <div>
+          <div className="flex items-center gap-2 min-w-0">
+            <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+            <div className="min-w-0">
               <div className="font-medium">Last Updated</div>
-              <div className="text-muted-foreground">{formatDate(submission.updatedAt)}</div>
+              <div className="text-muted-foreground truncate">{formatDate(submission.updatedAt)}</div>
             </div>
           </div>
         </div>
