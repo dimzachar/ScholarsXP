@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getWeekNumber } from '@/lib/utils'
+import { getWeekNumber, getWeekBoundaries } from '@/lib/utils'
 import { withPermission, AuthenticatedRequest } from '@/lib/auth-middleware'
 
 export const GET = withPermission('authenticated')(async (request: AuthenticatedRequest) => {
@@ -73,6 +73,9 @@ async function fetchUserPositionFromDatabase(userId: string, currentWeek: number
 
   // Get weekly position if requested
   if (type === 'weekly' || type === 'both') {
+    const currentYear = new Date().getFullYear()
+    const { startDate, endDate } = getWeekBoundaries(currentWeek, currentYear)
+
     // Get user's weekly XP and rank using raw SQL for efficiency
     const weeklyData = await prisma.$queryRaw<Array<{ 
       user_xp: bigint
@@ -83,6 +86,8 @@ async function fetchUserPositionFromDatabase(userId: string, currentWeek: number
         SELECT "userId", SUM(amount) as total_xp
         FROM "XpTransaction"
         WHERE "weekNumber" = ${currentWeek}
+          AND "createdAt" >= ${startDate}
+          AND "createdAt" <= ${endDate}
         GROUP BY "userId"
       ),
       ranked AS (

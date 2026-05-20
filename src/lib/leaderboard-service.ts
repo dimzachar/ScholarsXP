@@ -239,6 +239,8 @@ export class LeaderboardService {
             COUNT(*) FILTER (WHERE t.type = 'SUBMISSION_REWARD') as "submissionCount"
           FROM "XpTransaction" t
           WHERE t."weekNumber" = ${weekNumber}
+            AND t."createdAt" >= ${startDate}
+            AND t."createdAt" <= ${endDate}
           GROUP BY t."userId"
         ),
         user_reviews AS (
@@ -279,6 +281,8 @@ export class LeaderboardService {
         SELECT COUNT(DISTINCT "userId") as count, COALESCE(SUM(amount), 0) as total
         FROM "XpTransaction"
         WHERE "weekNumber" = ${weekNumber}
+          AND "createdAt" >= ${startDate}
+          AND "createdAt" <= ${endDate}
       `
     ])
 

@@ -167,12 +167,16 @@ export function getWeekBoundaries(weekNumber: number, year: number): { startDate
  */
 export async function recalculateCurrentWeekXp(tx: any, userId: string): Promise<number> {
   const currentWeek = getWeekNumber(new Date())
+  const currentYear = new Date().getFullYear()
+  const { startDate, endDate } = getWeekBoundaries(currentWeek, currentYear)
 
   // Use raw query to avoid enum errors and ensure accurate calculation
   const transactions: Array<{ amount: number }> = await tx.$queryRaw`
     SELECT amount FROM "XpTransaction"
     WHERE "userId" = ${userId}::uuid
     AND "weekNumber" = ${currentWeek}
+    AND "createdAt" >= ${startDate}
+    AND "createdAt" <= ${endDate}
   `
 
   return transactions.reduce((sum, t) => sum + t.amount, 0)

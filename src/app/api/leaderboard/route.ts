@@ -5,7 +5,7 @@ import { multiLayerCache } from '@/lib/cache/enhanced-cache'
 import { withPublicOptimization } from '@/middleware/api-optimization'
 import { leaderboardService } from '@/lib/leaderboard-service'
 
-const CACHE_VERSION = 'v13' // Optimized single-query leaderboard service
+const CACHE_VERSION = 'v14' // Fix: scope weekNumber queries to current year
 
 export const GET = withPublicOptimization(withErrorHandling(async (request: NextRequest) => {
   const { searchParams } = new URL(request.url)
