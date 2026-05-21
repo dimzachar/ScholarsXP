@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { ResponsiveStatCard, createStatCardData } from '@/components/ui/responsive-stat-card'
+import { cn } from '@/lib/utils'
 import {
   Users,
   Clock,
@@ -27,7 +28,8 @@ import {
   MessageSquareText,
   Award,
   Medal,
-  ChevronUp
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react'
 
 interface Submission {
@@ -158,6 +160,7 @@ export default function ReviewPage() {
   // Back to top like changelog
   const [mounted, setMounted] = useState(false)
   const [showBackToTop, setShowBackToTop] = useState(false)
+  const [showGuide, setShowGuide] = useState(true)
 
   useEffect(() => {
     if (!privyUserId) return
@@ -396,47 +399,82 @@ export default function ReviewPage() {
           </p>
         </div>
 
-        {/* How to Review panel (placed above stats) */}
+        {/* Unified Review Guide — collapsible */}
         <Card
           className="border-0 shadow-lg mb-6"
           role="region"
-          aria-labelledby="how-to-review-heading"
+          aria-labelledby="review-guide-heading"
         >
-          <CardHeader>
-            <CardTitle id="how-to-review-heading" className="flex items-center gap-2">
+          <button
+            type="button"
+            className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-muted/30 transition-colors rounded-t-xl"
+            aria-expanded={showGuide}
+            aria-controls="review-guide-content"
+            onClick={() => setShowGuide(!showGuide)}
+          >
+            <span id="review-guide-heading" className="flex items-center gap-2 text-lg font-semibold text-foreground">
               <TrendingUp className="h-5 w-5 text-primary" aria-hidden="true" />
-              How to Review
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              {/* Task A */}
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 rounded-md bg-primary/10 p-2 text-primary">
-                  <Twitter className="h-4 w-4" aria-hidden="true" />
-                </div>
-                <div>
-                  <p className="font-medium">Task A — Twitter</p>
-                  <p className="text-muted-foreground">
-                    Review Twitter threads (5+ tweets) OR Twitter Articles.
-                  </p>
+              Review Guide
+            </span>
+            <ChevronDown className={cn("h-5 w-5 text-muted-foreground transition-transform duration-200", showGuide && "rotate-180")} aria-hidden="true" />
+          </button>
+
+          {showGuide && (
+            <CardContent id="review-guide-content" className="pt-0 pb-5 px-6 space-y-5">
+              {/* Task Types */}
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Eligible Platforms</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div className="flex items-start gap-3 rounded-lg border border-border/60 bg-muted/10 p-3">
+                    <div className="mt-0.5 rounded-md bg-primary/10 p-2 text-primary shrink-0">
+                      <Twitter className="h-4 w-4" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <p className="font-medium">Task A — Twitter</p>
+                      <p className="text-muted-foreground">Threads (5+ tweets) OR Twitter Articles.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 rounded-lg border border-border/60 bg-muted/10 p-3">
+                    <div className="mt-0.5 rounded-md bg-secondary/10 p-2 text-secondary-foreground shrink-0">
+                      <FileText className="h-4 w-4" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <p className="font-medium">Task B — Reddit / Notion / Medium</p>
+                      <p className="text-muted-foreground">Posts must be 2000+ characters.</p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Task B */}
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 rounded-md bg-secondary/10 p-2 text-secondary-foreground">
-                  <FileText className="h-4 w-4" aria-hidden="true" />
-                </div>
-                <div>
-                  <p className="font-medium">Task B — Reddit / Notion / Medium</p>
-                  <p className="text-muted-foreground">
-                    Eligible posts must be 2000+ characters. Platforms allowed: Reddit, Notion, or Medium.
-                  </p>
+              {/* Review Steps */}
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Review Steps</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                  <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/10 p-3">
+                    <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">1</div>
+                    <div>
+                      <p className="font-medium">Choose Category + Tier</p>
+                      <p className="text-muted-foreground">Select strategy / guide / technical and Basic / Average / Awesome. XP is computed automatically.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/10 p-3">
+                    <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">2</div>
+                    <div>
+                      <p className="font-medium">Verify Platform Fit</p>
+                      <p className="text-muted-foreground">Task A: Twitter threads only (5+ tweets). Task B: Reddit/Notion/Medium (2000+ chars).</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/10 p-3">
+                    <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">3</div>
+                    <div>
+                      <p className="font-medium">Qualitative Feedback</p>
+                      <p className="text-muted-foreground">Use sliders/comments for feedback; they do not change XP.</p>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </CardContent>
+            </CardContent>
+          )}
         </Card>
 
         {/* Stats Cards */}
@@ -521,52 +559,16 @@ export default function ReviewPage() {
                 </Card>
               </div>
             ) : (
-              <>
-                <Card className="border-0 shadow-lg">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5 text-primary" aria-hidden="true" />
-                      Review Guidelines (V2)
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                      <div className="flex items-start gap-2">
-                        <CheckCircle className="h-4 w-4 text-primary mt-0.5" aria-hidden="true" />
-                        <div>
-                          <p className="font-medium">Choose Category + Tier</p>
-                          <p className="text-muted-foreground">Select strategy/guide/technical and Basic/Average/Awesome. XP is computed.</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <CheckCircle className="h-4 w-4 text-primary mt-0.5" aria-hidden="true" />
-                        <div>
-                          <p className="font-medium">Platform Fit</p>
-                          <p className="text-muted-foreground">Task A: Twitter threads only (5+ tweets). Task B: Reddit/Notion/Medium (2000+ characters).</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <CheckCircle className="h-4 w-4 text-success mt-0.5" aria-hidden="true" />
-                        <div>
-                          <p className="font-medium">Qualitative Criteria</p>
-                          <p className="text-muted-foreground">Use sliders/comments for feedback; they do not change XP.</p>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {pendingReviews.map(({ submission, assignment }) => (
-                  <SubmissionReviewRow
-                    key={submission.id}
-                    submission={submission}
-                    assignment={assignment}
-                    open={expandedMineId === submission.id}
-                    onOpenChange={(open) => setExpandedMineId(open ? submission.id : null)}
-                    onReviewSubmit={handleReviewSubmit}
-                  />
-                ))}
-              </>
+              pendingReviews.map(({ submission, assignment }) => (
+                <SubmissionReviewRow
+                  key={submission.id}
+                  submission={submission}
+                  assignment={assignment}
+                  open={expandedMineId === submission.id}
+                  onOpenChange={(open) => setExpandedMineId(open ? submission.id : null)}
+                  onReviewSubmit={handleReviewSubmit}
+                />
+              ))
             )}
           </TabsContent>
 
