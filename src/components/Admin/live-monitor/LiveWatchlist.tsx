@@ -19,6 +19,11 @@ import { WatchlistReviewer } from '@/app/admin/live-monitor/types'
 interface LiveWatchlistProps {
     data: {
         watchlist: WatchlistReviewer[]
+        config?: {
+            activeFormula?: string
+            shadowFormulaV1?: string
+            shadowFormulaV2?: string
+        }
     } | null
     onViewChange: (view: 'dashboard' | 'feed' | 'watchlist') => void
 }
@@ -109,9 +114,15 @@ export function LiveWatchlist({ data, onViewChange }: LiveWatchlistProps) {
                                     <tr className="border-b border-border bg-muted/30">
                                         <th className="p-4 text-xs font-bold text-muted-foreground uppercase tracking-wider w-16">Rank</th>
                                         <th className="p-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Reviewer</th>
-                                        <th className="p-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Formula A</th>
-                                        <th className="p-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Shadow V1</th>
-                                        <th className="p-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Shadow V2</th>
+                                        <th className="p-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">
+                                            {data?.config?.activeFormula ?? 'Formula A'}
+                                        </th>
+                                        <th className="p-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">
+                                            {data?.config?.shadowFormulaV1 ?? 'Shadow V1'}
+                                        </th>
+                                        <th className="p-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">
+                                            {data?.config?.shadowFormulaV2 ?? 'Shadow V2'}
+                                        </th>
                                         <th className="p-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Total Reviews</th>
                                         <th className="p-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-center">Status</th>
                                         <th className="p-4 text-xs font-bold text-muted-foreground uppercase tracking-wider w-16"></th>

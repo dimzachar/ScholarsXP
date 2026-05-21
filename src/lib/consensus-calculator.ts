@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import * as fs from 'fs'
-import path from 'path'
+
 import { xpAnalyticsService } from './xp-analytics'
 import { prisma } from '@/lib/prisma'
 import { getWeekNumber, getWeekBoundaries, recalculateCurrentWeekXp } from '@/lib/utils'
@@ -145,7 +145,9 @@ export class ConsensusCalculatorService {
       if (RELIABILITY_CONFIG.ENABLE_SHADOW_MODE) {
         setImmediate(async () => {
           try {
-            const shadowFormula = getFormula('CUSTOM_V1')
+            // Shadow the LEGACY formula so we always have a comparison against production
+            const shadowFormulaId = RELIABILITY_CONFIG.ACTIVE_FORMULA === 'LEGACY' ? 'CUSTOM_V1' : 'LEGACY'
+            const shadowFormula = getFormula(shadowFormulaId)
             let shadowWeightedSum = 0
             let shadowTotalWeight = 0
 
@@ -155,7 +157,7 @@ export class ConsensusCalculatorService {
             for (const review of validReviews) {
               const res = reliabilityMap.get(review.reviewerId)
               if (res) {
-                const shadowScore = calculateScore(res.metrics, shadowFormula.weights)
+                const shadowScore = calculateScore(res.metrics, shadowFormula.weights, shadowFormula.defaultValues)
                 shadowWeightedSum += (review.xpScore || 0) * shadowScore
                 shadowTotalWeight += shadowScore
               }
@@ -170,7 +172,7 @@ export class ConsensusCalculatorService {
                 submissionId,
                 activeFormulaId: RELIABILITY_CONFIG.ACTIVE_FORMULA,
                 activeScore: weightedPeerAverage,
-                shadowFormulaId: 'CUSTOM_V1',
+                shadowFormulaId,
                 shadowScore: shadowConsensus,
                 delta: delta
               }

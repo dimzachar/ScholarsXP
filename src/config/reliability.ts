@@ -4,7 +4,7 @@
 
 export const RELIABILITY_CONFIG = {
     // The formula currently used for production consensus weighting
-    ACTIVE_FORMULA: 'LEGACY' as 'LEGACY' | 'CUSTOM_V1',
+    ACTIVE_FORMULA: 'CUSTOM_V2' as 'LEGACY' | 'CUSTOM_V1' | 'CUSTOM_V2',
 
     // Toggle for the inclusion of voting-based metrics (voteValidation)
     USE_VOTE_VALIDATION: true,

@@ -151,16 +151,20 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
         const reliabilityMap = await reliabilityService.getReliabilityScores(reviewerIds)
 
         // 5. Calculate Shadow Scores locally to avoid redundant DB calls
-        const formulaV1 = getFormula('CUSTOM_V1')
-        const formulaV2 = getFormula('CUSTOM_V2')
+        // Always shadow the two formulas that aren't currently active
+        const shadowIds = (['LEGACY', 'CUSTOM_V1', 'CUSTOM_V2'] as const).filter(
+            id => id !== RELIABILITY_CONFIG.ACTIVE_FORMULA
+        )
+        const shadowFormula1 = getFormula(shadowIds[0])
+        const shadowFormula2 = getFormula(shadowIds[1])
 
         const reviewersWithScores = reviewerIds.map((id) => {
             const active = reliabilityMap.get(id)
             if (!active) return null
 
             // Calculate shadow scores locally using already fetched metrics
-            const shadowScoreV1 = calculateScore(active.metrics, formulaV1.weights, formulaV1.defaultValues)
-            const shadowScoreV2 = calculateScore(active.metrics, formulaV2.weights, formulaV2.defaultValues)
+            const shadowScoreV1 = calculateScore(active.metrics, shadowFormula1.weights, shadowFormula1.defaultValues)
+            const shadowScoreV2 = calculateScore(active.metrics, shadowFormula2.weights, shadowFormula2.defaultValues)
 
             // Determine status
             const { isBad } = identifyBad(active.metrics)
@@ -376,8 +380,8 @@ export const GET = withPermission('admin_access')(async (request: AuthenticatedR
             voteStats,
             config: {
                 activeFormula: RELIABILITY_CONFIG.ACTIVE_FORMULA,
-                shadowFormulaV1: 'CUSTOM_V1',
-                shadowFormulaV2: 'CUSTOM_V2',
+                shadowFormulaV1: shadowIds[0],
+                shadowFormulaV2: shadowIds[1],
                 shadowModeEnabled: RELIABILITY_CONFIG.ENABLE_SHADOW_MODE
             }
         })
