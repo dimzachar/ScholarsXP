@@ -706,7 +706,7 @@ export function buildReviewerAnalyticsDashboard(input: {
   const trendKeys = Array.from(new Set([
     ...assignmentTrendMap.keys(),
     ...reviewTrendMap.keys()
-  ])).sort()
+  ])).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
 
   const trends = trendKeys.map(bucketStart => {
     const assignmentTrend = assignmentTrendMap.get(bucketStart)
