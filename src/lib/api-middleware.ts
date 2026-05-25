@@ -217,6 +217,23 @@ export function validateUrl(url: string): void {
     }
   }
 
+  // Notion URL validation
+  // Per Notion's docs, public/published page links live on <workspace>.notion.site.
+  // Links on notion.so are the in-app form which often requires login or is the
+  // private workspace view (e.g. notion.so/<workspace>/<page>). Reject any
+  // notion.so link and require the published Site URL so reviewers can actually
+  // open the page.
+  // See: https://www.notion.com/help/public-pages-and-web-publishing
+  //   "Make sure you've shared the link to the published page and not the
+  //    version of the page in your Notion workspace! The link should begin
+  //    with your Notion workspace domain name."
+  if (hostname === 'notion.so' || hostname === 'www.notion.so') {
+    throw new ValidationError(
+      'This Notion link can\'t be opened by reviewers. Please share your page as a public Notion Site instead: open the page in Notion, click Share at the top, switch to the Publish tab, click Publish, then copy the link shown there. The link should look like https://your-workspace.notion.site/your-page.',
+      { url, hint: 'notion_unpublished_link' }
+    )
+  }
+
   // Check for extra text in the decoded path (catches URL-encoded spaces + text)
   try {
     const decodedPath = decodeURIComponent(pathname + parsedUrl.search + parsedUrl.hash)
