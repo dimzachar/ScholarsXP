@@ -244,7 +244,7 @@ export default function ReliabilityHistoryTab() {
   }
 
   const handleUserChange = (userId: string) => {
-    setSelectedUserId(userId)
+    setSelectedUserId(userId === 'all' ? '' : userId)
     setPage(1)
   }
 
@@ -442,12 +442,12 @@ export default function ReliabilityHistoryTab() {
         </div>
 
         {/* User filter */}
-        <Select value={selectedUserId || ''} onValueChange={handleUserChange}>
+        <Select value={selectedUserId || 'all'} onValueChange={handleUserChange}>
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="All Reviewers" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Reviewers</SelectItem>
+            <SelectItem value="all">All Reviewers</SelectItem>
             {(allReviewers.length > 0 ? allReviewers : users).map((u) => (
               <SelectItem key={u.id} value={u.id}>
                 {u.username}
