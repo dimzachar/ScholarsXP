@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { takeSnapshotAsync } from '@/lib/reliability/snapshot-service'
 
 const MIN_VOTES_FOR_CONSENSUS = 50
 const CONSENSUS_THRESHOLD = 0.50  // >50%
@@ -120,7 +121,6 @@ export async function processVoteConsensus(
     )
 
     // Fire-and-forget reliability snapshots for affected reviewers
-    const { takeSnapshotAsync } = await import('@/lib/reliability/snapshot-service')
     const reviewerIds = [...new Set(reviews.map(r => r.reviewerId))]
     reviewerIds.forEach(id => takeSnapshotAsync(id, 'vote_validation'))
 

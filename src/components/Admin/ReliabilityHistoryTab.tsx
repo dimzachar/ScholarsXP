@@ -81,7 +81,7 @@ function formatDate(iso: string): string {
 }
 
 function formatDelta(delta: number | null): { text: string; sign: 'pos' | 'neg' | 'zero' } {
-  if (delta === null || delta === undefined) {
+  if (delta == null) {
     return { text: '—', sign: 'zero' }
   }
   if (delta === 0) {
@@ -244,7 +244,7 @@ export default function ReliabilityHistoryTab() {
   }
 
   const handleUserChange = (userId: string) => {
-    setSelectedUserId(userId === '__all__' ? '' : userId)
+    setSelectedUserId(userId)
     setPage(1)
   }
 
@@ -357,7 +357,7 @@ export default function ReliabilityHistoryTab() {
   return (
     <div className="space-y-6">
       {/* ── Chart ── */}
-      {selectedUserId && selectedUserId !== '__all__' ? (
+      {selectedUserId ? (
         <Card className="border-border/60">
           <CardHeader>
             <CardTitle>Individual Reliability History</CardTitle>
@@ -442,12 +442,12 @@ export default function ReliabilityHistoryTab() {
         </div>
 
         {/* User filter */}
-        <Select value={selectedUserId || '__all__'} onValueChange={handleUserChange}>
+        <Select value={selectedUserId || ''} onValueChange={handleUserChange}>
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="All Reviewers" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">All Reviewers</SelectItem>
+            <SelectItem value="">All Reviewers</SelectItem>
             {(allReviewers.length > 0 ? allReviewers : users).map((u) => (
               <SelectItem key={u.id} value={u.id}>
                 {u.username}
@@ -529,7 +529,7 @@ export default function ReliabilityHistoryTab() {
                   snapshots.map((snap) => {
                     const deltaInfo = formatDelta(snap.delta)
                     const prevScore =
-                      snap.delta !== null && snap.delta !== undefined
+                      snap.delta != null
                         ? snap.score - snap.delta
                         : snap.score
 

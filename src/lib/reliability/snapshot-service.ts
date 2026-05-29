@@ -263,7 +263,8 @@ export function takeSnapshotAsync(userId: string, source: string): void {
  * Skips dates that already have a snapshot for that user.
  */
 export async function backfillHistory(
-  weeksBack: number = 12
+  /** @todo implement weeksBack limit — currently unused, always goes back to first review */
+  _weeksBack: number = 12
 ): Promise<{ snapshotsCreated: number; errors: string[]; reviewersProcessed: number }> {
   const errors: string[] = []
   let snapshotsCreated = 0
@@ -303,7 +304,7 @@ export async function backfillHistory(
         )
 
         // Step through weekly intervals
-        const interval = 7 * 24 * 60 * 60 * 1000 // 7 days in ms
+        const interval = 7 * 24 * 60 * 60 * 1000
         let cursor = new Date(earliestReview.createdAt)
         // Align to start of week for cleaner buckets
         cursor.setDate(cursor.getDate() - cursor.getDay())
