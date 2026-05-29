@@ -44,6 +44,7 @@ model User {
   notifications      Notification[]
   rolePromotionNotifications RolePromotionNotification[]
   wallets            UserWallet[]
+  reliabilitySnapshots ReliabilitySnapshot[]
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
 
@@ -643,4 +644,23 @@ model FairnessShadowLog {
   @@index([submissionId])
   @@index([createdAt])
   @@map("FairnessShadowLog")
+}
+
+model ReliabilitySnapshot {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  score        Float    // 0.0 – 1.0
+  formulaId    String   // Which formula was used (e.g. "CUSTOM_V2")
+  metrics      Json     // Full ReviewerMetrics snapshot
+  delta        Float?   // Change from previous snapshot (+0.02, –0.05, etc.)
+  source       String   @default("unknown") // e.g. "daily_cron", "review_submitted", "vote_validation", "missed_review", "admin_penalty"
+  snapshotDate DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, snapshotDate(sort: Desc)])
+  @@index([snapshotDate])
+  @@index([score])
+  @@map("ReliabilitySnapshot")
 }

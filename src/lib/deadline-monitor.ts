@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { reviewerPoolService } from './reviewer-pool'
 import { xpAnalyticsService } from './xp-analytics'
 import { logReviewerAssignmentAutomation } from './reviewer-assignment-log'
+import { takeSnapshotAsync } from '@/lib/reliability/snapshot-service'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -252,6 +253,9 @@ export class DeadlineMonitorService {
         console.error('Failed to record XP penalty:', xpError)
         return // Abort if we can't record the transaction (our idempotency key)
       }
+
+      // Fire-and-forget: reliability snapshot
+      takeSnapshotAsync(assignment.reviewerId, 'missed_review')
 
       // Check and apply threshold penalties (one-time, at exact thresholds)
       await applyMissedReviewThresholdPenalties(assignment.reviewerId, newMissedReviews)

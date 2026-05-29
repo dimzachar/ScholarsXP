@@ -6,6 +6,7 @@ import { useAuthenticatedFetch } from '@/hooks/useAuthenticatedFetch'
 import { isAdmin } from '@/lib/roles'
 import { getTaskDisplayInfo } from '@/lib/xp-rules-v2'
 import ReviewerAnalyticsTab from '@/components/Admin/ReviewerAnalyticsTab'
+import ReliabilityHistoryTab from '@/components/Admin/ReliabilityHistoryTab'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -1031,12 +1032,13 @@ export default function AdminAnalyticsPage() {
           </div>
         ) : hasAnyAnalytics ? (
           <Tabs defaultValue={analyticsData ? 'overview' : 'reviewers'} className="w-full">
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-6">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="reviewers">Reviewers</TabsTrigger>
               <TabsTrigger value="users">Users</TabsTrigger>
               <TabsTrigger value="content">Content</TabsTrigger>
               <TabsTrigger value="performance">Performance</TabsTrigger>
+              <TabsTrigger value="reliability">Reliability</TabsTrigger>
             </TabsList>
 
             {/* Overview Tab */}
@@ -1397,6 +1399,11 @@ export default function AdminAnalyticsPage() {
                   </CardContent>
                 </Card>
               ) : systemAnalyticsFallback}
+            </TabsContent>
+
+            {/* Reliability Tab */}
+            <TabsContent value="reliability" className="space-y-6 mt-6">
+              <ReliabilityHistoryTab />
             </TabsContent>
 
             {/* Performance Tab */}

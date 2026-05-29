@@ -10,6 +10,7 @@ import {
 } from '@/lib/xp-rules-v2'
 import { withErrorHandling, createSuccessResponse, validateRequiredFields } from '@/lib/api-middleware'
 import { ValidationError } from '@/lib/api-error-handler'
+import { takeSnapshotAsync } from '@/lib/reliability/snapshot-service'
 
 export const POST = withPermission('review_content')(
   withErrorHandling(async (request: AuthenticatedRequest) => {
@@ -247,6 +248,9 @@ export const POST = withPermission('review_content')(
         }
       }, { status: 500 })
     }
+
+    // Fire-and-forget: reliability snapshot for the reviewer
+    takeSnapshotAsync(reviewerId, 'review_submitted')
 
     // Award XP using the incentives system
     let rewardDetails = null

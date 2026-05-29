@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import { calculateReviewerMetrics } from './metrics-calculator'
 import { calculateScore, getFormula } from './formulas'
 import { ReliabilityScore, RawReviewerData } from './types'
@@ -31,8 +32,14 @@ export class ReliabilityService {
     /**
      * Fetches and calculates reliability scores for a list of reviewers
      * Optimized to use aggregation queries instead of loading all records
+     * 
+     * @param reviewerIds - Array of user IDs to compute scores for
+     * @param asOf - Optional date to compute historical score (only considers data before this date)
      */
-    async getReliabilityScores(reviewerIds: string[]): Promise<Map<string, ReliabilityScore>> {
+    async getReliabilityScores(
+        reviewerIds: string[],
+        asOf?: Date
+    ): Promise<Map<string, ReliabilityScore>> {
         const results = new Map<string, ReliabilityScore>()
         
         if (reviewerIds.length === 0) return results
@@ -49,6 +56,16 @@ export class ReliabilityService {
             }
         })
 
+        // Date filter for historical computation
+        const dateFilter = asOf
+            ? Prisma.sql`AND pr."createdAt" <= ${asOf}::timestamptz`
+            : Prisma.sql``
+
+        // Date filter for XpTransaction (uses different alias)
+        const txDateFilter = asOf
+            ? Prisma.sql`AND "createdAt" <= ${asOf}::timestamptz`
+            : Prisma.sql``
+
         // 2. Aggregate review stats in a single query
         const reviewStatsPromise = prisma.$queryRaw<AggregatedReviewData[]>`
             SELECT 
@@ -63,6 +80,7 @@ export class ReliabilityService {
                 SUM(pr."xpScore" * pr."xpScore")::bigint as "sumXpScoreSquared"
             FROM "PeerReview" pr
             WHERE pr."reviewerId" = ANY(${reviewerIds}::uuid[])
+              ${dateFilter}
             GROUP BY pr."reviewerId"
         `
 
@@ -76,6 +94,7 @@ export class ReliabilityService {
             JOIN "Submission" s ON pr."submissionId" = s.id
             WHERE pr."reviewerId" = ANY(${reviewerIds}::uuid[])
               AND s."finalXp" IS NOT NULL
+              ${dateFilter}
             GROUP BY pr."reviewerId"
         `
 
@@ -87,6 +106,7 @@ export class ReliabilityService {
             FROM "XpTransaction"
             WHERE "userId" = ANY(${reviewerIds}::uuid[])
               AND type = 'PENALTY'
+              ${txDateFilter}
             GROUP BY "userId"
         `
 

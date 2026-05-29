@@ -97,7 +97,7 @@ export async function processVoteConsensus(
             // We only care about the reviews that match the vote options
             xpScore: { in: losingXp !== null ? [winningXp, losingXp] : [winningXp] }
         },
-        select: { id: true, xpScore: true }
+        select: { id: true, xpScore: true, reviewerId: true }
     })
 
     if (reviews.length === 0) {
@@ -118,6 +118,11 @@ export async function processVoteConsensus(
             })
         })
     )
+
+    // Fire-and-forget reliability snapshots for affected reviewers
+    const { takeSnapshotAsync } = await import('@/lib/reliability/snapshot-service')
+    const reviewerIds = [...new Set(reviews.map(r => r.reviewerId))]
+    reviewerIds.forEach(id => takeSnapshotAsync(id, 'vote_validation'))
 
     console.log(`✅ Processed vote consensus for ${submissionId}: winner=${winningXp}, loser=${losingXp}`)
 }
