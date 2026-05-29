@@ -66,6 +66,8 @@ interface ReliabilityHistoryResponse {
   total: number
   page: number
   pageSize: number
+  /** Full chronological series for the selected user's individual chart */
+  individual?: ReliabilitySnapshot[]
 }
 
 /* ── Helpers ────────────────────────────────────────── */
@@ -121,10 +123,12 @@ function ChartTooltipContent({
   active,
   payload,
   label,
+  prefix = '',
 }: {
   active?: boolean
-  payload?: Array<{ value: number }>
+  payload?: Array<{ value: number; name?: string }>
   label?: string
+  prefix?: string
 }) {
   if (!active || !payload?.length) return null
   return (
@@ -132,7 +136,7 @@ function ChartTooltipContent({
       <p className="text-muted-foreground">{label}</p>
       {payload.map((entry, i) => (
         <p key={i} className="font-medium">
-          Avg: {formatReliabilityPercent(entry.value)}
+          {prefix || entry.name || ''}: {formatReliabilityPercent(entry.value)}
         </p>
       ))}
     </div>
@@ -223,6 +227,7 @@ export default function ReliabilityHistoryTab() {
       if (typeof payload.pageSize !== 'number') payload.pageSize = pageSize
       if (!Array.isArray(payload.snapshots)) payload.snapshots = []
       if (!Array.isArray(payload.aggregate)) payload.aggregate = []
+      if (!Array.isArray(payload.individual)) payload.individual = []
 
       setData(payload)
     } catch (err) {
@@ -358,19 +363,91 @@ export default function ReliabilityHistoryTab() {
     <div className="space-y-6">
       {/* ── Chart ── */}
       {selectedUserId ? (
-        <Card className="border-border/60">
-          <CardHeader>
-            <CardTitle>Individual Reliability History</CardTitle>
-            <CardDescription>
-              Per-reviewer history is shown in the table below, filtered by the selected user.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              Individual score progression will appear here once more snapshots accumulate.
-            </p>
-          </CardContent>
-        </Card>
+        (() => {
+          // Build individual chart data from the dedicated full series
+          const userSnapshots =
+            data.individual && data.individual.length > 0
+              ? data.individual
+              : snapshots
+                  .filter((s) => s.userId === selectedUserId)
+                  .slice()
+                  .sort(
+                    (a, b) =>
+                      new Date(a.snapshotDate).getTime() -
+                      new Date(b.snapshotDate).getTime()
+                  )
+
+          const selectedUser =
+            (allReviewers.length > 0 ? allReviewers : users).find(
+              (u) => u.id === selectedUserId
+            )?.username ?? 'Selected Reviewer'
+
+          return (
+            <Card className="border-border/60">
+              <CardHeader>
+                <CardTitle>{selectedUser} — Reliability Over Time</CardTitle>
+                <CardDescription>
+                  Individual reliability score progression across snapshots.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {userSnapshots.length < 2 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    {userSnapshots.length === 0
+                      ? 'No snapshots yet for this reviewer.'
+                      : 'At least 2 snapshots are needed to show a trend line. More data will appear as snapshots accumulate.'}
+                  </p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={userSnapshots}>
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="hsl(var(--border))"
+                      />
+                      <XAxis
+                        dataKey="snapshotDate"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fontSize: 12 }}
+                        tickFormatter={(val: string) => {
+                          const d = new Date(val)
+                          return Number.isNaN(d.getTime())
+                            ? val
+                            : d.toLocaleDateString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                              })
+                        }}
+                      />
+                      <YAxis
+                        domain={[0, 1]}
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fontSize: 12 }}
+                        tickFormatter={(val: number) =>
+                          `${(val * 100).toFixed(0)}%`
+                        }
+                      />
+                      <Tooltip
+                        content={<ChartTooltipContent prefix="Score" />}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="score"
+                        stroke="hsl(var(--chart-2, 160 60% 45%))"
+                        strokeWidth={2}
+                        dot={{ r: 3 }}
+                        activeDot={{ r: 5 }}
+                        name="Score"
+                        connectNulls
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          )
+        })()
       ) : (
         <Card className="border-border/60">
           <CardHeader>
@@ -407,7 +484,7 @@ export default function ReliabilityHistoryTab() {
                     tick={{ fontSize: 12 }}
                     tickFormatter={(val: number) => `${(val * 100).toFixed(0)}%`}
                   />
-                  <Tooltip content={<ChartTooltipContent />} />
+                  <Tooltip content={<ChartTooltipContent prefix="Avg" />} />
                   <Line
                     type="monotone"
                     dataKey="avgScore"

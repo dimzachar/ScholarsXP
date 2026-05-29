@@ -22,6 +22,7 @@ export const GET = withPermission('admin_access')(
         total: result.total,
         page: Math.floor(offset / limit) + 1,
         pageSize: limit,
+        individual: result.individual,
       })
     } catch (error) {
       console.error('[ReliabilityHistory] Error:', error)

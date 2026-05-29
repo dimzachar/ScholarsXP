@@ -27,6 +27,11 @@ export interface HistoryResult {
   snapshots: ReliabilitySnapshotData[]
   aggregate: AggregateDay[]
   total: number
+  /**
+   * All snapshots for the filtered user (if userId was provided),
+   * sorted chronologically ascending — used for the individual chart.
+   */
+  individual?: ReliabilitySnapshotData[]
 }
 
 /**
@@ -243,7 +248,30 @@ export async function getHistory(
     username: userMap.get(r.userId) ?? null,
   }))
 
-  return { snapshots, aggregate, total }
+  // When filtering by user, also fetch all their snapshots (no pagination)
+  // for the individual chart line, sorted chronologically
+  let individual: ReliabilitySnapshotData[] | undefined
+  if (userId) {
+    const allRows = await prisma.reliabilitySnapshot.findMany({
+      where: { userId, snapshotDate: { gte: since } },
+      orderBy: { snapshotDate: 'asc' },
+      select: {
+        id: true,
+        userId: true,
+        score: true,
+        formulaId: true,
+        delta: true,
+        source: true,
+        snapshotDate: true,
+      },
+    })
+    individual = allRows.map((r) => ({
+      ...r,
+      username: userMap.get(r.userId) ?? null,
+    }))
+  }
+
+  return { snapshots, aggregate, total, individual }
 }
 
 /**
