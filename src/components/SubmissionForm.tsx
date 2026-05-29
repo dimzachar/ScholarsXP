@@ -7,6 +7,25 @@ import { Progress } from '@/components/ui/progress'
 import { MobileInput, MobileForm } from '@/components/ui/mobile-input'
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout'
 import { detectPlatform } from '@/lib/utils'
+
+/**
+ * Check if a Notion URL is an unpublished app link (notion.so / notion.com)
+ * rather than a published Notion Site URL (*.notion.site).
+ * This mirrors the server-side validation in api-middleware.ts.
+ */
+function isBlockedNotionUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase()
+    return (
+      hostname === 'notion.so' ||
+      hostname === 'notion.com' ||
+      hostname.endsWith('.notion.so') ||
+      hostname.endsWith('.notion.com')
+    )
+  } catch {
+    return false
+  }
+}
 import { apiPost } from '@/lib/api-client'
 import {
   Send,
@@ -74,6 +93,13 @@ export default function SubmissionForm() {
 
     if (!platform) {
       setMessage('Only Twitter/X, Medium, Reddit, Notion, and LinkedIn links are supported')
+      setIsSubmitting(false)
+      return
+    }
+
+    // Client-side Notion URL check — matches server-side validateUrl() in api-middleware.ts
+    if (platform === 'Notion' && isBlockedNotionUrl(url)) {
+      setMessage('This Notion link can\'t be opened by reviewers. Please share your page as a public Notion Site instead: open the page in Notion, click Share at the top, switch to the Publish tab, click Publish, then copy the link shown there. The link should look like https://your-workspace.notion.site/your-page.')
       setIsSubmitting(false)
       return
     }

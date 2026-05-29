@@ -113,7 +113,7 @@ export function getXpForTier(task: TaskIdV2, category: TaskCategory, tier: Quali
 export function resolveTaskFromPlatform(platform: string): TaskIdV2 | null {
   const p = (platform || '').toLowerCase()
   if (p === 'twitter' || p === 'x' || p === 'x.com') return 'A'
-  if (p === 'medium' || p === 'reddit' || p === 'notion' || p === 'notion.so') return 'B'
+  if (p === 'medium' || p === 'reddit' || p === 'notion' || p === 'notion.so' || p === 'notion.com' || p === 'notion.site') return 'B'
   return null
 }
 

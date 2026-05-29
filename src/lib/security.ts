@@ -87,7 +87,7 @@ export function detectPlatform(url: string): 'Twitter' | 'Medium' | 'Reddit' | '
       return 'Reddit'
     }
 
-    if (hostname.includes('notion.so') || hostname.includes('notion.site')) {
+    if (hostname.includes('notion.so') || hostname.includes('notion.site') || hostname.includes('notion.com')) {
       return 'Notion'
     }
 
@@ -101,50 +101,7 @@ export function detectPlatform(url: string): 'Twitter' | 'Medium' | 'Reddit' | '
   }
 }
 
-export function validateURL(url: string): ValidationResult {
-  const result: ValidationResult = {
-    isValid: true,
-    errors: [],
-    warnings: []
-  }
 
-  if (!url) {
-    result.isValid = false
-    result.errors.push('URL is required')
-    return result
-  }
-
-  try {
-    const urlObj = new URL(url)
-    
-    // Check if it's a supported platform
-    const platform = detectPlatform(url)
-    if (!platform) {
-      result.isValid = false
-      result.errors.push('Only Twitter/X, Medium, Reddit, Notion, and LinkedIn links are supported')
-    }
-
-    // Check for blocked Twitter accounts
-    if (platform === 'Twitter') {
-      const blockedCheck = isBlockedTwitterAccount(url)
-      if (blockedCheck.blocked) {
-        result.isValid = false
-        result.errors.push(`Submissions from @${blockedCheck.account} are not allowed. Please submit your own content.`)
-      }
-    }
-
-    // Check for HTTPS
-    if (urlObj.protocol !== 'https:') {
-      result.warnings.push('URL should use HTTPS for security')
-    }
-
-  } catch (error) {
-    result.isValid = false
-    result.errors.push('Invalid URL format')
-  }
-
-  return result
-}
 
 export function validateScholarXPHashtag(content: string): ValidationResult {
   const result: ValidationResult = {
