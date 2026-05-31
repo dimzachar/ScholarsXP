@@ -114,23 +114,28 @@ export async function getHistoricalRecentAssignmentCounts(
 ): Promise<Map<string, number>> {
   if (reviewerIds.length === 0) return new Map()
 
-  // Matches the codebase convention (getTime() - N * 24h in ms) used across
-  // analytics, reviewer-dashboard, admin stats, etc. Fixed-duration UTC math —
-  // not DST-aware, but consistent with every other "N days ago" calculation.
-  const windowStart = new Date(targetTime.getTime() - windowDays * 24 * 60 * 60 * 1000)
+  try {
+    // Matches the codebase convention (getTime() - N * 24h in ms) used across
+    // analytics, reviewer-dashboard, admin stats, etc. Fixed-duration UTC math —
+    // not DST-aware, but consistent with every other "N days ago" calculation.
+    const windowStart = new Date(targetTime.getTime() - windowDays * 24 * 60 * 60 * 1000)
 
-  const rows = await prisma.$queryRaw<RecentAssignmentRow[]>`
-    SELECT
-      "reviewerId",
-      COUNT(*)::int AS "recentCount"
-    FROM "ReviewAssignment"
-    WHERE "reviewerId" = ANY(${reviewerIds}::uuid[])
-      AND "assignedAt" >= ${windowStart}
-      AND "assignedAt" < ${targetTime}
-    GROUP BY "reviewerId"
-  `
+    const rows = await prisma.$queryRaw<RecentAssignmentRow[]>`
+      SELECT
+        "reviewerId",
+        COUNT(*)::int AS "recentCount"
+      FROM "ReviewAssignment"
+      WHERE "reviewerId" = ANY(${reviewerIds}::uuid[])
+        AND "assignedAt" >= ${windowStart}
+        AND "assignedAt" < ${targetTime}
+      GROUP BY "reviewerId"
+    `
 
-  return new Map(rows.map(row => [row.reviewerId, row.recentCount]))
+    return new Map(rows.map(row => [row.reviewerId, row.recentCount]))
+  } catch (error) {
+    console.error('[ReviewerPool] Failed to fetch recent assignment counts:', error)
+    return new Map()
+  }
 }
 
 // ---------------------------------------------------------------------------

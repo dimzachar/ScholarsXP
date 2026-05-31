@@ -25,7 +25,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import type { SimulationResult, AlgorithmResult } from '@/lib/reviewer-fairness-simulator'
-import { ALGORITHMS, type AlgorithmId } from '@/lib/reviewer-fairness-algorithms'
+import { ALGORITHMS, getActiveFairnessAlgorithm, type AlgorithmId } from '@/lib/reviewer-fairness-algorithms'
 import type { ShadowQueryResult, ShadowSummaryRow, ShadowEventDetail, ShadowReviewerBreakdown } from '@/lib/reviewer-fairness-shadow'
 
 const today = new Date()
@@ -325,14 +325,18 @@ export default function ReviewerFairnessDashboard() {
                     </TableHeader>
                     <TableBody>
                       {result.algorithms.map(algo => {
+                        // 'isActive' marks the deployed algorithm (row highlight + badge).
+                        // 'isBaseline' is the comparison anchor for color deltas — these
+                        // are separate concerns (active can differ from baseline).
+                        const isActive = algo.algorithmId === getActiveFairnessAlgorithm()
                         const isBaseline = algo.algorithmId === 'baseline'
                         const bl = baseline
                         return (
-                          <TableRow key={algo.algorithmId} className={isBaseline ? 'bg-muted/30' : ''}>
+                          <TableRow key={algo.algorithmId} className={isActive ? 'bg-muted/30' : ''}>
                             <TableCell className="font-medium">
                               {algo.algorithmLabel}
-                              {isBaseline && (
-                                <Badge variant="secondary" className="ml-2 text-xs">current</Badge>
+                              {isActive && (
+                                <Badge variant="secondary" className="ml-2 text-xs">active</Badge>
                               )}
                             </TableCell>
                             <TableCell className={`text-right font-mono ${!isBaseline && bl ? colorForValue(algo.giniCoefficient, true, bl.giniCoefficient) : ''}`}>
@@ -568,13 +572,13 @@ export default function ReviewerFairnessDashboard() {
                   </TableHeader>
                   <TableBody>
                     {shadowResult.summary.map((row: ShadowSummaryRow) => {
-                      const isBaseline = row.algorithmId === 'baseline'
+                      const isActive = row.algorithmId === getActiveFairnessAlgorithm()
                       return (
-                        <TableRow key={row.algorithmId} className={isBaseline ? 'bg-muted/30' : ''}>
+                        <TableRow key={row.algorithmId} className={isActive ? 'bg-muted/30' : ''}>
                           <TableCell className="font-medium text-xs">
                             {row.algorithmLabel}
-                            {isBaseline && (
-                              <Badge variant="secondary" className="ml-1 text-xs">actual</Badge>
+                            {isActive && (
+                              <Badge variant="secondary" className="ml-1 text-xs">active</Badge>
                             )}
                           </TableCell>
                           <TableCell className="text-right font-mono text-xs">{row.totalEvents}</TableCell>

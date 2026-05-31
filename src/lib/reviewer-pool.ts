@@ -1,7 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
+import { prisma } from '@/lib/prisma'
 import { REVIEWER_ROLES, isAdmin } from './roles'
 import { reliabilityService } from './reliability/reliability-service'
 import { compareReviewerPriorityValues } from './reviewer-ranking'
+import {
+  runSelector,
+  getActiveFairnessAlgorithm,
+  type SelectionOptions,
+  type FairnessCandidate,
+} from '@/lib/reviewer-fairness-algorithms'
+import { getHistoricalRecentAssignmentCounts } from '@/lib/reviewer-pool-reconstruction'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -63,6 +71,31 @@ async function withRetry<T>(
   }
 
   return lastResult
+}
+
+/**
+ * Fetch penalty flags for a set of reviewer IDs (for O5 proven-bad filter).
+ * Needed by the fairness algorithms to exclude reviewers with penalties.
+ */
+async function fetchPenaltyChecksForPool(
+  reviewerIds: string[],
+  asOf: Date
+): Promise<Map<string, boolean>> {
+  if (reviewerIds.length === 0) return new Map()
+  try {
+    const rows = await prisma.$queryRaw<Array<{ userId: string; penaltyCount: number }>>`
+      SELECT "userId", COUNT(*)::int AS "penaltyCount"
+      FROM "XpTransaction"
+      WHERE "userId" = ANY(${reviewerIds}::uuid[])
+        AND type = 'PENALTY'
+        AND "createdAt" < ${asOf}
+      GROUP BY "userId"
+    `
+    return new Map(rows.map(r => [r.userId, Number(r.penaltyCount) > 0]))
+  } catch (error) {
+    console.error('[ReviewerPool] Failed to fetch penalty checks:', error)
+    return new Map()
+  }
 }
 
 export interface ReviewerPoolOptions {
@@ -272,9 +305,23 @@ export class ReviewerPoolService {
         result.warnings.push(`Insufficient reviewers available. Assigning ${availableReviewers.length} of ${minimumReviewers} requested`)
       }
 
-      // Select reviewers (already sorted by workload and XP)
+      // Select reviewers using the configured fairness algorithm
       const reviewerCount = Math.min(availableReviewers.length, minimumReviewers)
-      const selectedReviewers = availableReviewers.slice(0, reviewerCount)
+      const algoId = getActiveFairnessAlgorithm()
+
+      let selectedReviewers: ReviewerCandidate[]
+
+      if (algoId === 'baseline') {
+        // Baseline: simple deterministic top-N slice, no extra DB queries
+        selectedReviewers = availableReviewers.slice(0, reviewerCount)
+      } else {
+        selectedReviewers = await this.selectWithFairnessAlgorithm(
+          availableReviewers,
+          reviewerCount,
+          submissionId,
+          options.isReassignment ?? false,
+        )
+      }
 
       // Snapshot pick time BEFORE inserting — shadow monitor reads
       // ReviewAssignment with `assignedAt < pickedAt` so the rows we're about
@@ -371,6 +418,50 @@ export class ReviewerPoolService {
       result.errors.push(`Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`)
       return result
     }
+  }
+
+  /**
+   * Select reviewers using the configured fairness algorithm.
+   * Fetches recent assignment counts and penalty flags, then runs the
+   * active selector against a FairnessCandidate projection.
+   * Returns reviewers in the original `availableReviewers` sort order.
+   */
+  private async selectWithFairnessAlgorithm(
+    availableReviewers: ReviewerCandidate[],
+    reviewerCount: number,
+    submissionId: string,
+    isReassignment: boolean,
+  ): Promise<ReviewerCandidate[]> {
+    const candidateIds = availableReviewers.map(r => r.id)
+    const now = new Date()
+    const [recentCounts, penaltyMap] = await Promise.all([
+      getHistoricalRecentAssignmentCounts(candidateIds, now, 30),
+      fetchPenaltyChecksForPool(candidateIds, now),
+    ])
+
+    const fairnessPool: FairnessCandidate[] = availableReviewers.map(r => ({
+      id: r.id,
+      activeAssignments: r.activeAssignments,
+      reliabilityScore: r.reliabilityScore ?? 0.5,
+      totalXp: r.totalXp,
+      missedReviews: r.missedReviews,
+      hasPenalties: penaltyMap.get(r.id) ?? false,
+    }))
+
+    const fairnessOptions: SelectionOptions = {
+      minReviewers: reviewerCount,
+      submissionId,
+      isReassignment,
+      recentCounts,
+    }
+
+    const selectedFairness = runSelector(
+      getActiveFairnessAlgorithm(),
+      fairnessPool,
+      fairnessOptions,
+    )
+    const selectedFairnessIds = new Set(selectedFairness.map(sf => sf.id))
+    return availableReviewers.filter(r => selectedFairnessIds.has(r.id))
   }
 
   /**

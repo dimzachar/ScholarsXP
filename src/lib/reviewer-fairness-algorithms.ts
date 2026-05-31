@@ -572,6 +572,21 @@ export function selectO3O5SoftA3Combined<T extends FairnessCandidate>(
 }
 
 // ---------------------------------------------------------------------------
+// Active algorithm singleton
+// ---------------------------------------------------------------------------
+
+/**
+ * The currently active fairness algorithm for production reviewer selection.
+ * Change this value and redeploy to switch algorithms.
+ *
+ * This lives here (not in reviewer-pool.ts) so client components like
+ * the admin page can import it without pulling server-only dependencies.
+ */
+export function getActiveFairnessAlgorithm(): AlgorithmId {
+  return 'o3_a3_combined'
+}
+
+// ---------------------------------------------------------------------------
 // Dispatch table
 // ---------------------------------------------------------------------------
 
