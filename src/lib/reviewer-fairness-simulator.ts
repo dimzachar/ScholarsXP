@@ -14,7 +14,8 @@
 import { prisma } from '@/lib/prisma'
 import {
   reconstructPoolAtTime,
-  getHistoricalRecentAssignmentCounts
+  getHistoricalRecentAssignmentCounts,
+  getRecentPenaltyTimestamps,
 } from '@/lib/reviewer-pool-reconstruction'
 import type { ReconstructedCandidate } from '@/lib/reviewer-pool-reconstruction'
 import { compareReviewerPriorityValues } from '@/lib/reviewer-ranking'
@@ -79,6 +80,7 @@ interface EventPool {
   recentCounts: Map<string, number>
   recent7dCounts: Map<string, number>
   weightedLoads: Map<string, number>
+  recentPenaltyAt: Map<string, Date>
   triggerFairness: boolean
 }
 
@@ -274,13 +276,15 @@ export async function runSimulation(
       )
 
     const poolIds = eligiblePool.map(c => c.id)
-    const [recentCounts, recent7dCounts, weightedLoads] = poolIds.length > 0
+    const needsRecentPenaltyAt = algorithmIds.includes('o3_a3_recent_penalty_cooldown')
+    const [recentCounts, recent7dCounts, weightedLoads, recentPenaltyAt] = poolIds.length > 0
       ? await Promise.all([
           getHistoricalRecentAssignmentCounts(poolIds, event.timestamp, 30),
           getHistoricalRecentAssignmentCounts(poolIds, event.timestamp, 7),
-          computeWeightedLoads(poolIds, event.timestamp)
+          computeWeightedLoads(poolIds, event.timestamp),
+          needsRecentPenaltyAt ? getRecentPenaltyTimestamps(poolIds, event.timestamp, 30) : Promise.resolve(new Map<string, Date>()),
         ])
-      : [new Map<string, number>(), new Map<string, number>(), new Map<string, number>()]
+      : [new Map<string, number>(), new Map<string, number>(), new Map<string, number>(), new Map<string, Date>()]
 
     // 3D trigger: check if eligible reviewers have zero recent assignments
     const eligibleWithoutAssignments = eligiblePool.filter(c => {
@@ -298,6 +302,7 @@ export async function runSimulation(
       recentCounts,
       recent7dCounts,
       weightedLoads,
+      recentPenaltyAt,
       triggerFairness
     })
   }
@@ -380,7 +385,7 @@ export async function runSimulation(
     const reliabilitySums = new Map<string, number>()
     let totalPicks = 0
 
-    for (const { event, pool, recentCounts, recent7dCounts, weightedLoads, triggerFairness } of eventPools) {
+    for (const { event, pool, recentCounts, recent7dCounts, weightedLoads, recentPenaltyAt, triggerFairness } of eventPools) {
       const options: SelectionOptions = {
         minReviewers: event.isReassignment ? 1 : event.minReviewers,
         submissionId: event.submissionId,
@@ -388,6 +393,9 @@ export async function runSimulation(
         recentCounts,
         recent7dCounts,
         weightedLoads,
+        recentPenaltyAt,
+        recentPenaltyCooldownDays: 14,
+        recentPenaltyCooldownAsOf: event.timestamp,
         triggerFairness
       }
 

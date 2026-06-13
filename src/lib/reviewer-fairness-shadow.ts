@@ -15,7 +15,7 @@
 
 import { prisma } from '@/lib/prisma'
 import type { ReviewerCandidate } from '@/lib/reviewer-pool'
-import { getHistoricalRecentAssignmentCounts } from '@/lib/reviewer-pool-reconstruction'
+import { getHistoricalRecentAssignmentCounts, getRecentPenaltyTimestamps } from '@/lib/reviewer-pool-reconstruction'
 import {
   ALGORITHMS,
   runSelector,
@@ -62,6 +62,7 @@ interface ShadowLogEntry {
 
 const DEFAULT_SHADOW_ALGORITHMS: AlgorithmId[] = [
   'o3_a3_combined',         // session 5 winner
+  'o3_a3_recent_penalty_cooldown', // shadow-only reassignment penalty guard
   'o3_o5soft_a3_combined',  // session 5 fallback (rotation O5)
   'o3_o5_a3_combined',      // strict O5 variant for reference
   'o3_band_randomize',      // pure O3 without 3A reassign preference
@@ -160,10 +161,11 @@ export async function logShadowPicks(ctx: ShadowContext): Promise<void> {
     // Reuse the simulator's helper so "30 days" means the same thing in both
     // paths (Postgres INTERVAL, not JS Date arithmetic).
     const candidateIds = availablePool.map(c => c.id)
-    const [recent30dMap, recent7dMap, penaltyMap] = await Promise.all([
+    const [recent30dMap, recent7dMap, penaltyMap, recentPenaltyAt] = await Promise.all([
       getHistoricalRecentAssignmentCounts(candidateIds, pickedAt, 30),
       getHistoricalRecentAssignmentCounts(candidateIds, pickedAt, 7),
       fetchPenaltyChecks(candidateIds, pickedAt),
+      getRecentPenaltyTimestamps(candidateIds, pickedAt, 30),
     ])
 
     const shadowPool: ShadowCandidate[] = availablePool.map(c => ({
@@ -196,6 +198,9 @@ export async function logShadowPicks(ctx: ShadowContext): Promise<void> {
         isReassignment,
         recentCounts,
         recent7dCounts,
+        recentPenaltyAt,
+        recentPenaltyCooldownDays: 14,
+        recentPenaltyCooldownAsOf: pickedAt,
         // Shadow doesn't currently model weighted-load or dashboard triggers
         // live; algorithms that need them will fall back to their default.
       }
@@ -347,6 +352,19 @@ export async function queryShadowLogs(
     ? algorithmIds.filter(id => ALGORITHMS.some(a => a.id === id))
     : activeShadowAlgorithms
 
+  if (requestedAlgoIds.length === 0) {
+    return {
+      dateRange: {
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+      },
+      totalEvents: 0,
+      summary: [],
+      recentDivergences: [],
+      reviewerBreakdown: {},
+    }
+  }
+
   // Summary counters per algorithm (constant rows, scales forever)
   const summaryRows = await prisma.$queryRaw<
     Array<{
@@ -487,8 +505,25 @@ export async function queryShadowLogs(
     }
   }
 
-  const summary: ShadowSummaryRow[] = summaryRows
-    .filter(r => requestedAlgoIds.includes(r.algorithmId as AlgorithmId))
+  const summaryRowsByAlgo = new Map<string, typeof summaryRows[number]>(
+    summaryRows.map(r => [r.algorithmId, r])
+  )
+  const activeShadowAlgoIds = new Set(activeShadowAlgorithms)
+  const zeroSummaryRows = requestedAlgoIds
+    .filter(id => activeShadowAlgoIds.has(id) && !summaryRowsByAlgo.has(id))
+    .map(id => ({
+      algorithmId: id,
+      totalEvents: 0n,
+      divergedEvents: 0n,
+      poolSizeSum: 0n,
+    }))
+  const requestedAlgoOrder = new Map<AlgorithmId, number>(requestedAlgoIds.map((id, index) => [id, index]))
+  const orderFor = (algorithmId: string) => requestedAlgoOrder.get(algorithmId as AlgorithmId) ?? requestedAlgoIds.length
+  const orderedSummaryRows = [...summaryRows, ...zeroSummaryRows].sort((a, b) => {
+    return orderFor(a.algorithmId) - orderFor(b.algorithmId)
+  })
+
+  const summary: ShadowSummaryRow[] = orderedSummaryRows
     .map(r => {
       const algo = ALGORITHMS.find(a => a.id === r.algorithmId)
       const breakdown = perAlgoBreakdowns.get(r.algorithmId) ?? new Map()

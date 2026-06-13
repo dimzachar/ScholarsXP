@@ -9,7 +9,7 @@ import {
   type SelectionOptions,
   type FairnessCandidate,
 } from '@/lib/reviewer-fairness-algorithms'
-import { getHistoricalRecentAssignmentCounts } from '@/lib/reviewer-pool-reconstruction'
+import { getHistoricalRecentAssignmentCounts, getRecentPenaltyTimestamps } from '@/lib/reviewer-pool-reconstruction'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -434,9 +434,12 @@ export class ReviewerPoolService {
   ): Promise<ReviewerCandidate[]> {
     const candidateIds = availableReviewers.map(r => r.id)
     const now = new Date()
-    const [recentCounts, penaltyMap] = await Promise.all([
+    const algoId = getActiveFairnessAlgorithm()
+    const needsRecentPenaltyAt = algoId === 'o3_a3_recent_penalty_cooldown'
+    const [recentCounts, penaltyMap, recentPenaltyAt] = await Promise.all([
       getHistoricalRecentAssignmentCounts(candidateIds, now, 30),
       fetchPenaltyChecksForPool(candidateIds, now),
+      needsRecentPenaltyAt ? getRecentPenaltyTimestamps(candidateIds, now, 30) : Promise.resolve(new Map<string, Date>()),
     ])
 
     const fairnessPool: FairnessCandidate[] = availableReviewers.map(r => ({
@@ -453,6 +456,9 @@ export class ReviewerPoolService {
       submissionId,
       isReassignment,
       recentCounts,
+      recentPenaltyAt,
+      recentPenaltyCooldownDays: 14,
+      recentPenaltyCooldownAsOf: now,
     }
 
     const selectedFairness = runSelector(

@@ -27,6 +27,7 @@ export type AlgorithmId =
   | 'o3_o5soft_a3_combined'
   | 'o3_a3_combined'
   | 'o3_weighted_3a_combined'
+  | 'o3_a3_recent_penalty_cooldown'
   | 'o1_3a_combined'
 
 export interface AlgorithmMeta {
@@ -102,6 +103,11 @@ export const ALGORITHMS: AlgorithmMeta[] = [
     description: 'O3 with recent-count-biased seat 3 for initial + 3A for reassignment'
   },
   {
+    id: 'o3_a3_recent_penalty_cooldown',
+    label: 'O3 + 3A + Recent Penalty Cooldown',
+    description: 'O3 for initial assignments + 3A for reassignment while avoiding recently penalized reviewers'
+  },
+  {
     id: 'o1_3a_combined',
     label: 'O1 + 3A Combined',
     description: 'O1 fairness seat for initial + 3A underused-preference for reassignments'
@@ -145,6 +151,10 @@ export interface SelectionOptions {
   weightedLoads?: Map<string, number>
   /** For 3D — whether to activate fairness seat. */
   triggerFairness?: boolean
+  /** For recent-penalty cooldown reassignment guard. */
+  recentPenaltyAt?: Map<string, Date>
+  recentPenaltyCooldownDays?: number
+  recentPenaltyCooldownAsOf?: Date
 }
 
 export type SelectionFn<T extends FairnessCandidate> = (
@@ -495,6 +505,31 @@ export function selectO3A3Combined<T extends FairnessCandidate>(
   return selectO3BandRandomize(pool, options)
 }
 
+export const DEFAULT_REASSIGNMENT_PENALTY_COOLDOWN_DAYS = 14
+
+/** O3 + 3A + Recent Penalty Cooldown: O3 for initial, 3A for reassignment with recent-penalty guard. */
+export function selectO3A3RecentPenaltyCooldown<T extends FairnessCandidate>(
+  pool: T[],
+  options: SelectionOptions
+): T[] {
+  if (!options.isReassignment) {
+    return selectO3BandRandomize(pool, options)
+  }
+
+  const cooldownDays = options.recentPenaltyCooldownDays ?? DEFAULT_REASSIGNMENT_PENALTY_COOLDOWN_DAYS
+  const cooldownMs = cooldownDays * 24 * 60 * 60 * 1000
+  const asOf = options.recentPenaltyCooldownAsOf ?? new Date()
+
+  const cleanPool = pool.filter(candidate => {
+    const lastPenaltyAt = options.recentPenaltyAt?.get(candidate.id)
+    if (!lastPenaltyAt) return true
+    return asOf.getTime() - lastPenaltyAt.getTime() > cooldownMs
+  })
+
+  const effectivePool = cleanPool.length >= options.minReviewers ? cleanPool : pool
+  return select3AReassignPreference(effectivePool, options)
+}
+
 /** O3 Weighted Seat 3 + 3A: recent-weighted seat-3 O3 for initial, 3A for reassignment. */
 export function selectO3Weighted3ACombined<T extends FairnessCandidate>(
   pool: T[],
@@ -604,6 +639,7 @@ export const SELECTORS: Record<AlgorithmId, SelectionFn<FairnessCandidate>> = {
   d3_dashboard_triggered: selectD3DashboardTriggered,
   o3_a3_combined: selectO3A3Combined,
   o3_weighted_3a_combined: selectO3Weighted3ACombined,
+  o3_a3_recent_penalty_cooldown: selectO3A3RecentPenaltyCooldown,
   o1_3a_combined: selectO1A3Combined,
   o3_o5_a3_combined: selectO3O5A3Combined,
   o3_o5soft_a3_combined: selectO3O5SoftA3Combined,

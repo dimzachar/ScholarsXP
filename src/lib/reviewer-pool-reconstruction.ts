@@ -73,6 +73,11 @@ type HistoricalPenaltyRow = {
   penaltyCount: number
 }
 
+type RecentPenaltyTimestampRow = {
+  userId: string
+  lastPenaltyAt: Date
+}
+
 type RecentAssignmentRow = {
   reviewerId: string
   recentCount: number
@@ -235,6 +240,30 @@ export async function getHistoricalPenaltyCheck(
   `
 
   return new Map(rows.map(row => [row.userId, row.penaltyCount > 0]))
+}
+
+export async function getRecentPenaltyTimestamps(
+  reviewerIds: string[],
+  targetTime: Date,
+  windowDays = 30
+): Promise<Map<string, Date>> {
+  if (reviewerIds.length === 0) return new Map()
+
+  const windowStart = new Date(targetTime.getTime() - windowDays * 24 * 60 * 60 * 1000)
+
+  const rows = await prisma.$queryRaw<RecentPenaltyTimestampRow[]>`
+    SELECT
+      "userId",
+      MAX("createdAt") AS "lastPenaltyAt"
+    FROM "XpTransaction"
+    WHERE "userId" = ANY(${reviewerIds}::uuid[])
+      AND type = 'PENALTY'
+      AND "createdAt" >= ${windowStart}
+      AND "createdAt" < ${targetTime}
+    GROUP BY "userId"
+  `
+
+  return new Map(rows.map(row => [row.userId, row.lastPenaltyAt]))
 }
 
 // ---------------------------------------------------------------------------

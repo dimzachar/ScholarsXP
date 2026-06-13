@@ -57,6 +57,10 @@ export function getReviewerAssignmentUiMode(
     return 'fairness'
   }
 
+  if (algorithmId === 'o3_a3_recent_penalty_cooldown') {
+    return 'fairness'
+  }
+
   return 'generic'
 }
 
@@ -69,6 +73,10 @@ export function getReviewerAssignmentSelectionMode(
   }
 
   if (algorithmId === 'o3_a3_combined') {
+    return isReassignment ? 'a3_reassignment' : 'o3_initial'
+  }
+
+  if (algorithmId === 'o3_a3_recent_penalty_cooldown') {
     return isReassignment ? 'a3_reassignment' : 'o3_initial'
   }
 

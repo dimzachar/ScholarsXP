@@ -129,8 +129,7 @@ export default function ReviewerFairnessDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           startDate,
-          endDate,
-          algorithmIds: Array.from(selectedAlgos)
+          endDate
         })
       })
       if (!res.ok) {
