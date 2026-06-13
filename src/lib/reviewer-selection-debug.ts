@@ -1,9 +1,19 @@
 import { prisma } from '@/lib/prisma'
 import { REVIEWER_ROLES, isAdmin } from '@/lib/roles'
-import { RELIABILITY_CONFIG } from '@/config/reliability'
-import { calculateScore, getFormula } from '@/lib/reliability/formulas'
-import type { ReviewerMetrics } from '@/lib/reliability/types'
+import { reliabilityService } from '@/lib/reliability/reliability-service'
 import { compareReviewerPriorityValues } from '@/lib/reviewer-ranking'
+import {
+  buildA3ReassignmentTiers,
+  buildGenericPoolGroups,
+  buildO3ReplayBands,
+  buildO3ReplaySeatPicks,
+  getReviewerAssignmentModeDescription,
+  getReviewerAssignmentSelectionMode,
+  type ReplayBand,
+  type ReviewerAssignmentSelectionMode
+} from '@/lib/reviewer-assignment-ui'
+import { getActiveFairnessAlgorithm } from '@/lib/reviewer-fairness-algorithms'
+import { getHistoricalRecentAssignmentCounts } from '@/lib/reviewer-pool-reconstruction'
 
 const MIN_REVIEWER_XP = 50
 const MAX_ACTIVE_ASSIGNMENTS = 5
@@ -11,13 +21,6 @@ const MAX_ACTIVE_ASSIGNMENTS = 5
 type HistoricalAssignmentCount = {
   reviewerId: string
   activeAssignments: number
-}
-
-type HistoricalReviewAggregate = {
-  reviewerId: string
-  totalReviews: number
-  lateReviews: number
-  avgQualityRating: number | null
 }
 
 export interface SelectionReplayCandidate {
@@ -28,6 +31,7 @@ export interface SelectionReplayCandidate {
   totalXp: number
   reliabilityScore: number
   activeAssignmentsBefore: number
+  recentAssignmentsBefore?: number
   currentAssignmentStatus?: string
   selected: boolean
   inPool: boolean
@@ -38,6 +42,9 @@ export interface SelectionReplayCandidate {
 export interface SelectionReplayEvent {
   key: string
   assignedAt: string
+  algorithmId: string
+  selectionMode: ReviewerAssignmentSelectionMode
+  isReassignment: boolean
   selectedCount: number
   selectedReviewerIds: string[]
   selectedAssignments: Array<{
@@ -45,6 +52,14 @@ export interface SelectionReplayEvent {
     reviewerId: string
     reviewerName: string
     status: string
+  }>
+  baselineOrderedPool: SelectionReplayCandidate[]
+  bands: ReplayBand<SelectionReplayCandidate>[]
+  seatPicks: Array<{
+    seat: number
+    label: string
+    bandKey: string
+    reviewerId: string | null
   }>
   candidates: SelectionReplayCandidate[]
   poolSize: number
@@ -94,42 +109,6 @@ function parseReviewerOptOutAtTime(preferences: unknown, targetTime: Date): bool
   return false
 }
 
-function buildMetricsFromHistory(
-  aggregate: HistoricalReviewAggregate | undefined,
-  reviewerId: string
-): ReviewerMetrics {
-  const totalReviews = aggregate?.totalReviews ?? 0
-  const lateReviews = aggregate?.lateReviews ?? 0
-  const avgQualityRating = aggregate?.avgQualityRating ?? 0
-  const onTimeRate = totalReviews > 0 ? 1 - lateReviews / totalReviews : 0.5
-  const normalizedQuality = avgQualityRating > 0 ? (avgQualityRating - 1) / 4 : 0.4
-
-  return {
-    id: reviewerId,
-    username: reviewerId,
-    email: '',
-    totalReviews,
-    lateReviews,
-    missedReviews: 0,
-    streakWeeks: 0,
-    votesValidated: 0,
-    votesInvalidated: 0,
-    timeliness: onTimeRate,
-    quality: normalizedQuality,
-    accuracy: 0.5,
-    voteValidation: 0.5,
-    experience: Math.min(1, totalReviews / 50),
-    missedPenalty: 1,
-    penaltyScore: 1,
-    reviewVariance: 0.75,
-    latePercentage: onTimeRate,
-    extremeMissCount: 0,
-    extremeMissRate: 0,
-    avgDeviation: 0,
-    avgQualityRating
-  }
-}
-
 async function getHistoricalActiveAssignmentCounts(
   reviewerIds: string[],
   targetTime: Date
@@ -161,32 +140,33 @@ async function getHistoricalReliabilityScores(
     return new Map()
   }
 
-  const formula = getFormula(RELIABILITY_CONFIG.ACTIVE_FORMULA)
-
-  const aggregates = await prisma.$queryRaw<HistoricalReviewAggregate[]>`
-    SELECT
-      "reviewerId",
-      COUNT(*)::int AS "totalReviews",
-      COUNT(*) FILTER (WHERE "isLate" = true)::int AS "lateReviews",
-      AVG("qualityRating") AS "avgQualityRating"
-    FROM "PeerReview"
-    WHERE "reviewerId" = ANY(${reviewerIds}::uuid[])
-      AND "createdAt" <= ${targetTime}
-    GROUP BY "reviewerId"
-  `
-
-  const aggregateMap = new Map(aggregates.map(item => [item.reviewerId, item]))
-  const scores = new Map<string, number>()
-
-  for (const reviewerId of reviewerIds) {
-    const metrics = buildMetricsFromHistory(aggregateMap.get(reviewerId), reviewerId)
-    scores.set(
+  const reliabilityMap = await reliabilityService.getReliabilityScores(reviewerIds, targetTime)
+  return new Map(
+    reviewerIds.map(reviewerId => [
       reviewerId,
-      calculateScore(metrics, formula.weights, formula.defaultValues)
-    )
+      reliabilityMap.get(reviewerId)?.score ?? 0
+    ])
+  )
+}
+
+function isReassignmentEvent(
+  eventAssignments: Array<{ status: string }>,
+  allAssignments: Array<{ status: string; updatedAt: Date }>,
+  targetTime: Date
+): boolean {
+  if (eventAssignments.some(assignment => assignment.status === 'REASSIGNED')) {
+    return true
   }
 
-  return scores
+  const reassignmentWindowMs = 10_000
+  return allAssignments.some(assignment => {
+    if (assignment.status !== 'REASSIGNED') {
+      return false
+    }
+
+    const deltaMs = Math.abs(assignment.updatedAt.getTime() - targetTime.getTime())
+    return deltaMs <= reassignmentWindowMs
+  })
 }
 
 async function buildReplayEvent(
@@ -230,9 +210,13 @@ async function buildReplayEvent(
   })
 
   const reviewerIds = reviewers.map(reviewer => reviewer.id)
-  const [activeAssignmentCounts, reliabilityScores] = await Promise.all([
+  const algorithmId = getActiveFairnessAlgorithm()
+  const isReassignment = isReassignmentEvent(eventAssignments, allAssignments, targetTime)
+  const selectionMode = getReviewerAssignmentSelectionMode(algorithmId, isReassignment)
+  const [activeAssignmentCounts, reliabilityScores, recentAssignmentCounts] = await Promise.all([
     getHistoricalActiveAssignmentCounts(reviewerIds, targetTime),
-    getHistoricalReliabilityScores(reviewerIds, targetTime)
+    getHistoricalReliabilityScores(reviewerIds, targetTime),
+    getHistoricalRecentAssignmentCounts(reviewerIds, targetTime)
   ])
 
   const excludedBecauseAlreadyAssigned = new Set(
@@ -284,6 +268,7 @@ async function buildReplayEvent(
       totalXp: reviewer.totalXp,
       reliabilityScore,
       activeAssignmentsBefore,
+      recentAssignmentsBefore: recentAssignmentCounts.get(reviewer.id) ?? 0,
       currentAssignmentStatus: selectedStatusMap.get(reviewer.id),
       selected: eventSelectedIds.has(reviewer.id),
       inPool: reasons.length === 0,
@@ -313,6 +298,27 @@ async function buildReplayEvent(
     }))
 
   const rankedPoolMap = new Map(rankedPool.map(candidate => [candidate.id, candidate.priority]))
+  const baselineOrderedPool = rankedPool
+  const a3ReplayPool = baselineOrderedPool.map(candidate => ({
+    ...candidate,
+    activeAssignments: candidate.activeAssignmentsBefore
+  }))
+  const genericReplayPool = baselineOrderedPool.map(candidate => ({
+    ...candidate,
+    activeAssignments: candidate.activeAssignmentsBefore
+  }))
+  const bands: ReplayBand<SelectionReplayCandidate>[] =
+    selectionMode === 'o3_initial'
+      ? buildO3ReplayBands(baselineOrderedPool)
+      : selectionMode === 'a3_reassignment'
+        ? buildA3ReassignmentTiers(a3ReplayPool, recentAssignmentCounts)
+        : selectionMode === 'generic_fairness'
+          ? buildGenericPoolGroups(genericReplayPool)
+          : []
+  const seatPicks =
+    selectionMode === 'o3_initial'
+      ? buildO3ReplaySeatPicks(eventAssignments.map(assignment => assignment.reviewerId), submissionId)
+      : []
 
   const mergedCandidates = candidates
     .map(candidate => ({
@@ -328,9 +334,14 @@ async function buildReplayEvent(
       return a.username.localeCompare(b.username)
     })
 
+  const selectionLogic = getReviewerAssignmentModeDescription(selectionMode)
+
   return {
     key: `${submissionId}:${targetTime.toISOString()}`,
     assignedAt: targetTime.toISOString(),
+    algorithmId,
+    selectionMode,
+    isReassignment,
     selectedCount: eventAssignments.length,
     selectedReviewerIds: eventAssignments.map(assignment => assignment.reviewerId),
     selectedAssignments: eventAssignments.map(assignment => ({
@@ -339,12 +350,16 @@ async function buildReplayEvent(
       reviewerName: assignment.reviewer.username || assignment.reviewer.email.split('@')[0],
       status: assignment.status
     })),
+    baselineOrderedPool,
+    bands,
+    seatPicks,
     candidates: mergedCandidates,
     poolSize: rankedPool.length,
     limitations: [
+      `Assignment used ${algorithmId === 'baseline' ? 'the baseline queue selector' : selectionLogic.toLowerCase()}.`,
       'Workload is reconstructed at assignment time from review assignment timestamps.',
       'Historical pause and opt-out state is approximated from current user settings because pause snapshots are not stored.',
-      'Reliability is replayed using the current active formula and review history available up to that assignment time.'
+      'Reliability is replayed with the current active formula using review, vote validation, accuracy, and penalty history available up to that assignment time; user-level missed-review counters use the current stored value because historical counter snapshots are not stored.'
     ]
   }
 }
@@ -405,9 +420,12 @@ export async function getSubmissionSelectionReplay(
     )
   }
 
+  const algorithmId = getActiveFairnessAlgorithm()
+  const selectionMode = getReviewerAssignmentSelectionMode(algorithmId)
+
   return {
     submissionId: submission.id,
-    selectionLogic: 'Eligible reviewers are ranked by active workload first, then reliability, then total XP.',
+    selectionLogic: getReviewerAssignmentModeDescription(selectionMode),
     limitations: [
       'Assignment-time workload is reconstructed from historical assignment timestamps.',
       'Historical pause and opt-out state is not versioned, so availability filters use the current stored user settings.',

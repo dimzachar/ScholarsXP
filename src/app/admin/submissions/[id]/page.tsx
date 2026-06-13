@@ -92,12 +92,58 @@ interface SubmissionSelectionReplay {
   events: Array<{
     key: string
     assignedAt: string
+    algorithmId: string
+    selectionMode: 'baseline' | 'o3_initial' | 'a3_reassignment' | 'generic_fairness'
+    isReassignment: boolean
     selectedCount: number
+    selectedReviewerIds: string[]
     selectedAssignments: Array<{
       assignmentId: string
       reviewerId: string
       reviewerName: string
       status: string
+    }>
+    baselineOrderedPool: Array<{
+      id: string
+      username: string
+      email: string
+      role: string
+      totalXp: number
+      reliabilityScore: number
+      activeAssignmentsBefore: number
+      recentAssignmentsBefore?: number
+      currentAssignmentStatus?: string
+      selected: boolean
+      inPool: boolean
+      priority?: number
+      reasons: string[]
+    }>
+    bands: Array<{
+      key: string
+      label: string
+      description: string
+      candidateIds: string[]
+      candidates: Array<{
+        id: string
+        username: string
+        email: string
+        role: string
+        totalXp: number
+        reliabilityScore: number
+        activeAssignmentsBefore: number
+        recentAssignmentsBefore?: number
+        currentAssignmentStatus?: string
+        selected: boolean
+        inPool: boolean
+        priority?: number
+        reasons: string[]
+      }>
+    }>
+    seatPicks: Array<{
+      seat: number
+      label: string
+      bandKey: string
+      reviewerId: string | null
     }>
     candidates: Array<{
       id: string
@@ -107,6 +153,7 @@ interface SubmissionSelectionReplay {
       totalXp: number
       reliabilityScore: number
       activeAssignmentsBefore: number
+      recentAssignmentsBefore?: number
       currentAssignmentStatus?: string
       selected: boolean
       inPool: boolean

@@ -19,6 +19,12 @@ import { CalendarClock, CheckCircle2, Loader2, PauseCircle, PlayCircle, RefreshC
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import ReviewerPoolBuckets from '@/components/Admin/ReviewerPoolBuckets'
 import { compareReviewerPriorityValues, formatReliabilityPercent } from '@/lib/reviewer-ranking'
+import {
+  getReviewerAssignmentModeDescription,
+  getReviewerAssignmentUiMode,
+  type ReviewerAssignmentUiMode
+} from '@/lib/reviewer-assignment-ui'
+import { getActiveFairnessAlgorithm, type AlgorithmId } from '@/lib/reviewer-fairness-algorithms'
 
 type AvailabilityMode = 'available' | 'temporary' | 'indefinite'
 
@@ -102,6 +108,9 @@ export default function ReviewerAvailabilityPage() {
   const [selectedReviewer, setSelectedReviewer] = useState<ReviewerRecord | null>(null)
   const [availabilityMode, setAvailabilityMode] = useState<AvailabilityMode>('available')
   const [availabilityDate, setAvailabilityDate] = useState('')
+  const assignmentAlgorithmId: AlgorithmId = getActiveFairnessAlgorithm()
+  const assignmentUiMode: ReviewerAssignmentUiMode = getReviewerAssignmentUiMode(assignmentAlgorithmId)
+  const assignmentModeDescription = getReviewerAssignmentModeDescription(assignmentUiMode)
 
   const fetchReviewers = useCallback(async () => {
     try {
@@ -219,19 +228,23 @@ export default function ReviewerAvailabilityPage() {
       const totalEligible = sorted.length
 
       let priorityNote = ''
-      if (priority <= 3) {
-        priorityNote = 'High priority - likely to be selected'
-      } else if (priority <= Math.ceil(totalEligible / 2)) {
-        priorityNote = 'Medium priority'
+      if (assignmentUiMode === 'baseline') {
+        if (priority <= 3) {
+          priorityNote = 'High priority - likely to be selected'
+        } else if (priority <= Math.ceil(totalEligible / 2)) {
+          priorityNote = 'Medium priority'
+        } else {
+          priorityNote = 'Low priority - lower workload, then higher reliability, then higher XP selected first'
+        }
       } else {
-        priorityNote = 'Low priority - lower workload, then higher reliability, then higher XP selected first'
+        priorityNote = 'Eligible for the fairness selector; deterministic queue rank is not shown.'
       }
 
       return { inPool, reasons, priority, priorityNote }
     }
 
     return { inPool, reasons }
-  }, [])
+  }, [assignmentUiMode])
 
   const summary = useMemo(() => {
     const total = reviewers.length
@@ -438,7 +451,7 @@ export default function ReviewerAvailabilityPage() {
                   Reviewer Availability
                 </CardTitle>
                 <CardDescription>
-                  Control which admins and reviewers receive automatic peer review assignments. Eligible reviewers are ranked by active workload first, then reliability, then total XP.
+                  Control which admins and reviewers receive automatic peer review assignments. {assignmentModeDescription}
                 </CardDescription>
               </div>
               <Button variant="outline" size="sm" onClick={fetchReviewers} disabled={loading}>
@@ -457,7 +470,9 @@ export default function ReviewerAvailabilityPage() {
                   <p className="text-2xl font-semibold">{summary.total}</p>
                 </div>
                 <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950">
-                  <p className="text-sm text-muted-foreground">In active pool (ranked by workload, reliability, XP)</p>
+                  <p className="text-sm text-muted-foreground">
+                    {assignmentUiMode === 'baseline' ? 'In active pool (ranked by workload, reliability, XP)' : 'In active fairness pool'}
+                  </p>
                   <p className="text-2xl font-semibold text-green-700 dark:text-green-400">{summary.inPool}</p>
                 </div>
                 <div className="rounded-lg border p-4">
@@ -472,6 +487,8 @@ export default function ReviewerAvailabilityPage() {
 
               <ReviewerPoolBuckets
                 reviewers={reviewers.filter(reviewer => getPoolEligibility(reviewer, reviewers).inPool)}
+                algorithmId={assignmentAlgorithmId}
+                uiMode={assignmentUiMode}
               />
 
               <div className="overflow-hidden rounded-lg border">
@@ -518,7 +535,9 @@ export default function ReviewerAvailabilityPage() {
                           ) : null}
                         </button>
                       </TableHead>
-                      <TableHead>Pool Rank</TableHead>
+                      <TableHead>
+                        {assignmentUiMode === 'baseline' ? 'Pool Rank' : 'Baseline order'}
+                      </TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="hidden md:table-cell">Notes</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -579,7 +598,9 @@ export default function ReviewerAvailabilityPage() {
                                             <>
                                               <CheckCircle2 className="h-5 w-5 text-green-600" />
                                               {priority && (
-                                                <span className="text-xs text-muted-foreground">#{priority}</span>
+                                                <span className="text-xs text-muted-foreground">
+                                                  {assignmentUiMode === 'baseline' ? `#${priority}` : `Baseline ${priority}`}
+                                                </span>
                                               )}
                                             </>
                                           ) : (
@@ -590,8 +611,19 @@ export default function ReviewerAvailabilityPage() {
                                       <TooltipContent>
                                         {inPool ? (
                                           <div className="space-y-1">
-                                            <p className="font-medium">Priority #{priority} of {summary.inPool}</p>
-                                            <p className="text-sm text-muted-foreground">{priorityNote}</p>
+                                            {assignmentUiMode === 'baseline' ? (
+                                              <>
+                                                <p className="font-medium">Priority #{priority} of {summary.inPool}</p>
+                                                <p className="text-sm text-muted-foreground">{priorityNote}</p>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <p className="font-medium">Baseline order #{priority} of {summary.inPool}</p>
+                                                <p className="text-sm text-muted-foreground">
+                                                  Baseline order is shown for context only. Current picks come from O3 fairness bands, so this is not a guaranteed queue position.
+                                                </p>
+                                              </>
+                                            )}
                                             <p className="text-xs text-muted-foreground mt-1">
                                               Reliability: {formatReliabilityPercent(reviewer.metrics?.reliabilityScore)} | XP: {reviewer.totalXp || 0} | Active: {reviewer.activeAssignments || 0}
                                             </p>

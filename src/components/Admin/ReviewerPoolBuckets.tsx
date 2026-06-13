@@ -1,6 +1,16 @@
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { compareReviewerPriorityValues, formatReliabilityPercent } from '@/lib/reviewer-ranking'
+import {
+  buildAvailabilityFairnessBands,
+  buildBaselineQueueViewModel,
+  buildGenericPoolGroups,
+  getReviewerAssignmentModeDescription,
+  getReviewerAssignmentModeLabel,
+  getReviewerAssignmentUiMode,
+  type ReviewerAssignmentUiMode
+} from '@/lib/reviewer-assignment-ui'
+import { type AlgorithmId } from '@/lib/reviewer-fairness-algorithms'
+import { formatReliabilityPercent } from '@/lib/reviewer-ranking'
 
 interface ReviewerPoolBucketRecord {
   id: string
@@ -15,35 +25,34 @@ interface ReviewerPoolBucketRecord {
 
 interface ReviewerPoolBucketsProps {
   reviewers: ReviewerPoolBucketRecord[]
+  algorithmId?: AlgorithmId
+  uiMode?: ReviewerAssignmentUiMode
 }
 
-export default function ReviewerPoolBuckets({ reviewers }: ReviewerPoolBucketsProps) {
-  const rankedReviewers = [...reviewers].sort((a, b) => {
-    return compareReviewerPriorityValues(
-      {
-        activeAssignments: a.activeAssignments,
-        reliabilityScore: a.metrics?.reliabilityScore,
-        totalXp: a.totalXp
-      },
-      {
-        activeAssignments: b.activeAssignments,
-        reliabilityScore: b.metrics?.reliabilityScore,
-        totalXp: b.totalXp
-      }
-    )
-  })
+function getDisplayName(reviewer: ReviewerPoolBucketRecord): string {
+  return reviewer.username || reviewer.email.split('@')[0]
+}
 
+function formatReviewerStats(reviewer: ReviewerPoolBucketRecord): string {
+  return `Active ${reviewer.activeAssignments || 0} · Reliability ${formatReliabilityPercent(reviewer.metrics?.reliabilityScore)} · XP ${reviewer.totalXp || 0}`
+}
+
+function ReviewerCard({ reviewer }: { reviewer: ReviewerPoolBucketRecord }) {
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">{getDisplayName(reviewer)}</p>
+          <p className="text-xs text-muted-foreground">{formatReviewerStats(reviewer)}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ReviewerPoolBucketsBaseline({ reviewers }: { reviewers: ReviewerPoolBucketRecord[] }) {
+  const { rankedReviewers, buckets } = buildBaselineQueueViewModel(reviewers)
   const topReviewers = rankedReviewers.slice(0, 3)
-
-  const bucketEntries = Array.from(
-    rankedReviewers.reduce((acc, reviewer, index) => {
-      const key = reviewer.activeAssignments || 0
-      const bucket = acc.get(key) ?? []
-      bucket.push({ ...reviewer, rank: index + 1 })
-      acc.set(key, bucket)
-      return acc
-    }, new Map<number, Array<ReviewerPoolBucketRecord & { rank: number }>>()).entries()
-  ).sort(([a], [b]) => a - b)
 
   return (
     <Card>
@@ -74,12 +83,8 @@ export default function ReviewerPoolBuckets({ reviewers }: ReviewerPoolBucketsPr
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="font-medium">
-                        #{index + 1} {reviewer.username || reviewer.email.split('@')[0]}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Active {reviewer.activeAssignments || 0} · Reliability {formatReliabilityPercent(reviewer.metrics?.reliabilityScore)} · XP {reviewer.totalXp || 0}
-                      </p>
+                      <p className="font-medium">#{index + 1} {getDisplayName(reviewer)}</p>
+                      <p className="text-xs text-muted-foreground">{formatReviewerStats(reviewer)}</p>
                     </div>
                     {index === 0 && (
                       <Badge variant="secondary">First up</Badge>
@@ -92,19 +97,19 @@ export default function ReviewerPoolBuckets({ reviewers }: ReviewerPoolBucketsPr
         )}
 
         <div className="space-y-4">
-          {bucketEntries.map(([bucketKey, bucketReviewers]) => (
-            <div key={bucketKey} className="rounded-lg border bg-background">
+          {buckets.map(({ activeAssignments, reviewers: bucketReviewers }) => (
+            <div key={activeAssignments} className="rounded-lg border bg-background">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
                 <div>
                   <p className="text-sm font-medium">
-                    {bucketKey === 0 ? '0 Active Assignments' : `${bucketKey} Active Assignments`}
+                    {activeAssignments === 0 ? '0 Active Assignments' : `${activeAssignments} Active Assignments`}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {bucketReviewers.length} reviewer{bucketReviewers.length === 1 ? '' : 's'} in this workload bucket
                   </p>
                 </div>
                 <Badge variant="secondary">
-                  {bucketKey === 0 ? 'Front of queue' : 'Queued after lower-workload buckets'}
+                  {activeAssignments === 0 ? 'Front of queue' : 'Queued after lower-workload buckets'}
                 </Badge>
               </div>
 
@@ -113,9 +118,7 @@ export default function ReviewerPoolBuckets({ reviewers }: ReviewerPoolBucketsPr
                   <div key={reviewer.id} className="rounded-lg border bg-muted/20 p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">
-                          #{reviewer.rank} {reviewer.username || reviewer.email.split('@')[0]}
-                        </p>
+                        <p className="truncate text-sm font-medium">#{reviewer.rank} {getDisplayName(reviewer)}</p>
                         <p className="text-xs text-muted-foreground">
                           Reliability {formatReliabilityPercent(reviewer.metrics?.reliabilityScore)}
                         </p>
@@ -136,4 +139,152 @@ export default function ReviewerPoolBuckets({ reviewers }: ReviewerPoolBucketsPr
       </CardContent>
     </Card>
   )
+}
+
+function ReviewerPoolBucketsFairness({ reviewers }: { reviewers: ReviewerPoolBucketRecord[] }) {
+  const bands = buildAvailabilityFairnessBands(reviewers)
+  const { buckets } = buildBaselineQueueViewModel(reviewers)
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Current Fairness Selection Bands</CardTitle>
+        <CardDescription>
+          Reviewers are drawn from O3 fairness bands rather than a single strict queue. Workload grouping is shown as context.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="grid gap-3 lg:grid-cols-3">
+          {bands.map(band => (
+            <div key={band.key} className="rounded-xl border bg-muted/20 p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div>
+                  <p className="font-medium">{band.label}</p>
+                  <p className="text-xs text-muted-foreground">{band.description}</p>
+                </div>
+                <Badge variant="secondary">{band.candidates.length}</Badge>
+              </div>
+
+              <div className="space-y-3">
+                {band.candidates.slice(0, 8).map((candidate, index) => (
+                  <div key={candidate.id} className="rounded-lg border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">
+                      {band.key === 'o3-seat-1' ? 'In seat-1 band' : band.key === 'o3-seat-2' ? 'In seat-2 band' : 'In fairness band'} · Order {index + 1}
+                    </p>
+                    <p className="truncate text-sm font-medium">{getDisplayName(candidate)}</p>
+                    <p className="text-xs text-muted-foreground">{formatReviewerStats(candidate)}</p>
+                  </div>
+                ))}
+
+                {band.candidates.length > 8 && (
+                  <p className="text-xs text-muted-foreground">
+                    +{band.candidates.length - 8} more in this band
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-medium">Workload context</p>
+            <p className="text-xs text-muted-foreground">
+              Active assignment buckets remain useful context, but they are not a guaranteed pick order.
+            </p>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-4 md:grid-cols-2">
+            {buckets.map(({ activeAssignments, reviewers: bucketReviewers }) => (
+              <div key={activeAssignments} className="rounded-xl border bg-background p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">
+                      {activeAssignments === 0 ? '0 active assignments' : `${activeAssignments} active assignments`}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {bucketReviewers.length} reviewer{bucketReviewers.length === 1 ? '' : 's'} in this workload group
+                    </p>
+                  </div>
+                  <Badge variant="secondary">Workload group</Badge>
+                </div>
+
+                <div className="space-y-3">
+                  {bucketReviewers.slice(0, 6).map(candidate => (
+                    <ReviewerCard key={candidate.id} reviewer={candidate} />
+                  ))}
+                  {bucketReviewers.length > 6 && (
+                    <p className="text-xs text-muted-foreground">
+                      +{bucketReviewers.length - 6} more in this group
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ReviewerPoolBucketsGeneric({ reviewers }: { reviewers: ReviewerPoolBucketRecord[] }) {
+  const groups = buildGenericPoolGroups(reviewers)
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{getReviewerAssignmentModeLabel('generic')}</CardTitle>
+        <CardDescription>{getReviewerAssignmentModeDescription('generic')}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {groups.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No eligible reviewers are currently available.</p>
+        ) : (
+          <div className="grid gap-4 xl:grid-cols-3 md:grid-cols-2">
+            {groups.map(group => (
+              <div key={group.key} className="rounded-xl border bg-background p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <p className="font-medium">{group.label}</p>
+                    <p className="text-xs text-muted-foreground">{group.description}</p>
+                  </div>
+                  <Badge variant="secondary">{group.candidates.length}</Badge>
+                </div>
+
+                <div className="space-y-3">
+                  {group.candidates.slice(0, 8).map(candidate => (
+                    <ReviewerCard key={candidate.id} reviewer={candidate} />
+                  ))}
+                  {group.candidates.length > 8 && (
+                    <p className="text-xs text-muted-foreground">
+                      +{group.candidates.length - 8} more in this group
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+export default function ReviewerPoolBuckets({
+  reviewers,
+  algorithmId,
+  uiMode
+}: ReviewerPoolBucketsProps) {
+  const mode = uiMode ?? getReviewerAssignmentUiMode(algorithmId ?? 'baseline')
+
+  if (mode === 'baseline') {
+    return <ReviewerPoolBucketsBaseline reviewers={reviewers} />
+  }
+
+  if (mode === 'fairness') {
+    return <ReviewerPoolBucketsFairness reviewers={reviewers} />
+  }
+
+  return <ReviewerPoolBucketsGeneric reviewers={reviewers} />
 }
