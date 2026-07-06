@@ -27,6 +27,7 @@ export type AlgorithmId =
   | 'o3_o5soft_a3_combined'
   | 'o3_a3_combined'
   | 'o3_weighted_3a_combined'
+  | 'o3_cooldown_3a_combined'
   | 'o3_a3_recent_penalty_cooldown'
   | 'o1_3a_combined'
 
@@ -101,6 +102,11 @@ export const ALGORITHMS: AlgorithmMeta[] = [
     id: 'o3_weighted_3a_combined',
     label: 'O3 Weighted Seat 3 + 3A',
     description: 'O3 with recent-count-biased seat 3 for initial + 3A for reassignment'
+  },
+  {
+    id: 'o3_cooldown_3a_combined',
+    label: 'O3 Cooldown + 3A',
+    description: 'O3 bands after a 7-day recent-assignment cooldown + 3A for reassignment'
   },
   {
     id: 'o3_a3_recent_penalty_cooldown',
@@ -392,7 +398,15 @@ export function selectO4Cooldown<T extends FairnessCandidate>(
   options: SelectionOptions
 ): T[] {
   const { minReviewers: n, recent7dCounts = new Map<string, number>() } = options
-  const reSorted = [...pool].sort((a, b) => {
+  const reSorted = sortByRecent7dCooldown(pool, recent7dCounts)
+  return reSorted.slice(0, n)
+}
+
+function sortByRecent7dCooldown<T extends FairnessCandidate>(
+  pool: T[],
+  recent7dCounts: Map<string, number>
+): T[] {
+  return [...pool].sort((a, b) => {
     const aCooldown = (recent7dCounts.get(a.id) ?? 0) * 0.5
     const bCooldown = (recent7dCounts.get(b.id) ?? 0) * 0.5
     const aEff = a.activeAssignments + aCooldown
@@ -402,7 +416,6 @@ export function selectO4Cooldown<T extends FairnessCandidate>(
     if (a.reliabilityScore !== b.reliabilityScore) return b.reliabilityScore - a.reliabilityScore
     return b.totalXp - a.totalXp
   })
-  return reSorted.slice(0, n)
 }
 
 /** O1+O5 — fairness seat with the proven-bad filter on top of O1's low-recent seat. */
@@ -541,6 +554,22 @@ export function selectO3Weighted3ACombined<T extends FairnessCandidate>(
   return selectO3WeightedSeat3(pool, options)
 }
 
+/** O3 Cooldown + 3A: O3 initial bands after applying 7-day assignment cooldown, 3A for reassignment. */
+export function selectO3Cooldown3ACombined<T extends FairnessCandidate>(
+  pool: T[],
+  options: SelectionOptions
+): T[] {
+  if (options.isReassignment) {
+    return select3AReassignPreference(pool, options)
+  }
+
+  const cooldownOrderedPool = sortByRecent7dCooldown(
+    pool,
+    options.recent7dCounts ?? new Map<string, number>()
+  )
+  return selectO3BandRandomize(cooldownOrderedPool, options)
+}
+
 /** O1+3A: O1 fairness seat for initial, 3A for reassignment. */
 export function selectO1A3Combined<T extends FairnessCandidate>(
   pool: T[],
@@ -639,6 +668,7 @@ export const SELECTORS: Record<AlgorithmId, SelectionFn<FairnessCandidate>> = {
   d3_dashboard_triggered: selectD3DashboardTriggered,
   o3_a3_combined: selectO3A3Combined,
   o3_weighted_3a_combined: selectO3Weighted3ACombined,
+  o3_cooldown_3a_combined: selectO3Cooldown3ACombined,
   o3_a3_recent_penalty_cooldown: selectO3A3RecentPenaltyCooldown,
   o1_3a_combined: selectO1A3Combined,
   o3_o5_a3_combined: selectO3O5A3Combined,

@@ -436,8 +436,9 @@ export class ReviewerPoolService {
     const now = new Date()
     const algoId = getActiveFairnessAlgorithm()
     const needsRecentPenaltyAt = algoId === 'o3_a3_recent_penalty_cooldown'
-    const [recentCounts, penaltyMap, recentPenaltyAt] = await Promise.all([
+    const [recentCounts, recent7dCounts, penaltyMap, recentPenaltyAt] = await Promise.all([
       getHistoricalRecentAssignmentCounts(candidateIds, now, 30),
+      getHistoricalRecentAssignmentCounts(candidateIds, now, 7),
       fetchPenaltyChecksForPool(candidateIds, now),
       needsRecentPenaltyAt ? getRecentPenaltyTimestamps(candidateIds, now, 30) : Promise.resolve(new Map<string, Date>()),
     ])
@@ -456,6 +457,7 @@ export class ReviewerPoolService {
       submissionId,
       isReassignment,
       recentCounts,
+      recent7dCounts,
       recentPenaltyAt,
       recentPenaltyCooldownDays: 14,
       recentPenaltyCooldownAsOf: now,

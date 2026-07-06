@@ -62,6 +62,8 @@ interface ShadowLogEntry {
 
 const DEFAULT_SHADOW_ALGORITHMS: AlgorithmId[] = [
   'o3_a3_combined',         // session 5 winner
+  'o3_cooldown_3a_combined', // O3 with recent 7-day cooldown before banding
+  'o3_weighted_3a_combined', // O3 with recent-count-biased seat 3
   'o3_a3_recent_penalty_cooldown', // shadow-only reassignment penalty guard
   'o3_o5soft_a3_combined',  // session 5 fallback (rotation O5)
   'o3_o5_a3_combined',      // strict O5 variant for reference
