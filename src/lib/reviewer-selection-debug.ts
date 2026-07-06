@@ -124,8 +124,11 @@ async function getHistoricalActiveAssignmentCounts(
     FROM "ReviewAssignment"
     WHERE "reviewerId" = ANY(${reviewerIds}::uuid[])
       AND "assignedAt" < ${targetTime}
-      AND ("completedAt" IS NULL OR "completedAt" > ${targetTime})
-      AND NOT ("status" = 'REASSIGNED' AND "updatedAt" <= ${targetTime})
+      AND (
+        "status" IN ('PENDING', 'IN_PROGRESS')
+        OR ("status" = 'COMPLETED' AND "completedAt" IS NOT NULL AND "completedAt" > ${targetTime})
+        OR ("status" IN ('MISSED', 'REASSIGNED') AND "updatedAt" > ${targetTime})
+      )
     GROUP BY "reviewerId"
   `
 
