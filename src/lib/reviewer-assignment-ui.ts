@@ -1,4 +1,4 @@
-import { hashCode, type AlgorithmId } from '@/lib/reviewer-fairness-algorithms'
+import { hashCode, passesProvenBadFilter, type AlgorithmId } from '@/lib/reviewer-fairness-algorithms'
 import { compareReviewerPriorityValues } from '@/lib/reviewer-ranking'
 
 export type ReviewerAssignmentUiMode = 'baseline' | 'fairness' | 'generic'
@@ -41,6 +41,12 @@ interface A3ReviewerSnapshot {
   metrics?: {
     reliabilityScore?: number | null
   }
+}
+
+interface O3ReplayCandidate {
+  id: string
+  missedReviews?: number | null
+  hasPenalties?: boolean | null
 }
 
 const pluralize = (count: number, singular: string, plural = `${singular}s`) =>
@@ -212,64 +218,183 @@ export function buildAvailabilityFairnessBands<T extends PriorityReviewerSnapsho
   return bands
 }
 
-export function buildO3ReplayBands<T extends { id: string }>(
-  baselineOrderedPool: T[]
+export function buildO3ReplayBands<T extends O3ReplayCandidate>(
+  baselineOrderedPool: T[],
+  submissionId: string,
+  selectedCount = 3
 ): ReplayBand<T>[] {
-  const seat1 = baselineOrderedPool.slice(0, 2)
-  const remainingAfterSeat1 = baselineOrderedPool.slice(seat1.length)
-  const seat2 = remainingAfterSeat1.slice(0, 5)
-  const fairnessBand = remainingAfterSeat1.slice(seat2.length)
+  return buildO3ReplayTrace(baselineOrderedPool, submissionId, selectedCount).bands
+}
 
+export function buildO3ReplaySeatPicks<T extends O3ReplayCandidate>(
+  baselineOrderedPool: T[],
+  submissionId: string,
+  selectedCount = 3
+): ReplaySeatPick[] {
+  return buildO3ReplayTrace(baselineOrderedPool, submissionId, selectedCount).seatPicks
+}
+
+export function getO3ReplayCandidateSelectionLabel(
+  reviewerId: string,
+  bandKey: ReplaySeatPick['bandKey'],
+  seatPicks: ReplaySeatPick[] = []
+): string | null {
+  const pick = seatPicks.find(item => item.reviewerId === reviewerId)
+  if (!pick) {
+    return null
+  }
+
+  if (pick.bandKey === bandKey) {
+    return `Seat ${pick.seat} pick`
+  }
+
+  return `Selected later (Seat ${pick.seat})`
+}
+
+export function getO3ReplayBandDisplayCandidates<T extends { id: string }>(
+  candidates: T[],
+  bandKey: ReplaySeatPick['bandKey'],
+  seatPicks: ReplaySeatPick[] = [],
+  limit = 8
+): T[] {
+  const cappedLimit = Math.max(limit, 1)
+  const preview = candidates.slice(0, cappedLimit)
+  const selectedLaterCandidates = seatPicks
+    .filter(pick => pick.bandKey === bandKey && pick.reviewerId)
+    .map(pick => candidates.find(candidate => candidate.id === pick.reviewerId))
+    .filter((candidate): candidate is T => Boolean(candidate))
+    .filter(candidate => !preview.some(previewCandidate => previewCandidate.id === candidate.id))
+
+  if (selectedLaterCandidates.length === 0) {
+    return preview
+  }
+
+  if (preview.length < cappedLimit) {
+    return [...preview, ...selectedLaterCandidates].slice(0, cappedLimit)
+  }
+
+  const slotsToKeep = Math.max(cappedLimit - selectedLaterCandidates.length, 0)
+  return [...preview.slice(0, slotsToKeep), ...selectedLaterCandidates].slice(0, cappedLimit)
+}
+
+export function getO3ReplayBandOrderLabel(
+  bandKey: ReplaySeatPick['bandKey'],
+  index: number
+): string {
+  const prefix = bandKey === 'o3-seat-1'
+    ? 'In seat-1 band'
+    : bandKey === 'o3-seat-2'
+      ? 'In seat-2 band'
+      : 'In fairness band'
+
+  return `${prefix} · Order ${index + 1}`
+}
+
+function buildO3ReplayTrace<T extends O3ReplayCandidate>(
+  baselineOrderedPool: T[],
+  submissionId: string,
+  selectedCount = 3
+): {
+  bands: ReplayBand<T>[]
+  seatPicks: ReplaySeatPick[]
+} {
   const bands: ReplayBand<T>[] = []
+  const seatPicks: ReplaySeatPick[] = []
+  const reviewerCount = Math.min(Math.max(selectedCount, 0), baselineOrderedPool.length)
 
-  if (seat1.length > 0) {
+  if (reviewerCount === 0) {
+    return { bands, seatPicks }
+  }
+
+  const selectedIds = new Set<string>()
+
+  const seat1Band = baselineOrderedPool.slice(0, Math.min(2, baselineOrderedPool.length))
+  if (seat1Band.length > 0) {
     bands.push({
       key: 'o3-seat-1',
       label: 'Seat 1: top-2 band',
-      description: 'The first pick is selected from the top two reviewers in the baseline ordering.',
-      candidates: seat1,
-      candidateIds: seat1.map(reviewer => reviewer.id)
+      description: 'The first pick is a submission-seeded hash draw from the top two reviewers in the baseline ordering.',
+      candidates: seat1Band,
+      candidateIds: seat1Band.map(reviewer => reviewer.id)
+    })
+
+    const seat1Hash = hashCode(submissionId + 'seat1')
+    const seat1Pick = seat1Band[seat1Hash % seat1Band.length]
+    selectedIds.add(seat1Pick.id)
+    seatPicks.push({
+      seat: 1,
+      label: `Seat 1 (${seat1Hash}-seeded)`,
+      bandKey: 'o3-seat-1',
+      reviewerId: seat1Pick.id
     })
   }
 
-  if (seat2.length > 0) {
-    bands.push({
-      key: 'o3-seat-2',
-      label: 'Seat 2: top-5 remaining band',
-      description: 'The second pick is selected from up to five remaining reviewers after seat 1.',
-      candidates: seat2,
-      candidateIds: seat2.map(reviewer => reviewer.id)
-    })
-  }
+  if (reviewerCount >= 2) {
+    const seat2Band = baselineOrderedPool
+      .filter(reviewer => !selectedIds.has(reviewer.id))
+      .slice(0, 5)
 
-  if (fairnessBand.length > 0) {
-    bands.push({
-      key: 'o3-fairness-band',
-      label: 'Seat 3+: remaining fairness band',
-      description: 'Remaining picks are selected from the rest of the eligible fairness pool.',
-      candidates: fairnessBand,
-      candidateIds: fairnessBand.map(reviewer => reviewer.id)
-    })
-  }
+    if (seat2Band.length > 0) {
+      bands.push({
+        key: 'o3-seat-2',
+        label: 'Seat 2: top-5 remaining band',
+        description: 'The second pick is a submission-seeded hash draw from up to five remaining reviewers after the actual seat 1 winner is removed.',
+        candidates: seat2Band,
+        candidateIds: seat2Band.map(reviewer => reviewer.id)
+      })
 
-  return bands
-}
-
-export function buildO3ReplaySeatPicks(
-  selectedReviewerIds: string[],
-  submissionId: string
-): ReplaySeatPick[] {
-  return selectedReviewerIds.map((reviewerId, index) => {
-    const seat = index + 1
-    const bandKey = seat === 1 ? 'o3-seat-1' : seat === 2 ? 'o3-seat-2' : 'o3-fairness-band'
-
-    return {
-      seat,
-      label: `Seat ${seat} (${hashCode(submissionId + `seat${seat}`)}-seeded)`,
-      bandKey,
-      reviewerId
+      const seat2Hash = hashCode(submissionId + 'seat2')
+      const seat2Pick = seat2Band[seat2Hash % seat2Band.length]
+      selectedIds.add(seat2Pick.id)
+      seatPicks.push({
+        seat: 2,
+        label: `Seat 2 (${seat2Hash}-seeded)`,
+        bandKey: 'o3-seat-2',
+        reviewerId: seat2Pick.id
+      })
     }
-  })
+  }
+
+  if (reviewerCount >= 3) {
+    const fairnessBand = baselineOrderedPool.filter(reviewer => !selectedIds.has(reviewer.id))
+    if (fairnessBand.length > 0) {
+      bands.push({
+        key: 'o3-fairness-band',
+        label: 'Seat 3+: remaining fairness band',
+        description: 'Seat 3 and beyond are submission-seeded hash draws from whoever remains after seats 1 and 2. When possible, the pool is first narrowed to reviewers who pass the proven-bad filter; otherwise it falls back to the full remaining pool.',
+        candidates: fairnessBand,
+        candidateIds: fairnessBand.map(reviewer => reviewer.id)
+      })
+    }
+
+    for (let seat = 3; seat <= reviewerCount; seat++) {
+      const remaining = baselineOrderedPool.filter(reviewer => !selectedIds.has(reviewer.id))
+      if (remaining.length === 0) {
+        break
+      }
+
+      const filtered = remaining.filter(reviewer => passesProvenBadFilter({
+        id: reviewer.id,
+        activeAssignments: 0,
+        reliabilityScore: 0,
+        totalXp: 0,
+        missedReviews: reviewer.missedReviews ?? 0,
+        hasPenalties: reviewer.hasPenalties ?? false,
+      }))
+      const effectiveBand = filtered.length > 0 ? filtered : remaining
+      const seatHash = hashCode(submissionId + `seat${seat}`)
+      const pick = effectiveBand[seatHash % effectiveBand.length]
+      selectedIds.add(pick.id)
+      seatPicks.push({
+        seat,
+        label: `Seat ${seat} (${seatHash}-seeded)`,
+        bandKey: 'o3-fairness-band',
+        reviewerId: pick.id
+      })
+    }
+  }
+
+  return { bands, seatPicks }
 }
 
 export function buildA3ReassignmentTiers<T extends A3ReviewerSnapshot>(

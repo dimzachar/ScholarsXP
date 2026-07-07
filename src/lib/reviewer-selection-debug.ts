@@ -13,7 +13,7 @@ import {
   type ReviewerAssignmentSelectionMode
 } from '@/lib/reviewer-assignment-ui'
 import { getActiveFairnessAlgorithm } from '@/lib/reviewer-fairness-algorithms'
-import { getHistoricalRecentAssignmentCounts } from '@/lib/reviewer-pool-reconstruction'
+import { getHistoricalPenaltyCheck, getHistoricalRecentAssignmentCounts } from '@/lib/reviewer-pool-reconstruction'
 
 const MIN_REVIEWER_XP = 50
 const MAX_ACTIVE_ASSIGNMENTS = 5
@@ -32,6 +32,8 @@ export interface SelectionReplayCandidate {
   reliabilityScore: number
   activeAssignmentsBefore: number
   recentAssignmentsBefore?: number
+  missedReviews?: number
+  hasPenalties?: boolean
   currentAssignmentStatus?: string
   selected: boolean
   inPool: boolean
@@ -206,6 +208,7 @@ async function buildReplayEvent(
       email: true,
       role: true,
       totalXp: true,
+      missedReviews: true,
       preferences: true,
       reviewPausedUntil: true,
       reviewPausedPermanently: true
@@ -216,10 +219,11 @@ async function buildReplayEvent(
   const algorithmId = getActiveFairnessAlgorithm()
   const isReassignment = isReassignmentEvent(eventAssignments, allAssignments, targetTime)
   const selectionMode = getReviewerAssignmentSelectionMode(algorithmId, isReassignment)
-  const [activeAssignmentCounts, reliabilityScores, recentAssignmentCounts] = await Promise.all([
+  const [activeAssignmentCounts, reliabilityScores, recentAssignmentCounts, penaltyChecks] = await Promise.all([
     getHistoricalActiveAssignmentCounts(reviewerIds, targetTime),
     getHistoricalReliabilityScores(reviewerIds, targetTime),
-    getHistoricalRecentAssignmentCounts(reviewerIds, targetTime)
+    getHistoricalRecentAssignmentCounts(reviewerIds, targetTime),
+    getHistoricalPenaltyCheck(reviewerIds, targetTime)
   ])
 
   const excludedBecauseAlreadyAssigned = new Set(
@@ -272,6 +276,8 @@ async function buildReplayEvent(
       reliabilityScore,
       activeAssignmentsBefore,
       recentAssignmentsBefore: recentAssignmentCounts.get(reviewer.id) ?? 0,
+      missedReviews: reviewer.missedReviews,
+      hasPenalties: penaltyChecks.get(reviewer.id) ?? false,
       currentAssignmentStatus: selectedStatusMap.get(reviewer.id),
       selected: eventSelectedIds.has(reviewer.id),
       inPool: reasons.length === 0,
@@ -312,7 +318,7 @@ async function buildReplayEvent(
   }))
   const bands: ReplayBand<SelectionReplayCandidate>[] =
     selectionMode === 'o3_initial'
-      ? buildO3ReplayBands(baselineOrderedPool)
+      ? buildO3ReplayBands(baselineOrderedPool, submissionId, eventAssignments.length)
       : selectionMode === 'a3_reassignment'
         ? buildA3ReassignmentTiers(a3ReplayPool, recentAssignmentCounts)
         : selectionMode === 'generic_fairness'
@@ -320,8 +326,28 @@ async function buildReplayEvent(
           : []
   const seatPicks =
     selectionMode === 'o3_initial'
-      ? buildO3ReplaySeatPicks(eventAssignments.map(assignment => assignment.reviewerId), submissionId)
+      ? buildO3ReplaySeatPicks(baselineOrderedPool, submissionId, eventAssignments.length)
       : []
+  const seatByReviewerId = new Map(
+    seatPicks
+      .filter(pick => pick.reviewerId)
+      .map(pick => [pick.reviewerId as string, pick.seat])
+  )
+  const selectedAssignments = [...eventAssignments]
+    .sort((a, b) => {
+      const aSeat = seatByReviewerId.get(a.reviewerId) ?? Number.MAX_SAFE_INTEGER
+      const bSeat = seatByReviewerId.get(b.reviewerId) ?? Number.MAX_SAFE_INTEGER
+      if (aSeat !== bSeat) {
+        return Number(aSeat) - Number(bSeat)
+      }
+      return a.reviewerId.localeCompare(b.reviewerId)
+    })
+    .map(assignment => ({
+      assignmentId: assignment.id,
+      reviewerId: assignment.reviewerId,
+      reviewerName: assignment.reviewer.username || assignment.reviewer.email.split('@')[0],
+      status: assignment.status
+    }))
 
   const mergedCandidates = candidates
     .map(candidate => ({
@@ -347,12 +373,7 @@ async function buildReplayEvent(
     isReassignment,
     selectedCount: eventAssignments.length,
     selectedReviewerIds: eventAssignments.map(assignment => assignment.reviewerId),
-    selectedAssignments: eventAssignments.map(assignment => ({
-      assignmentId: assignment.id,
-      reviewerId: assignment.reviewerId,
-      reviewerName: assignment.reviewer.username || assignment.reviewer.email.split('@')[0],
-      status: assignment.status
-    })),
+    selectedAssignments,
     baselineOrderedPool,
     bands,
     seatPicks,

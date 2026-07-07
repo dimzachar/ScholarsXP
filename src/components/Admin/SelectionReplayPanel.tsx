@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   buildGenericPoolGroups,
-  buildO3ReplayBands,
+  getO3ReplayBandDisplayCandidates,
+  getO3ReplayBandOrderLabel,
+  getO3ReplayCandidateSelectionLabel,
   type ReplayBand,
   type ReviewerAssignmentSelectionMode
 } from '@/lib/reviewer-assignment-ui'
@@ -20,6 +22,8 @@ interface SelectionReplayCandidate {
   reliabilityScore: number
   activeAssignmentsBefore: number
   recentAssignmentsBefore?: number
+  missedReviews?: number
+  hasPenalties?: boolean
   currentAssignmentStatus?: string
   selected: boolean
   inPool: boolean
@@ -182,11 +186,15 @@ function O3SeatPicksSection({ event }: { event: SelectionReplayEvent }) {
 function CandidateCard({
   candidate,
   mode,
-  index
+  index,
+  selectionLabel,
+  bandKey
 }: {
   candidate: SelectionReplayCandidate
   mode: ReviewerAssignmentSelectionMode
   index: number
+  selectionLabel?: string | null
+  bandKey?: SelectionReplayEvent['seatPicks'][number]['bandKey']
 }) {
   return (
     <div
@@ -203,8 +211,13 @@ function CandidateCard({
                   ? `Pool item ${index + 1}: ${candidate.username}`
                   : candidate.username}
           </p>
+          {mode === 'o3_initial' && bandKey && (
+            <p className="text-xs text-muted-foreground">
+              {getO3ReplayBandOrderLabel(bandKey, index)}
+            </p>
+          )}
           <p className="text-xs text-muted-foreground">
-            Reliability {formatReliabilityPercent(candidate.reliabilityScore)} · XP {candidate.totalXp}
+            Active {candidate.activeAssignmentsBefore} · Reliability {formatReliabilityPercent(candidate.reliabilityScore)} · XP {candidate.totalXp}
           </p>
           {mode === 'a3_reassignment' && (
             <p className="text-xs text-muted-foreground">
@@ -212,7 +225,11 @@ function CandidateCard({
             </p>
           )}
         </div>
-        {candidate.selected && <Badge variant="secondary">Selected</Badge>}
+        {selectionLabel ? (
+          <Badge variant="secondary">{selectionLabel}</Badge>
+        ) : candidate.selected ? (
+          <Badge variant="secondary">Selected</Badge>
+        ) : null}
       </div>
     </div>
   )
@@ -282,10 +299,12 @@ function BaselinePoolBuckets({ event }: { event: SelectionReplayEvent }) {
 
 function BandList({
   bands,
-  mode
+  mode,
+  seatPicks
 }: {
   bands: ReplayBand<SelectionReplayCandidate>[]
   mode: Exclude<ReviewerAssignmentSelectionMode, 'baseline'>
+  seatPicks?: SelectionReplayEvent['seatPicks']
 }) {
   return (
     <div className="grid gap-4 xl:grid-cols-3 md:grid-cols-2">
@@ -300,9 +319,23 @@ function BandList({
           </div>
 
           <div className="space-y-3">
-            {band.candidates.slice(0, 8).map((candidate, index) => (
-              <CandidateCard key={candidate.id} candidate={candidate} mode={mode} index={index} />
-            ))}
+            {getO3ReplayBandDisplayCandidates(band.candidates, band.key, seatPicks, 8).map((candidate) => {
+              const selectionLabel = mode === 'o3_initial'
+                ? getO3ReplayCandidateSelectionLabel(candidate.id, band.key, seatPicks)
+                : null
+              const actualIndex = band.candidates.findIndex(item => item.id === candidate.id)
+
+              return (
+                <CandidateCard
+                  key={candidate.id}
+                  candidate={candidate}
+                  mode={mode}
+                  index={actualIndex >= 0 ? actualIndex : 0}
+                  selectionLabel={selectionLabel}
+                  bandKey={mode === 'o3_initial' ? band.key : undefined}
+                />
+              )
+            })}
 
             {band.candidates.length > 8 && (
               <p className="text-xs text-muted-foreground">
@@ -446,10 +479,10 @@ export default function SelectionReplayPanel({ replay }: SelectionReplayPanelPro
                   <div>
                     <p className="text-sm font-medium">O3 selection bands</p>
                     <p className="text-xs text-muted-foreground">
-                      Eligible reviewers are first ordered by workload, reliability, and XP, then selected using O3 fairness bands.
+                      Eligible reviewers start in baseline order by workload, reliability, and XP. Replay then rebuilds each seat&apos;s actual O3 pool after removing earlier winners; the final pick for each seat is a submission-seeded hash draw from that pool, and seat 3+ first applies the proven-bad filter when possible.
                     </p>
                   </div>
-                  <BandList bands={selectedEvent.bands ?? buildO3ReplayBands(getBaselineOrderedPool(selectedEvent))} mode="o3_initial" />
+                  <BandList bands={selectedEvent.bands ?? []} mode="o3_initial" seatPicks={selectedEvent.seatPicks} />
                 </div>
               )}
 
